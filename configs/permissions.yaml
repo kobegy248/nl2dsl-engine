@@ -1,0 +1,27 @@
+users:
+  u001:
+    tenant_id: "t001"
+    row_filters:
+      region:
+        operator: "in"
+        value: ["华东", "华南"]
+    allowed_dimensions: ["product_name", "region", "order_date"]
+
+sensitive_columns:
+  salary:
+    level: "high"
+    description: "薪资"
+  phone:
+    level: "high"
+    description: "手机号"
+  id_card:
+    level: "high"
+    description: "身份证号"
+  email:
+    level: "medium"
+    description: "邮箱"
+
+masking_rules:
+  phone: "{x[:3]}****{x[-4:]}"
+  email: "{x[:2]}***@{x.split('@')[1]}"
+  id_card: "{x[:4]}**********{x[-4:]}"

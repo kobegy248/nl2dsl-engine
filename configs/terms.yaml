@@ -1,0 +1,15 @@
+terms:
+  sales_amount:
+    aliases: ["销售额", "业绩", "销售收入", "营收", "营业额"]
+    metric: sales_amount
+    description: "含税销售额，不含退款"
+
+  gmv:
+    aliases: ["GMV", "成交总额", "交易额"]
+    metric: gmv
+    description: "订单成交总额"
+
+  order_count:
+    aliases: ["订单量", "订单数", "单量"]
+    metric: order_count
+    description: "订单数量"
