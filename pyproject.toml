@@ -2,7 +2,7 @@
 name = "nl2dsl"
 version = "0.1.0"
 description = "Natural Language to DSL intelligent query system"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
@@ -11,6 +11,7 @@ dependencies = [
     "sqlalchemy>=2.0.25",
     "sqlglot>=20.0.0",
     "langgraph>=0.0.50",
+    "langchain>=0.1.0",
     "openai>=1.10.0",
     "pymilvus>=2.3.0",
     "sentence-transformers>=2.2.0",
@@ -34,7 +35,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "C4"]
