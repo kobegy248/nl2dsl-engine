@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(pytest *)",
+      "Bash(pip install *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git init *)",
+      "Bash(.venv\\\\Scripts\\\\pip install *)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\pip.exe install -e .)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"import nl2dsl; print\\('nl2dsl OK'\\)\")",
+      "Bash(.venv\\\\Scripts\\\\python.exe *)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\pytest.exe tests\\\\unit\\\\test_dsl_models.py -v)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests\\\\unit\\\\test_dsl_models.py -v)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\pip.exe install pytest)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests\\\\unit\\\\test_dsl_validator.py -v)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests\\\\unit\\\\test_semantic_registry.py -v)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests\\\\unit\\\\test_permission.py -v)",
+      "Skill(superpowers:finishing-a-development-branch)",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(git checkout *)",
+      "Bash(New-Item *)"
+    ]
+  }
+}
