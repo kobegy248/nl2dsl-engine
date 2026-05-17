@@ -5,10 +5,10 @@ from nl2dsl.exceptions import PermissionError
 class ColumnLevelSecurity:
     def __init__(
         self,
-        sensitive_columns: dict[str, dict],
+        sensitive_columns: dict[str, dict] | None = None,
         masking_rules: dict[str, callable] | None = None,
     ):
-        self._sensitive = sensitive_columns
+        self._sensitive = sensitive_columns or {}
         self._masking = masking_rules or {}
 
     def check(self, dsl: DSL, user_id: str) -> None:

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class Filter(BaseModel):
     field: str
-    operator: Literal["=", "!=", ">", "<", ">=", "<=", "between", "in", "like"]
+    operator: Literal["=", "!=", ">", "<", ">=", "<=", "between", "in", "like", "is_null"]
     value: Any = None
 
 
