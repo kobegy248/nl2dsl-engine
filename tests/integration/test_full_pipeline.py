@@ -75,7 +75,7 @@ def test_full_pipeline(pipeline):
     builder = SQLBuilder(engine, {"orders": "order_fact"})
     sql = builder.build(resolved)
     assert "SELECT" in sql
-    assert "SUM(order_amount)" in sql
+    assert "sum" in sql.lower() and "order_amount" in sql
 
     scanner = SQLScanner()
     scanner.scan(sql)

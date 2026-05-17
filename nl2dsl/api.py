@@ -69,16 +69,6 @@ if _permissions_yaml_path.exists():
 _engine = create_engine(settings.db_url, echo=False)
 
 # Ensure the order_fact table exists for SQLBuilder metadata reflection
-# Drop and recreate to handle schema changes during development
-from sqlalchemy import inspect as _inspect  # noqa: E402
-
-_inspector = _inspect(_engine)
-if "order_fact" in _inspector.get_table_names():
-    from sqlalchemy import text as _text  # noqa: E402
-    with _engine.connect() as _conn:
-        _conn.execute(_text("DROP TABLE order_fact"))
-        _conn.commit()
-
 _metadata = MetaData()
 Table(
     "order_fact", _metadata,
