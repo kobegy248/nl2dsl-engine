@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData, select, func, and_, text, desc, asc
+from sqlalchemy import MetaData, select, func, and_, text, desc, asc, literal_column
 from nl2dsl.dsl.models import DSL
 
 
@@ -21,8 +21,12 @@ class SQLBuilder:
 
         if dsl.metrics:
             for metric in dsl.metrics:
-                agg_fn = getattr(func, metric.func)
-                col = agg_fn(table.c[metric.field]).label(metric.alias or metric.field)
+                if "(" in metric.field:
+                    # Already resolved expression like SUM(order_amount)
+                    col = literal_column(metric.field).label(metric.alias or metric.field)
+                else:
+                    agg_fn = getattr(func, metric.func)
+                    col = agg_fn(table.c[metric.field]).label(metric.alias or metric.field)
                 columns.append(col)
 
         stmt = select(*columns)
