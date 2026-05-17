@@ -1,0 +1,27 @@
+metrics:
+  sales_amount:
+    expr: SUM(order_amount)
+    description: "销售额"
+  gmv:
+    expr: SUM(order_amount)
+    description: "成交总额"
+  order_count:
+    expr: COUNT(id)
+    description: "订单数量"
+
+dimensions:
+  product_name:
+    column: product_name
+    description: "产品名称"
+  region:
+    column: region
+    description: "地区"
+  order_date:
+    column: order_date
+    description: "订单日期"
+
+data_sources:
+  orders:
+    table: order_fact
+    metrics: [sales_amount, gmv, order_count]
+    dimensions: [product_name, region, order_date]

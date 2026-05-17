@@ -10,11 +10,10 @@ class RowLevelSecurity:
         if not user_perm:
             return dsl
 
-        row_filters = user_perm.get("row_filters", {})
-        if not row_filters:
-            return dsl
-
         new_filters = list(dsl.filters or [])
+
+        # 行级过滤
+        row_filters = user_perm.get("row_filters", {})
         for field, cfg in row_filters.items():
             new_filters.append(Filter(
                 field=field,
@@ -22,4 +21,15 @@ class RowLevelSecurity:
                 value=cfg["value"],
             ))
 
+        # 租户隔离
+        tenant_id = user_perm.get("tenant_id")
+        if tenant_id:
+            new_filters.append(Filter(
+                field="tenant_id",
+                operator="=",
+                value=tenant_id,
+            ))
+
+        if not new_filters:
+            return dsl
         return dsl.model_copy(update={"filters": new_filters})

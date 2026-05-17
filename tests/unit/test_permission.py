@@ -58,3 +58,33 @@ def test_data_masking():
 
     result = cls.mask({"phone": "13800138000"})
     assert result["phone"] == "138****8000"
+
+
+def test_tenant_isolation():
+    rls = RowLevelSecurity({
+        "u123": {
+            "tenant_id": "t001",
+        }
+    })
+    dsl = DSL(data_source="orders")
+    result = rls.inject(dsl, "u123")
+    assert len(result.filters) == 1
+    assert result.filters[0].field == "tenant_id"
+    assert result.filters[0].value == "t001"
+    assert result.filters[0].operator == "="
+
+
+def test_tenant_with_row_filters():
+    rls = RowLevelSecurity({
+        "u123": {
+            "tenant_id": "t001",
+            "row_filters": {
+                "region": {"operator": "=", "value": "华东"}
+            }
+        }
+    })
+    dsl = DSL(data_source="orders")
+    result = rls.inject(dsl, "u123")
+    assert len(result.filters) == 2
+    fields = {f.field for f in result.filters}
+    assert fields == {"region", "tenant_id"}
