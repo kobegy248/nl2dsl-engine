@@ -13,3 +13,6 @@ class VectorStore(ABC):
 
     @abstractmethod
     def search(self, collection: str, vector: list[float], limit: int) -> list[dict]: ...
+
+    @abstractmethod
+    def get_all(self, collection: str) -> list[dict]: ...

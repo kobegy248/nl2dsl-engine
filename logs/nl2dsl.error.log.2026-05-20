@@ -1,0 +1,2 @@
+2026-05-20 00:04:05 | ERROR    | nl2dsl.api | LLM DSL generation failed: Invalid control character at: line 4 column 8 (char 125)
+2026-05-20 00:14:05 | ERROR    | nl2dsl.api | LLM DSL generation failed: Invalid control character at: line 7 column 8 (char 272)

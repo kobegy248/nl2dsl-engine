@@ -9,12 +9,15 @@ from nl2dsl.dsl.models import DSL, ClarificationItem
 from nl2dsl.query.sandbox import SandboxResult
 
 
-def add_to_list(existing: list[dict] | None, new_item: dict | list[dict] | None) -> list[dict] | None:
+def add_to_list(existing: list[dict] | dict | None, new_item: dict | list[dict] | None) -> list[dict] | None:
     """Reducer: append new item to a list field, or return None if new_item is None.
 
     LangGraph wraps update values in a list before passing to the reducer,
     so new_item may be a list containing the actual dict(s) to append.
     We flatten one level of list wrapping to handle this.
+
+    Also handles the case where existing is a single dict (first assignment
+    before reducer takes over).
     """
     if new_item is None:
         return existing
@@ -27,6 +30,11 @@ def add_to_list(existing: list[dict] | None, new_item: dict | list[dict] | None)
 
     if existing is None:
         return list(items_to_add)
+
+    # Handle case where existing is a single dict (first assignment)
+    if isinstance(existing, dict):
+        return [existing] + list(items_to_add)
+
     return existing + list(items_to_add)
 
 

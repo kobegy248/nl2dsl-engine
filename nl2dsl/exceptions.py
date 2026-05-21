@@ -30,3 +30,8 @@ class QueryError(NL2DSLException):
 class LLMError(NL2DSLException):
     error_code = "LLM_ERROR"
     status_code = 502
+
+
+class NotFoundError(NL2DSLException):
+    error_code = "NOT_FOUND"
+    status_code = 404

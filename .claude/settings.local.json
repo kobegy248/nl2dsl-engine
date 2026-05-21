@@ -21,7 +21,23 @@
       "Skill(superpowers:writing-plans)",
       "Skill(superpowers:subagent-driven-development)",
       "Bash(git checkout *)",
-      "Bash(New-Item *)"
+      "Bash(New-Item *)",
+      "Bash(git branch *)",
+      "Bash(Get-Content *)",
+      "Bash(sqlite3 *)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\demo\\\\db-gpt\\\\NL2DSL\" -Depth 2 | Where-Object { $_.Name -match \"^\\(requirements|pyproject|setup\\)\" } | Select-Object FullName)",
+      "Bash(uvicorn nl2dsl.api:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(echo \"Server PID: $!\")",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/query -H 'Content-Type: application/json' -d '{\"question\":\"查询销售额\",\"user_id\":\"u001\",\"tenant_id\":\"t001\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/query -H \"Content-Type: application/json\" -d '{\"question\":\"查询销售额\",\"user_id\":\"u001\",\"tenant_id\":\"t001\"}')",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(echo \"PID: $!\")",
+      "Skill(superpowers:brainstorming)",
+      "PowerShell(ollama ps *)",
+      "PowerShell(nvidia-smi *)",
+      "PowerShell(ollama list *)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

@@ -43,3 +43,17 @@ def test_upsert_and_search(store):
     results = store.search("test_schema", vector=[1.0, 0.0, 0.0], limit=1)
     assert len(results) == 1
     assert results[0]["text"] == "销售额指标"
+
+
+def test_get_all(store):
+    store.create_collection("test_all", dimension=3)
+    records = [
+        {"id": 1, "vector": [1.0, 0.0, 0.0], "text": "record 1", "metadata": {"name": "sales"}},
+        {"id": 2, "vector": [0.0, 1.0, 0.0], "text": "record 2", "metadata": {"name": "orders"}},
+    ]
+    store.upsert("test_all", records)
+
+    all_records = store.get_all("test_all")
+    assert len(all_records) == 2
+    names = {r.get("name") for r in all_records}
+    assert names == {"sales", "orders"}

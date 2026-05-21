@@ -66,6 +66,11 @@ def route_after_validate(state: QueryState) -> str:
     if not dsl_attempts:
         return "ok"
 
+    # Debug: ensure dsl_attempts is a list
+    if isinstance(dsl_attempts, dict):
+        # Single attempt stored as dict (shouldn't happen with proper reducer)
+        dsl_attempts = [dsl_attempts]
+
     last_attempt = dsl_attempts[-1]
     if last_attempt.get("valid") is False:
         # Validation failed, check retry limit

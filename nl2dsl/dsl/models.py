@@ -19,6 +19,13 @@ class Aggregation(BaseModel):
     alias: str | None = None
 
 
+class Join(BaseModel):
+    table: str
+    on_field: str
+    join_type: Literal["inner", "left", "right"] = "inner"
+    alias: str | None = None
+
+
 class DSL(BaseModel):
     metrics: list[Aggregation] | None = None
     dimensions: list[str] | None = None
@@ -29,3 +36,16 @@ class DSL(BaseModel):
     data_source: str
     time_field: str | None = None
     time_range: tuple[str, str] | None = None
+    joins: list[Join] | None = None
+
+
+class ClarificationItem(BaseModel):
+    type: str
+    question: str
+    options: list[str]
+
+
+class ClarificationResponse(BaseModel):
+    status: Literal["clarification"] = "clarification"
+    message: str
+    items: list[ClarificationItem]

@@ -1,0 +1,211 @@
+2026-05-20 00:00:26 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 00:00:26 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 00:00:26 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 00:00:36 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-20 00:00:38 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-20 00:00:38 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:00:38 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:00:38 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:01:21 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=601, prompt_tokens=1193, total_tokens=1794, completion_tokens_details=None, prompt_tokens_details=None) time=42395ms content_length=145
+2026-05-20 00:01:21 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'data_source': 'orders', 'limit': 10, 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 00:01:21 | INFO     | nl2dsl.api | Calling LLM for question: 查询销售额最高的产品, rag_retriever=True
+2026-05-20 00:01:21 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:01:21 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1033
+2026-05-20 00:02:05 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=640, prompt_tokens=1212, total_tokens=1852, completion_tokens_details=None, prompt_tokens_details=None) time=43957ms content_length=224
+2026-05-20 00:02:05 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:02:05 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=True
+2026-05-20 00:02:05 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:02:05 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1110
+2026-05-20 00:02:33 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=385, prompt_tokens=1246, total_tokens=1631, completion_tokens_details=None, prompt_tokens_details=None) time=27514ms content_length=292
+2026-05-20 00:02:33 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:02:33 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] question=查询华东地区销售额最高的 10 个产品 user=u001 tenant=t001
+2026-05-20 00:02:33 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额最高的 10 个产品, rag_retriever=True
+2026-05-20 00:02:33 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:02:33 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1056
+2026-05-20 00:03:24 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=742, prompt_tokens=1224, total_tokens=1966, completion_tokens_details=None, prompt_tokens_details=None) time=51157ms content_length=292
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] dsl_generate: llm=True
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] validate: passed
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] row_permission_inject: done
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] column_permission_check: passed
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] semantic_resolve: done
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] sql_build: SELECT order_fact.product_name, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] sql_scan: passed
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] sql_execute: rows_returned=5
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | [query_id=5c8c536e-5d29-4177-a31e-ea7947800e86] total_time=51448ms status=success
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:03:24 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:03:24 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:04:05 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=588, prompt_tokens=1193, total_tokens=1781, completion_tokens_details=None, prompt_tokens_details=None) time=40766ms content_length=127
+2026-05-20 00:04:05 | ERROR    | nl2dsl.api | LLM DSL generation failed: Invalid control character at: line 4 column 8 (char 125)
+2026-05-20 00:04:16 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 00:04:16 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 00:04:16 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 00:04:26 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-20 00:04:28 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-20 00:04:28 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:04:29 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:04:29 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:05:10 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=574, prompt_tokens=1193, total_tokens=1767, completion_tokens_details=None, prompt_tokens_details=None) time=41292ms content_length=160
+2026-05-20 00:05:10 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'data_source': 'orders', 'limit': 10, 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 00:05:10 | INFO     | nl2dsl.api | Calling LLM for question: 查询销售额最高的产品, rag_retriever=True
+2026-05-20 00:05:10 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:05:10 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1033
+2026-05-20 00:05:53 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=616, prompt_tokens=1212, total_tokens=1828, completion_tokens_details=None, prompt_tokens_details=None) time=42630ms content_length=224
+2026-05-20 00:05:53 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:05:53 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=True
+2026-05-20 00:05:53 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:05:53 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1110
+2026-05-20 00:07:01 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=988, prompt_tokens=1246, total_tokens=2234, completion_tokens_details=None, prompt_tokens_details=None) time=67845ms content_length=292
+2026-05-20 00:07:01 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:07:01 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] question=查询华东地区销售额最高的 10 个产品 user=u001 tenant=t001
+2026-05-20 00:07:01 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额最高的 10 个产品, rag_retriever=True
+2026-05-20 00:07:02 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:07:02 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1056
+2026-05-20 00:07:40 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=550, prompt_tokens=1224, total_tokens=1774, completion_tokens_details=None, prompt_tokens_details=None) time=38580ms content_length=292
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] dsl_generate: llm=True
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] validate: passed
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] row_permission_inject: done
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] column_permission_check: passed
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] semantic_resolve: done
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] sql_build: SELECT order_fact.product_name, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] sql_scan: passed
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] sql_execute: rows_returned=5
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | [query_id=121a6a07-2679-40d4-9e0c-f41cf462b0f8] total_time=38906ms status=success
+2026-05-20 00:07:40 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:07:41 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:07:41 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:08:09 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=397, prompt_tokens=1193, total_tokens=1590, completion_tokens_details=None, prompt_tokens_details=None) time=28235ms content_length=160
+2026-05-20 00:08:09 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'limit': 10, 'data_source': 'orders', 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 00:09:37 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 00:09:37 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 00:09:37 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 00:09:47 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-20 00:09:50 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-20 00:09:52 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:09:52 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:09:52 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:11:02 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=1003, prompt_tokens=1193, total_tokens=2196, completion_tokens_details=None, prompt_tokens_details=None) time=69485ms content_length=160
+2026-05-20 00:11:02 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'data_source': 'orders', 'limit': 10, 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 00:11:02 | INFO     | nl2dsl.api | Calling LLM for question: 查询销售额最高的产品, rag_retriever=True
+2026-05-20 00:11:02 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:11:02 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1033
+2026-05-20 00:12:12 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=1024, prompt_tokens=1212, total_tokens=2236, completion_tokens_details=None, prompt_tokens_details=None) time=69811ms content_length=224
+2026-05-20 00:12:12 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:12:12 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=True
+2026-05-20 00:12:12 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:12:12 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1110
+2026-05-20 00:13:19 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=970, prompt_tokens=1246, total_tokens=2216, completion_tokens_details=None, prompt_tokens_details=None) time=66805ms content_length=228
+2026-05-20 00:13:19 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'limit': 10, 'data_source': 'orders', 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 00:13:19 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] question=查询华东地区销售额最高的 10 个产品 user=u001 tenant=t001
+2026-05-20 00:13:19 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额最高的 10 个产品, rag_retriever=True
+2026-05-20 00:13:19 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:13:19 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1056
+2026-05-20 00:14:05 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=651, prompt_tokens=1224, total_tokens=1875, completion_tokens_details=None, prompt_tokens_details=None) time=45288ms content_length=274
+2026-05-20 00:14:05 | ERROR    | nl2dsl.api | LLM DSL generation failed: Invalid control character at: line 7 column 8 (char 272)
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] Using mock DSL generation
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] dsl_generate: llm=False
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] validate: passed
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] row_permission_inject: done
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] column_permission_check: passed
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] semantic_resolve: done
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] sql_build: SELECT order_fact.product_name, order_fact.region, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name, order_fact.region ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] sql_scan: passed
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] sql_execute: rows_returned=5
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | [query_id=ab5470f2-b417-4f7b-949a-e70c9545de5a] total_time=45619ms status=success
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=True
+2026-05-20 00:14:05 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-20 00:14:05 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1006
+2026-05-20 00:14:34 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=411, prompt_tokens=1193, total_tokens=1604, completion_tokens_details=None, prompt_tokens_details=None) time=29239ms content_length=91
+2026-05-20 00:14:34 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLMClient initialized: model=test-model base_url=https://test.example.com
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM request: model=test-model prompt_length=5
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM response: tokens=<MagicMock name='mock.usage' id='2018660718128'> time=0ms content_length=40
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLMClient initialized: model=test-model base_url=https://test.example.com
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM request: model=test-model prompt_length=5
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM response: tokens={'prompt_tokens': 10, 'completion_tokens': 5} time=1ms content_length=25
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLMClient initialized: model=test-model base_url=https://test.example.com
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM request: model=test-model prompt_length=5
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM response: tokens={'prompt_tokens': 10, 'completion_tokens': 5} time=0ms content_length=25
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLMClient initialized: model=test-model base_url=https://test.example.com
+2026-05-20 00:14:38 | INFO     | nl2dsl.llm | LLM request: model=test-model prompt_length=5
+2026-05-20 00:14:39 | INFO     | nl2dsl.llm | LLM response: tokens={'prompt_tokens': 10, 'completion_tokens': 5} time=50ms content_length=25
+2026-05-20 00:14:39 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 00:14:39 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=14
+2026-05-20 00:15:11 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=473, prompt_tokens=31, total_tokens=504, completion_tokens_details=None, prompt_tokens_details=None) time=32950ms content_length=46
+2026-05-20 00:15:12 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 00:15:12 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=15
+2026-05-20 00:15:34 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=307, prompt_tokens=35, total_tokens=342, completion_tokens_details=None, prompt_tokens_details=None) time=22105ms content_length=2
+2026-05-20 00:15:34 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=15
+2026-05-20 00:16:00 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=398, prompt_tokens=35, total_tokens=433, completion_tokens_details=None, prompt_tokens_details=None) time=25952ms content_length=60
+2026-05-20 00:16:00 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=15
+2026-05-20 00:16:32 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=483, prompt_tokens=35, total_tokens=518, completion_tokens_details=None, prompt_tokens_details=None) time=31498ms content_length=67
+2026-05-20 07:42:26 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 07:42:26 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 07:42:27 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 07:43:10 | WARNING  | nl2dsl.api | RAG store initialization failed: Due to a serious vulnerability issue in `torch.load`, even with `weights_only=True`, we now require users to upgrade torch to at least v2.6 in order to use the function. This version restriction does not apply when loading files with safetensors.
+See the vulnerability report here https://nvd.nist.gov/vuln/detail/CVE-2025-32434. LLM will work without RAG context.
+2026-05-20 07:43:12 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=False
+2026-05-20 07:43:12 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=845
+2026-05-20 07:43:43 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=354, prompt_tokens=985, total_tokens=1339, completion_tokens_details=None, prompt_tokens_details=None) time=30727ms content_length=158
+2026-05-20 07:43:43 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'data_source': 'orders', 'limit': 10, 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 07:43:43 | INFO     | nl2dsl.api | Calling LLM for question: 查询销售额最高的产品, rag_retriever=False
+2026-05-20 07:43:43 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:44:01 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=337, prompt_tokens=988, total_tokens=1325, completion_tokens_details=None, prompt_tokens_details=None) time=18172ms content_length=222
+2026-05-20 07:44:01 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 07:44:01 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=False
+2026-05-20 07:44:01 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:48:42 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 07:48:42 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 07:48:42 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 07:48:55 | WARNING  | nl2dsl.api | RAG store initialization failed: Due to a serious vulnerability issue in `torch.load`, even with `weights_only=True`, we now require users to upgrade torch to at least v2.6 in order to use the function. This version restriction does not apply when loading files with safetensors.
+See the vulnerability report here https://nvd.nist.gov/vuln/detail/CVE-2025-32434. LLM will work without RAG context.
+2026-05-20 07:48:55 | INFO     | nl2dsl.api | Calling LLM for question: 测试, rag_retriever=False
+2026-05-20 07:48:55 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=845
+2026-05-20 07:49:18 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=297, prompt_tokens=985, total_tokens=1282, completion_tokens_details=None, prompt_tokens_details=None) time=22572ms content_length=158
+2026-05-20 07:49:18 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'data_source': 'orders', 'limit': 10, 'offset': 0, 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}]}
+2026-05-20 07:49:18 | INFO     | nl2dsl.api | Calling LLM for question: 查询销售额最高的产品, rag_retriever=False
+2026-05-20 07:49:18 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:49:36 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=338, prompt_tokens=988, total_tokens=1326, completion_tokens_details=None, prompt_tokens_details=None) time=18486ms content_length=222
+2026-05-20 07:49:36 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 07:49:36 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=False
+2026-05-20 07:49:36 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:54:30 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 07:54:30 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 07:54:30 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 07:54:42 | WARNING  | nl2dsl.api | RAG store initialization failed: Due to a serious vulnerability issue in `torch.load`, even with `weights_only=True`, we now require users to upgrade torch to at least v2.6 in order to use the function. This version restriction does not apply when loading files with safetensors.
+See the vulnerability report here https://nvd.nist.gov/vuln/detail/CVE-2025-32434. LLM will work without RAG context.
+2026-05-20 07:54:42 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区的销售额, rag_retriever=False
+2026-05-20 07:54:42 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:55:17 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=528, prompt_tokens=988, total_tokens=1516, completion_tokens_details=None, prompt_tokens_details=None) time=34760ms content_length=290
+2026-05-20 07:55:17 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 07:55:37 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 07:55:37 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 07:55:37 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 07:55:49 | WARNING  | nl2dsl.api | RAG store initialization failed: Due to a serious vulnerability issue in `torch.load`, even with `weights_only=True`, we now require users to upgrade torch to at least v2.6 in order to use the function. This version restriction does not apply when loading files with safetensors.
+See the vulnerability report here https://nvd.nist.gov/vuln/detail/CVE-2025-32434. LLM will work without RAG context.
+2026-05-20 07:55:50 | INFO     | nl2dsl.api | [query_id=75cc7ae4-19b5-4f05-877f-f6c748051725] question=查询销量 user=u001 tenant=t001
+2026-05-20 07:55:50 | INFO     | nl2dsl.api | [query_id=75cc7ae4-19b5-4f05-877f-f6c748051725] clarification: 2 ambiguities found
+2026-05-20 07:55:50 | INFO     | nl2dsl.api | [query_id=a4b809f2-dd8c-45b7-88ea-f0502cf2035e] question=查询华东地区的销售额 user=u001 tenant=t001
+2026-05-20 07:55:50 | INFO     | nl2dsl.api | [query_id=a4b809f2-dd8c-45b7-88ea-f0502cf2035e] clarification: 3 ambiguities found
+2026-05-20 07:56:11 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-20 07:56:11 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-20 07:56:11 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-20 07:56:23 | WARNING  | nl2dsl.api | RAG store initialization failed: Due to a serious vulnerability issue in `torch.load`, even with `weights_only=True`, we now require users to upgrade torch to at least v2.6 in order to use the function. This version restriction does not apply when loading files with safetensors.
+See the vulnerability report here https://nvd.nist.gov/vuln/detail/CVE-2025-32434. LLM will work without RAG context.
+2026-05-20 07:56:23 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] question=查询最近7天的订单量 user=u001 tenant=t001
+2026-05-20 07:56:23 | INFO     | nl2dsl.api | Calling LLM for question: 查询最近7天的订单量, rag_retriever=False
+2026-05-20 07:56:23 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=853
+2026-05-20 07:57:52 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=1573, prompt_tokens=991, total_tokens=2564, completion_tokens_details=None, prompt_tokens_details=None) time=88831ms content_length=293
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'count', 'field': 'id', 'alias': 'order_count'}], 'dimensions': ['order_date'], 'filters': [{'field': 'order_date', 'operator': '>=', 'value': '2023-09-28'}], 'order_by': [{'field': 'order_count', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] dsl_generate: llm=True
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] validate: passed
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] row_permission_inject: done
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] column_permission_check: passed
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] semantic_resolve: done
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] sql_build: SELECT order_fact.order_date, count(order_fact.id) AS order_count  FROM order_fact  WHERE order_fact.order_date >= '2023-09-28' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.order_date ORDER BY order_count DESC  LIMIT 10 OFFSET 0
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] sql_scan: passed
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] sandbox: passed=True risks=[]
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] sql_execute: rows_returned=10
+2026-05-20 07:57:52 | INFO     | nl2dsl.api | [query_id=b8de34fb-4ed1-4923-98c9-e10e433e7adc] total_time=88853ms status=success

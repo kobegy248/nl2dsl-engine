@@ -1,0 +1,75 @@
+2026-05-18 23:12:25 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:12:25 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:12:25 | WARNING  | nl2dsl.api | RAG store initialization failed: <ConnectionConfigException: (code=1, message=milvus-lite is required for local database connections. Please install it with: pip install pymilvus[milvus_lite])>. LLM will work without RAG context.
+2026-05-18 23:13:22 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:13:22 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:13:23 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:13:36 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:13:39 | WARNING  | nl2dsl.api | RAG store initialization failed: <DataNotMatchException: (code=1, message=The Input data type is inconsistent with defined schema, {id} field should be a int64, but got a {<class 'str'>} instead. Detail: 'str' object cannot be interpreted as an integer)>. LLM will work without RAG context.
+2026-05-18 23:15:13 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:15:13 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:15:14 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:15:27 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:15:30 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-18 23:15:49 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] question=查询华东地区销售额 user=u001 tenant=t001
+2026-05-18 23:15:49 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额
+2026-05-18 23:15:49 | INFO     | nl2dsl.llm | LLM request: model=qwen3.5-plus prompt_length=852
+2026-05-18 23:16:59 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=3751, prompt_tokens=489, total_tokens=4240, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=3600, rejected_prediction_tokens=None, text_tokens=3751), prompt_tokens_details=PromptTokensDetails(audio_tokens=None, cached_tokens=None, text_tokens=489)) time=69529ms content_length=382
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | LLM generated DSL: {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': ['region'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders'}
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] dsl_generate: llm=True
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] validate: passed
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] row_permission_inject: done
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] column_permission_check: passed
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] semantic_resolve: done
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] sql_build: SELECT order_fact.region, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.region ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] sql_scan: passed
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] sql_execute: rows_returned=1
+2026-05-18 23:16:59 | INFO     | nl2dsl.api | [query_id=2e3b4f57-c79b-4382-a9c9-b9f4bf9fcd62] total_time=69545ms status=success
+2026-05-18 23:18:12 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:18:12 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:18:12 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:18:23 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:18:24 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-18 23:18:55 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:18:55 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:18:55 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:19:08 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:19:11 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-18 23:19:28 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:19:28 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:19:29 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:19:40 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:19:41 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-18 23:19:55 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] question=查询华东地区销售额 user=u001 tenant=t001
+2026-05-18 23:19:55 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额
+2026-05-18 23:19:55 | INFO     | nl2dsl.llm | LLM request: model=qwen3.5-plus prompt_length=852
+2026-05-18 23:20:48 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=2943, prompt_tokens=489, total_tokens=3432, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=2826, rejected_prediction_tokens=None, text_tokens=2943), prompt_tokens_details=PromptTokensDetails(audio_tokens=None, cached_tokens=None, text_tokens=489)) time=53498ms content_length=294
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | LLM generated DSL: {'metrics': [{'func': 'sum', 'field': 'pay_amount', 'alias': 'sales_amount'}], 'dimensions': [], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [], 'limit': 10, 'data_source': 'orders'}
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] dsl_generate: llm=True
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] validate: passed
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] row_permission_inject: done
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] column_permission_check: passed
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] semantic_resolve: done
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] sql_build: SELECT sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001'  LIMIT 10 OFFSET 0
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] sql_scan: passed
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] sql_execute: rows_returned=1
+2026-05-18 23:20:48 | INFO     | nl2dsl.api | [query_id=f6640e19-189c-44b1-91c2-f9b9bb3dc235] total_time=53507ms status=success
+2026-05-18 23:22:16 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3.5-plus base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:22:16 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3.5-plus, base_url=https://dashscope.aliyuncs.com/compatible-mode/v1
+2026-05-18 23:22:16 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+2026-05-18 23:22:27 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-18 23:22:28 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] question=查询华东地区销售额 user=u001 tenant=t001
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额
+2026-05-18 23:22:46 | INFO     | nl2dsl.llm | LLM request: model=qwen3.5-plus prompt_length=852
+2026-05-18 23:22:46 | ERROR    | nl2dsl.api | LLM DSL generation failed: Error code: 400 - {'error': {'message': 'Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment', 'type': 'Arrearage', 'param': None, 'code': 'Arrearage'}, 'id': 'chatcmpl-be25c95a-9e2f-9ab5-9e83-7a8f2c555df9', 'request_id': 'be25c95a-9e2f-9ab5-9e83-7a8f2c555df9'}
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] Using mock DSL generation
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] dsl_generate: llm=False
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] validate: passed
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] row_permission_inject: done
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] column_permission_check: passed
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] semantic_resolve: done
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] sql_build: SELECT order_fact.region, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.region ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] sql_scan: passed
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] sql_execute: rows_returned=1
+2026-05-18 23:22:46 | INFO     | nl2dsl.api | [query_id=20243bb5-c634-4f34-891a-cb6aab428006] total_time=159ms status=success

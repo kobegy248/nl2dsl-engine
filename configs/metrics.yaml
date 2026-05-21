@@ -8,6 +8,21 @@ metrics:
   order_count:
     expr: COUNT(id)
     description: "订单数量"
+  avg_order_value:
+    expr: AVG(order_amount)
+    description: "客单价"
+  total_discount:
+    expr: SUM(discount_amount)
+    description: "优惠总额"
+  customer_count:
+    expr: COUNT(DISTINCT customer_id)
+    description: "客户数量"
+  max_price:
+    expr: MAX(price)
+    description: "最高单价"
+  avg_price:
+    expr: AVG(price)
+    description: "平均单价"
 
 dimensions:
   product_name:
@@ -19,9 +34,44 @@ dimensions:
   order_date:
     column: order_date
     description: "订单日期"
+  brand:
+    column: brand
+    description: "品牌"
+  category:
+    column: category
+    description: "品类"
+  channel:
+    column: channel
+    description: "销售渠道"
+  customer_type:
+    column: customer_type
+    description: "客户类型"
+  customer_name:
+    column: customer_name
+    description: "客户名称"
+  price:
+    column: price
+    description: "产品单价"
 
 data_sources:
   orders:
     table: order_fact
-    metrics: [sales_amount, gmv, order_count]
-    dimensions: [product_name, region, order_date]
+    metrics: [sales_amount, gmv, order_count, avg_order_value, total_discount]
+    dimensions: [product_name, region, order_date, brand, category, channel, customer_type]
+    joins:
+      product_dim:
+        on: product_id
+        type: inner
+        alias: p
+      customer_dim:
+        on: customer_id
+        type: left
+        alias: c
+  products:
+    table: product_dim
+    metrics: [max_price, avg_price]
+    dimensions: [product_name, brand, category, price]
+  customers:
+    table: customer_dim
+    metrics: [customer_count]
+    dimensions: [customer_name, customer_type, region]

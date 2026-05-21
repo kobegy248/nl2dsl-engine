@@ -1,5 +1,6 @@
 from nl2dsl.exceptions import (
     NL2DSLException,
+    NotFoundError,
     ValidationError,
     PermissionError,
     SemanticError,
@@ -29,3 +30,9 @@ def test_semantic_error():
     exc = SemanticError("metric not found")
     assert exc.error_code == "SEMANTIC_ERROR"
     assert exc.status_code == 400
+
+
+def test_not_found_error():
+    exc = NotFoundError("audit record not found")
+    assert exc.error_code == "NOT_FOUND"
+    assert exc.status_code == 404

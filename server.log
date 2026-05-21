@@ -1,0 +1,71 @@
+2026-05-19 08:24:28 | INFO     | nl2dsl.llm | LLMClient initialized: model=qwen3:8b base_url=http://localhost:11434/v1
+2026-05-19 08:24:28 | INFO     | nl2dsl.api | LLM client initialized: model=qwen3:8b, base_url=http://localhost:11434/v1
+2026-05-19 08:24:29 | INFO     | nl2dsl.api | Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 22008.35it/s]
+D:\demo\db-gpt\NL2DSL\nl2dsl\rag\embedder.py:34: FutureWarning: The `get_sentence_embedding_dimension` method has been renamed to `get_embedding_dimension`.
+  self._dim = self._model.get_sentence_embedding_dimension()
+2026-05-19 08:25:11 | INFO     | nl2dsl.api | BGE model loaded, dimension=768
+2026-05-19 08:25:14 | INFO     | nl2dsl.api | LLM + RAG (BGE embedder + keyword-split) initialized successfully
+INFO:     Started server process [16060]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:45050 - "GET /health HTTP/1.1" 200 OK
+2026-05-19 08:25:37 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] question=查询华东地区销售额 user=u001 tenant=t001
+2026-05-19 08:25:37 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区销售额, rag_retriever=True
+2026-05-19 08:25:37 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-19 08:25:37 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1082
+2026-05-19 08:26:54 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=1000, prompt_tokens=1222, total_tokens=2222, completion_tokens_details=None, prompt_tokens_details=None) time=76916ms content_length=292
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] dsl_generate: llm=True
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] validate: passed
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] row_permission_inject: done
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] column_permission_check: passed
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] semantic_resolve: done
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] sql_build: SELECT order_fact.product_name, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] sql_scan: passed
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] sql_execute: rows_returned=5
+2026-05-19 08:26:54 | INFO     | nl2dsl.api | [query_id=36ef857a-f8e7-4fe0-bbd7-f6c50b6b9699] total_time=77151ms status=success
+INFO:     127.0.0.1:45051 - "POST /api/v1/query HTTP/1.1" 200 OK
+I0519 00:26:57.895342   15296 chttp2_transport.cc:1369] ipv4:127.0.0.1:45041: Got goaway [11] err=UNAVAILABLE:GOAWAY received; Error code: 11; Debug Text: too_many_pings {grpc_status:14, http2_error:11}
+E0519 00:26:57.901420   15296 chttp2_transport.cc:1401] ipv4:127.0.0.1:45041: Received a GOAWAY with error code ENHANCE_YOUR_CALM and debug data equal to "too_many_pings". Current keepalive time (before throttling): 10000ms
+2026-05-19 08:30:49 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] question=查询华东地区VIP客户在手机品类上的消费偏好，按消费金额降序排列 user=u001 tenant=t001
+2026-05-19 08:30:49 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区VIP客户在手机品类上的消费偏好，按消费金额降序排列, rag_retriever=True
+2026-05-19 08:30:50 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-19 08:30:50 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1150
+I0519 00:32:30.420941   18176 chttp2_transport.cc:1369] ipv4:127.0.0.1:45041: Got goaway [11] err=UNAVAILABLE:GOAWAY received; Error code: 11; Debug Text: too_many_pings {grpc_status:14, http2_error:11}
+E0519 00:32:30.421135   18176 chttp2_transport.cc:1401] ipv4:127.0.0.1:45041: Received a GOAWAY with error code ENHANCE_YOUR_CALM and debug data equal to "too_many_pings". Current keepalive time (before throttling): 20000ms
+INFO:     127.0.0.1:45177 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45179 - "GET /health HTTP/1.1" 200 OK
+2026-05-19 08:37:04 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] question=查询华东地区VIP客户在手机品类上的消费偏好，按消费金额降序排列 user=u001 tenant=t001
+2026-05-19 08:37:04 | INFO     | nl2dsl.api | Calling LLM for question: 查询华东地区VIP客户在手机品类上的消费偏好，按消费金额降序排列, rag_retriever=True
+2026-05-19 08:37:05 | INFO     | nl2dsl.api | Using RAG context for LLM prompt
+2026-05-19 08:37:05 | INFO     | nl2dsl.llm | LLM request: model=qwen3:8b prompt_length=1150
+I0519 00:39:25.160711    5072 chttp2_transport.cc:1369] ipv4:127.0.0.1:45041: Got goaway [11] err=UNAVAILABLE:GOAWAY received; Error code: 11; Debug Text: too_many_pings {http2_error:11, grpc_status:14}
+E0519 00:39:25.161221    5072 chttp2_transport.cc:1401] ipv4:127.0.0.1:45041: Received a GOAWAY with error code ENHANCE_YOUR_CALM and debug data equal to "too_many_pings". Current keepalive time (before throttling): 40000ms
+2026-05-19 08:41:56 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=881, prompt_tokens=1294, total_tokens=2175, completion_tokens_details=None, prompt_tokens_details=None) time=291238ms content_length=464
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}, {'field': 'customer_type', 'operator': '=', 'value': 'VIP'}, {'field': 'category', 'operator': '=', 'value': '手机'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] dsl_generate: llm=True
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] validate: passed
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] row_permission_inject: done
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] column_permission_check: passed
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] semantic_resolve: done
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] sql_build: SELECT order_fact.product_name, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.customer_type = 'VIP' AND order_fact.category = '手机' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] sql_scan: passed
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] sql_execute: rows_returned=1
+2026-05-19 08:41:56 | INFO     | nl2dsl.api | [query_id=0b0e52d8-2350-496e-87cf-c1b9a50fc80e] total_time=291884ms status=success
+INFO:     127.0.0.1:45189 - "POST /api/v1/query HTTP/1.1" 200 OK
+2026-05-19 08:43:18 | INFO     | nl2dsl.llm | LLM response: tokens=CompletionUsage(completion_tokens=1227, prompt_tokens=1294, total_tokens=2521, completion_tokens_details=None, prompt_tokens_details=None) time=748559ms content_length=424
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | LLM generated DSL (post-processed): {'metrics': [{'func': 'sum', 'field': 'order_amount', 'alias': 'sales_amount'}], 'dimensions': ['product_name'], 'filters': [{'field': 'region', 'operator': '=', 'value': '华东'}, {'field': 'customer_type', 'operator': '=', 'value': 'VIP'}, {'field': 'category', 'operator': '=', 'value': '手机'}], 'order_by': [{'field': 'sales_amount', 'direction': 'desc'}], 'limit': 10, 'data_source': 'orders', 'offset': 0}
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] dsl_generate: llm=True
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] validate: passed
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] row_permission_inject: done
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] column_permission_check: passed
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] semantic_resolve: done
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] sql_build: SELECT order_fact.product_name, sum(order_fact.order_amount) AS sales_amount  FROM order_fact  WHERE order_fact.region = '华东' AND order_fact.customer_type = 'VIP' AND order_fact.category = '手机' AND order_fact.region IN ('华东', '华南') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC  LIMIT 10 OFFSET 0
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] sql_scan: passed
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] sql_execute: rows_returned=1
+2026-05-19 08:43:18 | INFO     | nl2dsl.api | [query_id=463d9d58-cd4f-414a-9b56-27ab900899bf] total_time=749008ms status=success
+INFO:     127.0.0.1:36861 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36873 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36890 - "POST /api/v1/query/execute HTTP/1.1" 200 OK

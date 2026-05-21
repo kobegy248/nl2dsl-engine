@@ -1,0 +1,55 @@
+terms:
+  sales_amount:
+    aliases: ["销售额", "业绩", "销售收入", "营收", "营业额", "实收金额"]
+    metric: sales_amount
+    description: "含税销售额，不含退款，按实付金额计算"
+
+  gmv:
+    aliases: ["GMV", "成交总额", "交易额", "成交金额"]
+    metric: gmv
+    description: "订单成交总额，按订单金额计算"
+
+  order_count:
+    aliases: ["订单量", "订单数", "单量", "下单数量"]
+    metric: order_count
+    description: "订单数量"
+
+  avg_order_value:
+    aliases: ["客单价", "平均订单金额", "平均消费", "笔单价"]
+    metric: avg_order_value
+    description: "每笔订单的平均实付金额"
+
+  total_discount:
+    aliases: ["优惠总额", "折扣金额", "优惠金额", "让利金额"]
+    metric: total_discount
+    description: "所有订单的优惠金额合计"
+
+  total_quantity:
+    aliases: ["销量", "销售数量", "售出数量"]
+    metric: total_quantity
+    description: "所有商品的销售数量合计"
+
+  total_stock:
+    aliases: ["总库存", "库存总量", "库存数", "库存量"]
+    metric: total_stock
+    description: "所有仓库的库存数量合计"
+
+  avg_stock:
+    aliases: ["平均库存", "均库存"]
+    metric: avg_stock
+    description: "各商品的平均库存量"
+
+  total_available:
+    aliases: ["可用库存", "可售库存"]
+    metric: total_available
+    description: "扣除预留后的可用库存总量"
+
+  total_reserved:
+    aliases: ["预留库存", "锁定库存"]
+    metric: total_reserved
+    description: "已预留/锁定的库存总量"
+
+  stock_product_count:
+    aliases: ["库存SKU数", "有库存商品数", "库存种类"]
+    metric: stock_product_count
+    description: "当前有库存的商品种类数量"
