@@ -1,16 +1,20 @@
 # NL2DSL 查询完整流程图
 
-本文档描述用户自然语言查询从请求到结果返回的完整处理链路，包含每个处理节点和分支判断。
+本文档描述用户自然语言查询从请求到结果返回的完整处理链路，基于 LangGraph StateGraph 架构。
 
 ---
 
 ## 一、顶层架构概览
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   用户请求   │────▶│  歧义澄清   │────▶│  DSL 生成   │────▶│  校验与权限  │────▶│ SQL 编译执行 │
-│  (自然语言)  │     │(Clarification)│   │(RetryChain) │     │  语义解析   │     │  Sandbox   │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+用户请求 → API 层 → LangGraph StateGraph → 审计日志 → 返回响应
+              ↓
+         ┌──────────────────────────────────────────────┐
+         │  clarification → validation 子图 →           │
+         │  permission_check 子图 → resolve_semantic →  │
+         │  build_sql → scan_sql → sandbox_check →      │
+         │  [human_review] → execute_sql → END           │
+         └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -19,113 +23,83 @@
 
 ```mermaid
 flowchart TD
-    START([用户发起 POST /api/v1/query]) --> INIT["1. 初始化<br/>生成 query_id<br/>开始计时<br/>初始化 trace 数组"]
+    START([用户发起 POST /api/v1/query]) --> INIT["1. API 层<br/>生成 query_id<br/>构建 QueryState<br/>初始化状态"]
 
-    INIT --> CLARIFY{"2. 歧义澄清检查<br/>ClarificationDetector.detect()<br/>• 时间缺失<br/>• 指标歧义<br/>• 维度歧义<br/>• 比较基准歧义"}
+    INIT --> GRAPH["2. LangGraph StateGraph<br/>graph.ainvoke(state, config)"]
 
-    CLARIFY -->|"发现歧义"| RECORD_CLARIFY["记录 trace: clarification<br/>返回 clarification 响应"]
-    RECORD_CLARIFY --> RESP_CLARIFY["返回 QueryResponse<br/>status=clarification<br/>含 clarification 字段"]
-    RESP_CLARIFY --> END_CLARIFY([结束])
+    %% StateGraph 内部节点
+    subgraph STATEGRAPH["StateGraph 执行链路"]
+        direction TB
 
-    CLARIFY -->|"无歧义"| DSL_GEN{"3. DSL 生成阶段<br/>RetryChain.generate()<br/>max_retries=3"}
+        ENTRY([START]) --> CLARIFY["clarification_node<br/>ClarificationDetector.detect()<br/>• 时间缺失<br/>• 指标歧义<br/>• 维度歧义"]
 
-    %% DSL 生成分支 (RetryChain 包装)
-    DSL_GEN -->|"attempt 1"| GEN_ATTEMPT["3a. 生成尝试"]
+        CLARIFY --> ROUTE_CLARIFY{"route_after_clarification"}
+        ROUTE_CLARIFY -->|"发现歧义"| END_CLARIFY([END<br/>status=clarification])
+        ROUTE_CLARIFY -->|"无歧义"| VALIDATION["validation 子图"]
 
-    GEN_ATTEMPT -->|"API Key 已配置"| LLM_TRY["尝试 LLM 生成<br/>_llm_generate_dsl()"]
-    GEN_ATTEMPT -->|"API Key 未配置"| MOCK["Mock DSL 生成<br/>_mock_dsl_from_question()"]
+        %% 验证子图
+        subgraph VALIDATION_SUB["验证子图 (validation)"]
+            V_ENTRY --> V_ROUTE_LLM{"route_llm_availability<br/>llm_client 是否配置?"}
+            V_ROUTE_LLM -->|"未配置"| MOCK_DSL["mock_dsl_node<br/>_mock_dsl_from_question()<br/>关键词匹配生成 DSL"]
+            V_ROUTE_LLM -->|"已配置"| GEN_DSL["generate_dsl_node<br/>LLM + RAG 生成 DSL"]
 
-    LLM_TRY --> RAG_CHECK{"RAG 可用?"}
-    RAG_CHECK -->|"是"| RAG_PROMPT["RAG 构建 Prompt<br/>• jieba 分词提取关键词<br/>• 混合检索: 语义向量 + 关键词匹配<br/>• 从 schema/metrics/history/terms 召回上下文"]
-    RAG_CHECK -->|"否"| FALLBACK_PROMPT["Fallback Prompt<br/>硬编码表结构 + 指标 + 维度"]
+            GEN_DSL -->|"失败"| MOCK_DSL
+            GEN_DSL -->|"成功"| VALIDATE["validate_dsl_node<br/>DSLValidator.validate()"]
+            MOCK_DSL --> VALIDATE
 
-    RAG_PROMPT --> LLM_CALL["调用 LLM API<br/>(OpenAI SDK, DashScope)"]
-    FALLBACK_PROMPT --> LLM_CALL
+            VALIDATE --> V_ROUTE_VAL{"route_after_validate<br/>校验通过?"}
+            V_ROUTE_VAL -->|"通过"| V_EXIT([子图 END])
+            V_ROUTE_VAL -->|"失败(可重试)"| CORRECT["correct_dsl_node<br/>错误反馈 + 重新生成"]
+            V_ROUTE_VAL -->|"失败(已达上限)"| V_ERR([子图 END<br/>status=error])
+            CORRECT --> VALIDATE
+        end
+        V_ENTRY([子图 START])
 
-    LLM_CALL --> LLM_OK{"LLM 返回成功?"}
-    LLM_OK -->|"是"| PARSE["解析 JSON + 后处理<br/>_post_process_dsl()<br/>• 修正 data_source<br/>• 补充默认 metrics<br/>• 规范化 func 包裹<br/>• 补充默认 dimensions<br/>• 修正 limit / offset<br/>• 补充默认 order_by<br/>• 校验 operator 合法性"]
-    LLM_OK -->|"否 (异常/超时/空返回)"| MOCK
+        VALIDATION --> PERM["permission_check 子图"]
 
-    PARSE --> PARSE_OK{"JSON 解析成功?"}
-    PARSE_OK -->|"是"| DSL_READY["DSL Model 对象"]
-    PARSE_OK -->|"否"| MOCK
+        %% 权限子图
+        subgraph PERM_SUB["权限子图 (permission_check)"]
+            P_ENTRY --> INJECT_ROW["inject_row_permission_node<br/>RowLevelSecurity.inject()<br/>• 注入 row_filters<br/>• 注入 tenant_id 隔离"]
+            INJECT_ROW --> P_ROUTE{"错误?"}
+            P_ROUTE -->|"错误"| P_ERR([子图 END<br/>status=error])
+            P_ROUTE -->|"正常"| CHECK_COL["check_col_permission_node<br/>ColumnLevelSecurity.check()<br/>• 敏感字段黑名单"]
+            CHECK_COL --> P_EXIT([子图 END])
+        end
+        P_ENTRY([子图 START])
 
-    MOCK["Mock DSL 生成<br/>• 关键词匹配指标<br/>• JOIN 意图检测 (客户/产品)<br/>• 模糊语义识别 (高价值→VIP)<br/>• 维度/过滤/排序自动推断"]
-    MOCK --> DSL_READY
+        PERM --> RESOLVE["resolve_semantic_node<br/>SemanticResolver.resolve()<br/>• 指标展开: alias → SQL expr<br/>• value_map 值映射"]
 
-    DSL_READY --> VALIDATE_RETRY["自动校验<br/>DSLValidator.validate()"]
-    VALIDATE_RETRY --> VALID_OK_RETRY{"校验通过?"}
-    VALID_OK_RETRY -->|"否"| FEEDBACK["将错误注入 prompt<br/>RetryChain._build_prompt()<br/>进入下一次 attempt"]
-    FEEDBACK --> GEN_ATTEMPT
-    VALID_OK_RETRY -->|"是 (或达到 max_retries)"| DSL_DONE["DSL 生成完成"]
+        RESOLVE --> BUILD_SQL["build_sql_node<br/>SQLBuilder.build()<br/>• 恢复 metric 原始字段名<br/>• 解析 JOIN<br/>• 编译 SQL"]
 
-    DSL_DONE --> RECORD_DSL["记录 trace: dsl_generate<br/>标记 llm_used=true/false"]
+        BUILD_SQL --> ROUTE_COMPLEXITY{"detect_complexity<br/>简单/复杂查询?"}
+        ROUTE_COMPLEXITY -->|"简单"| SCAN_SQL["scan_sql_node<br/>SQLScanner.scan()<br/>基础安全扫描"]
+        ROUTE_COMPLEXITY -->|"复杂"| SCAN_SQL
+        ROUTE_COMPLEXITY -->|"错误"| END_ERR([END<br/>status=error])
 
-    %% DSL 校验 (RetryChain 内部已做，此处为防御性校验)
-    RECORD_DSL --> VALIDATE["4. DSL 校验<br/>DSLValidator.validate()<br/>• data_source 存在性<br/>• metrics alias 已注册<br/>• dimensions 已注册<br/>• 至少指定 metric 或 dimension"]
-    VALIDATE --> VALID_OK{"校验通过?"}
-    VALID_OK -->|"否"| ERR_VALIDATE["异常: ValidationError<br/>error_code=VALIDATION_ERROR<br/>status_code=400"]
-    VALID_OK -->|"是"| RECORD_VAL["记录 trace: validate"]
+        SCAN_SQL --> SANDBOX["sandbox_check_node<br/>QuerySandbox.check()<br/>• EXPLAIN 估算扫描行数<br/>• LIMIT 预览执行时间<br/>• 检测缺少 WHERE"]
 
-    %% 行级权限
-    RECORD_VAL --> RLS["4. 行级权限注入<br/>RowLevelSecurity.inject()<br/>• 按 user_id 查找权限配置<br/>• 注入 row_filters<br/>• 注入 tenant_id 隔离"]
-    RLS --> RECORD_RLS["记录 trace: row_permission_inject"]
+        SANDBOX --> ROUTE_SANDBOX{"route_after_sandbox<br/>检查通过?"}
+        ROUTE_SANDBOX -->|"有风险"| HUMAN_REVIEW["human_review_node<br/>标记 pending_review<br/>(有 checkpointer 时中断)"]
+        ROUTE_SANDBOX -->|"通过"| EXEC_SQL["execute_sql_node<br/>engine.execute()<br/>转换为 dict list"]
 
-    %% 列级权限
-    RECORD_RLS --> CLS["5. 列级权限检查<br/>ColumnLevelSecurity.check()<br/>• 检查 dimensions 是否含敏感字段<br/>• 命中敏感字段即拒绝"]
-    CLS --> CLS_OK{"检查通过?"}
-    CLS_OK -->|"否"| ERR_CLS["异常: PermissionError<br/>error_code=PERMISSION_DENIED<br/>status_code=403"]
-    CLS_OK -->|"是"| RECORD_CLS["记录 trace: column_permission_check"]
+        HUMAN_REVIEW --> ROUTE_HUMAN{"route_after_human_review<br/>用户批准?"}
+        ROUTE_HUMAN -->|"批准"| EXEC_SQL
+        ROUTE_HUMAN -->|"拒绝"| END_REJECT([END<br/>status=rejected])
 
-    %% 语义解析
-    RECORD_CLS --> SEMANTIC["6. 语义解析<br/>SemanticResolver.resolve()<br/>• 指标展开: alias → SQL expr<br/>  (sales_amount → SUM(pay_amount))<br/>• 过滤器维度展开: field → column<br/>• value_map 值映射转换"]
-    SEMANTIC --> SEM_OK{"解析成功?"}
-    SEM_OK -->|"否 (指标未定义)"| ERR_SEM["异常: SemanticError<br/>error_code=SEMANTIC_ERROR<br/>status_code=400"]
-    SEM_OK -->|"是"| RECORD_SEM["记录 trace: semantic_resolve"]
+        EXEC_SQL --> ROUTE_EXEC{"route_after_execute<br/>执行成功?"}
+        ROUTE_EXEC -->|"失败(可重试)"| SIMPLIFY["simplify_dsl_node<br/>去除 JOIN / 减少维度"]
+        ROUTE_EXEC -->|"成功"| END_OK([END<br/>status=success])
+        ROUTE_EXEC -->|"失败(已达上限)"| END_ERR
 
-    %% SQL 构建
-    RECORD_SEM --> BUILD_SQL["7. SQL 构建<br/>SQLBuilder.build()<br/>• 恢复 metric 原始字段名<br/>• 解析主表 + JOIN 表<br/>• 构建 SELECT (维度 + 聚合)<br/>• 构建 WHERE (含 operator 映射)<br/>• 构建 GROUP BY<br/>• 构建 ORDER BY (支持 metric alias)<br/>• 构建 LIMIT / OFFSET<br/>• 编译为 SQL 字符串"]
-    BUILD_SQL --> BUILD_OK{"构建成功?"}
-    BUILD_OK -->|"否"| ERR_BUILD["异常: ValidationError<br/>error_code=VALIDATION_ERROR<br/>status_code=400"]
-    BUILD_OK -->|"是"| RECORD_BUILD["记录 trace: sql_build"]
+        SIMPLIFY --> BUILD_SQL
+    end
 
-    %% SQL 扫描
-    RECORD_BUILD --> SCAN["9. SQL 安全扫描<br/>SQLScanner.scan()<br/>• 检测 DELETE/UPDATE/DROP/...<br/>• 检测块注释 /* */<br/>• 检测行注释 --<br/>• 检测 UNION<br/>• 检测多语句 ;"]
-    SCAN --> SCAN_OK{"扫描通过?"}
-    SCAN_OK -->|"否"| ERR_SCAN["异常: ValidationError<br/>error_code=VALIDATION_ERROR<br/>status_code=400"]
-    SCAN_OK -->|"是"| RECORD_SCAN["记录 trace: sql_scan"]
+    GRAPH --> EXTRACT["3. API 层提取结果<br/>从 QueryState 构建 QueryResponse"]
 
-    %% Sandbox 检查
-    RECORD_SCAN --> SANDBOX["10. Sandbox 预执行检查<br/>QuerySandbox.check()<br/>• EXPLAIN QUERY PLAN 估算扫描行数<br/>• LIMIT 10 预览执行时间<br/>• 检测缺少 WHERE 条件"]
-    SANDBOX --> SANDBOX_OK{"检查通过?"}
-    SANDBOX_OK -->|"否 (有风险)"| RECORD_SANDBOX_WARN["记录 trace: sandbox<br/>passed=false, risks=[...]"]
-    RECORD_SANDBOX_WARN --> RESP_WARN["返回 QueryResponse<br/>status=warning<br/>sql 返回但不执行"]
-    RESP_WARN --> AUDIT_WARN["审计日志记录<br/>status=warning<br/>含 risks"]
-    AUDIT_WARN --> END_WARN([结束])
+    EXTRACT --> AUDIT["4. 审计日志记录<br/>AuditLogger.log()<br/>含完整 trace"]
 
-    SANDBOX_OK -->|"是"| RECORD_SANDBOX["记录 trace: sandbox<br/>passed=true, risks=[]"]
-
-    %% SQL 执行
-    RECORD_SANDBOX --> EXEC["11. SQL 执行<br/>sqlalchemy engine.execute()<br/>转换为 dict list"]
-    EXEC --> EXEC_OK{"执行成功?"}
-    EXEC_OK -->|"否"| ERR_EXEC["异常: 通用 Exception<br/>error_code=INTERNAL_ERROR<br/>status_code=500"]
-    EXEC_OK -->|"是"| RECORD_EXEC["记录 trace: sql_execute<br/>rows_returned=N"]
-
-    %% 成功响应
-    RECORD_EXEC --> AUDIT_OK["12. 审计日志记录<br/>AuditLogger.log()<br/>status=success<br/>含完整 trace"]
-    AUDIT_OK --> RESP_OK["返回 QueryResponse<br/>status=success<br/>data + dsl + sql + execution_time_ms"]
-    RESP_OK --> END_OK([结束])
-
-    %% 异常汇聚
-    ERR_VALIDATE --> AUDIT_ERR
-    ERR_CLS --> AUDIT_ERR
-    ERR_SEM --> AUDIT_ERR
-    ERR_BUILD --> AUDIT_ERR
-    ERR_SCAN --> AUDIT_ERR
-    ERR_EXEC --> AUDIT_ERR
-
-    AUDIT_ERR["审计日志记录<br/>status=error<br/>含 trace + error_code + error_message"] --> RESP_ERR["返回 JSONResponse<br/>status=error + error_code + message"]
-    RESP_ERR --> END_ERR([结束])
+    AUDIT --> RESPONSE["返回响应<br/>status=success/error/clarification/pending_review"]
+    RESPONSE --> END([结束])
 ```
 
 ---
@@ -134,10 +108,9 @@ flowchart TD
 
 | 阶段 | 状态/异常类型 | Error Code | HTTP Status | 触发场景 |
 |------|-------------|-----------|-------------|---------|
-| 歧义澄清 | `status=clarification` | — | 200 | 检测到时间缺失/指标歧义/维度歧义/比较基准歧义 |
+| 歧义澄清 | `status=clarification` | — | 200 | 检测到时间缺失/指标歧义/维度歧义 |
 | Sandbox 警告 | `status=warning` | — | 200 | 扫描行数超限 / 执行时间超限 / 缺少 WHERE 条件 |
-| DSL 生成 | MaxRetryExceeded → ValidationError | VALIDATION_ERROR | 400 | RetryChain 3 次重试后仍验证失败 |
-| DSL 生成 | LLMError | LLM_ERROR | 502 | LLM API 调用失败（RetryChain 内部捕获） |
+| DSL 生成 | ValidationError | VALIDATION_ERROR | 400 | 验证子图重试耗尽 |
 | DSL 校验 | ValidationError | VALIDATION_ERROR | 400 | 数据源/指标/维度不存在 |
 | 行级权限 | — | — | — | 无权限配置则直通 |
 | 列级权限 | PermissionError | PERMISSION_DENIED | 403 | 访问敏感字段 |
@@ -145,46 +118,87 @@ flowchart TD
 | SQL 构建 | ValidationError | VALIDATION_ERROR | 400 | 表不存在 / 列不存在 / 非法表达式 |
 | SQL 扫描 | ValidationError | VALIDATION_ERROR | 400 | 检测到危险 SQL 模式 |
 | SQL 执行 | Exception | INTERNAL_ERROR | 500 | 数据库执行失败 |
+| 人工审核 | `status=pending_review` | — | 200 | 沙箱检测风险，等待人工确认 |
 | 审计查询 | NotFoundError | NOT_FOUND | 404 | 审计记录不存在 |
 
 ---
 
-## 四、DSL 生成阶段内部流程
+## 四、StateGraph 节点详解
 
-### 4.1 LLM + RetryChain 生成链路
+### 4.1 节点清单
+
+| 节点 | 所在文件 | 说明 |
+|------|---------|------|
+| `clarification` | `builder.py` | 歧义检测，有歧义直接 END |
+| `validation` (子图) | `subgraphs.py` | DSL 生成 + 校验 + 修正循环 |
+| `permission_check` (子图) | `subgraphs.py` | 行级权限注入 + 列级权限检查 |
+| `resolve_semantic` | `builder.py` | 指标展开为 SQL 表达式 |
+| `build_sql` | `builder.py` | SQLAlchemy Core 构建 SQL |
+| `scan_sql` | `builder.py` | SQL 安全扫描 |
+| `sandbox_check` | `builder.py` | 预执行安全检测 |
+| `human_review` | `builder.py` | 人工审核标记（可中断） |
+| `execute_sql` | `builder.py` | 数据库执行 |
+| `simplify_dsl` | `builder.py` | 简化 DSL 后重试 |
+
+### 4.2 条件路由
+
+| 路由函数 | 判断条件 | 分支 |
+|---------|---------|------|
+| `route_after_clarification` | `ambiguities` 是否存在 | `clarification` → END / `continue` → validation |
+| `route_llm_availability` | `llm_client` 是否配置 | `llm` → generate_dsl / `mock` → mock_dsl |
+| `route_after_validate` | 校验结果 + 重试次数 | `ok` → END / `retry` → correct_dsl / `error` → END |
+| `detect_complexity` | joins / metrics / dimensions 数量 | `simple` / `complex` → scan_sql |
+| `route_after_sandbox` | `sandbox_result.passed` | `review` → human_review / `execute` → execute_sql |
+| `route_after_execute` | 执行结果 + 重试次数 | `retry` → simplify_dsl / `end` → END |
+| `route_on_error` | `error_code` 是否致命 | `end` → END / `continue` → 尝试恢复 |
+
+---
+
+## 五、验证子图内部流程
 
 ```mermaid
-flowchart LR
-    subgraph RETRY["RetryChain (max_retries=3)"]
-        A["用户问题<br/>(或含错误反馈的 prompt)"] --> B{"API Key<br/>已配置?"}
-        B -->|"否"| MOCK["Mock DSL<br/>_mock_dsl_from_question()"]
-        B -->|"是"| C{"RAG<br/>可用?"}
-        C -->|"是"| D["jieba 分词<br/>提取关键词"]
-        D --> E["混合检索"]
-        E --> F["召回上下文"]
-        C -->|"否"| G["Fallback Prompt<br/>硬编码结构"]
-        F --> H["组装 Prompt"]
-        G --> H
-        H --> I["LLM API 调用<br/>temperature=0.1"]
-        I --> J{"返回成功?"}
-        J -->|"是"| K["清理 markdown<br/>去除 ```json"]
-        K --> L["JSON 解析"]
-        L --> M["_post_process_dsl()<br/>修复常见问题"]
-        M --> N["DSL Model"]
-        J -->|"否"| MOCK
-        L -->|"解析失败"| MOCK
-        N --> VALIDATE["自动校验<br/>DSLValidator.validate()"]
-        VALIDATE -->|"通过"| DONE["返回 DSL"]
-        VALIDATE -->|"失败<br/>且 attempt &lt; max_retries"| FEEDBACK["错误注入 prompt<br/>RetryChain._build_prompt()<br/>→ 下一次 attempt"]
-        FEEDBACK --> A
-        MOCK --> VALIDATE
-        VALIDATE -->|"失败<br/>且 attempt == max_retries"| MAX_ERR["抛出 MaxRetryExceeded"]
+flowchart TD
+    subgraph VALIDATION["验证子图 (validation)"]
+        START_V([START]) --> ROUTE_LLM{"LLM 已配置?"}
+        ROUTE_LLM -->|"否"| MOCK["mock_dsl_node<br/>关键词匹配生成"]
+        ROUTE_LLM -->|"是"| GEN["generate_dsl_node<br/>LLM + RAG 生成"]
+
+        GEN -->|"成功"| DSL1["DSL 对象"]
+        GEN -->|"失败<br/>异常/超时/空返回"| MOCK
+
+        MOCK --> DSL2["DSL 对象"]
+        DSL1 --> VALIDATE["validate_dsl_node<br/>DSLValidator.validate()"]
+        DSL2 --> VALIDATE
+
+        VALIDATE --> ROUTE_VAL{"校验通过?"}
+        ROUTE_VAL -->|"是"| DONE([END<br/>返回 DSL])
+        ROUTE_VAL -->|"否 (可重试)"| CORRECT["correct_dsl_node<br/>错误反馈 + 重新生成"]
+        ROUTE_VAL -->|"否 (已达上限)"| ERR([END<br/>status=error])
+
+        CORRECT --> VALIDATE
     end
-    DONE --> OUT["RetryChain 输出 DSL"]
-    MAX_ERR --> OUT_ERR["api.py 捕获后抛出 ValidationError<br/>status=error error_code=VALIDATION_ERROR"]
 ```
 
-### 4.2 Mock DSL 生成逻辑
+**关键设计**: LLM 失败不 fallback 到 mock，而是重试修正。mock 只在 LLM 未配置时使用。
+
+---
+
+## 六、权限子图内部流程
+
+```mermaid
+flowchart TD
+    subgraph PERMISSION["权限子图 (permission_check)"]
+        START_P([START]) --> INJECT["inject_row_permission_node<br/>RowLevelSecurity.inject()"]
+        INJECT --> ROUTE_P{"错误?"}
+        ROUTE_P -->|"错误"| ERR_P([END<br/>status=error])
+        ROUTE_P -->|"正常"| CHECK["check_col_permission_node<br/>ColumnLevelSecurity.check()"]
+        CHECK --> DONE_P([END])
+    end
+```
+
+---
+
+## 七、Mock DSL 生成逻辑
 
 ```mermaid
 flowchart TD
@@ -211,7 +225,7 @@ flowchart TD
 
 ---
 
-## 五、SQL 构建阶段内部流程
+## 八、SQL 构建阶段内部流程
 
 ```mermaid
 flowchart TD
@@ -238,117 +252,106 @@ flowchart TD
 
 ---
 
-## 六、辅助接口流程
+## 九、辅助接口流程
 
-### 6.1 `POST /api/v1/query/dsl` — 仅生成 DSL
-
-```mermaid
-flowchart LR
-    A["用户问题"] --> RETRY["RetryChain.generate()\nmax_retries=3"]
-    RETRY --> B["尝试 LLM"] -->|"失败"| C["Mock DSL"]
-    B -->|"成功"| VALIDATE["自动校验"]
-    VALIDATE -->|"失败→重试"| B
-    VALIDATE -->|"通过"| D["返回 DSL"]
-    C --> VALIDATE
-```
-
-包含: DSL 生成 + RetryChain 自动校验 + 重试。跳过: 权限注入、语义解析、SQL 构建/扫描/执行、审计记录。
-
-### 6.2 `POST /api/v1/query/execute` — 直接执行 DSL
+### 9.1 `POST /api/v1/query` — 自然语言查询
 
 ```mermaid
 flowchart LR
-    A["用户传入 DSL"] --> B["DSL 校验"] --> C["行级权限注入"]
-    C --> D["列级权限检查"] --> E["语义解析"]
-    E --> F["SQL 构建"] --> G["SQL 扫描"]
-    G --> H["SQL 执行"] --> I["返回结果"]
+    A["用户问题"] --> B["构建 QueryState"] --> C["graph.ainvoke()"]
+    C --> D["提取结果<br/>构建 QueryResponse"] --> E["返回结果"]
 ```
 
-跳过: DSL 生成阶段。从用户提供的 DSL 直接开始校验执行。
+### 9.2 `POST /api/v1/query/dsl` — 仅生成 DSL
+
+```mermaid
+flowchart LR
+    A["用户问题"] --> B["构建 QueryState"] --> C["graph.ainvoke()"]
+    C --> D["提取 dsl 字段"] --> E["返回 DSL"]
+```
+
+### 9.3 `POST /api/v1/query/execute` — 直接执行 DSL
+
+```mermaid
+flowchart LR
+    A["用户传入 DSL"] --> B["构建 QueryState<br/>dsl=用户输入"] --> C["graph.ainvoke()"]
+    C --> D["返回结果"]
+```
+
+### 9.4 `POST /api/v1/query/stream` — 流式查询
+
+```mermaid
+flowchart LR
+    A["用户问题"] --> B["构建 QueryState"] --> C["graph.astream()"]
+    C --> D["SSE 流式输出<br/>每个节点结果"] --> E["data: [DONE]"]
+```
+
+### 9.5 `POST /api/v1/query/resume` — 恢复中断流程
+
+```mermaid
+flowchart LR
+    A["query_id + action"] --> B["graph.ainvoke(None, config)<br/>或 graph.ainvoke({'status': 'rejected'}, config)"]
+    B --> C["返回结果"]
+```
 
 ---
 
-## 七、审计 Trace 结构
+## 十、审计 Trace 结构
 
-每条查询的 `trace` 数组记录各阶段耗时和中间状态：
+每条查询的 `trace` 数组由各节点通过 `Annotated[list[dict], add_to_list]` reducer 自动累积：
 
 ```json
 [
   {
     "step": "clarification",
     "status": "success",
-    "duration_ms": 5,
-    "output": {
-      "items": [
-        { "type": "time_missing", "question": "请确认时间范围", "options": ["本月", "上月", "最近7天"] }
-      ]
-    }
+    "items_count": 0
   },
   {
-    "step": "dsl_generate",
+    "step": "mock_dsl",
     "status": "success",
-    "duration_ms": 1250,
-    "output": {
-      "dsl": { ... },
-      "llm_used": true
-    }
+    "source": "mock"
   },
   {
-    "step": "validate",
-    "status": "success",
-    "duration_ms": 2
+    "step": "validate_dsl",
+    "status": "success"
   },
   {
-    "step": "row_permission_inject",
-    "status": "success",
-    "duration_ms": 1,
-    "output": { "dsl": { ... } }
+    "step": "inject_row_permission",
+    "status": "success"
   },
   {
-    "step": "column_permission_check",
-    "status": "success",
-    "duration_ms": 1
+    "step": "check_col_permission",
+    "status": "success"
   },
   {
-    "step": "semantic_resolve",
-    "status": "success",
-    "duration_ms": 3,
-    "output": { "dsl": { ... } }
+    "step": "resolve_semantic",
+    "status": "success"
   },
   {
-    "step": "sql_build",
-    "status": "success",
-    "duration_ms": 15,
-    "output": { "sql": "SELECT ..." }
+    "step": "build_sql",
+    "status": "success"
   },
   {
-    "step": "sql_scan",
-    "status": "success",
-    "duration_ms": 1
+    "step": "scan_sql",
+    "status": "success"
   },
   {
-    "step": "sandbox",
+    "step": "sandbox_check",
     "status": "success",
-    "duration_ms": 12,
-    "output": {
-      "passed": true,
-      "risks": [],
-      "estimated_rows": 1000,
-      "execution_time_ms": 8.5
-    }
+    "risks": []
   },
   {
-    "step": "sql_execute",
+    "step": "execute_sql",
     "status": "success",
-    "duration_ms": 8,
-    "output": { "rows_returned": 10 }
+    "rows_returned": 10
   }
 ]
 ```
 
 ---
 
-## 八、数据流图
+## 十一、数据流图
 
 ```mermaid
 flowchart LR
@@ -358,8 +361,8 @@ flowchart LR
         TID["tenant_id"]
     end
 
-    subgraph DSL_LAYER["DSL 层"]
-        DSL["DSL JSON"]
+    subgraph GRAPH["LangGraph 层"]
+        STATE["QueryState<br/>TypedDict"]
     end
 
     subgraph SEMANTIC["语义层"]
@@ -376,11 +379,11 @@ flowchart LR
         AUDIT[(审计日志表<br/>nl2dsl_audit_log)]
     end
 
-    Q --> DSL
+    Q --> STATE
     UID --> PERM
     TID --> PERM
-    REG --> DSL
-    DSL --> SQL
+    REG --> STATE
+    STATE --> SQL
     PERM --> SQL
     SQL --> DB
     SQL --> AUDIT
@@ -390,22 +393,24 @@ flowchart LR
 
 ---
 
-## 九、关键设计决策
+## 十二、关键设计决策
 
-1. **LLM 只生成 DSL 不生成 SQL**：DSL 是结构化 JSON，可校验、可修正、可做权限控制；SQL 是自由文本，出错后难以定位。
+1. **LangGraph StateGraph**: 用 StateGraph 建模查询管道，获得条件分支、检查点、流式输出、子图封装、LangSmith 追踪等原生能力。
 
-2. **LLM 失败自动回退 Mock**：保证系统在无 API Key 或 LLM 服务异常时仍可工作。
+2. **LLM 只生成 DSL 不生成 SQL**：DSL 是结构化 JSON，可校验、可修正、可做权限控制；SQL 是自由文本，出错后难以定位。
 
-3. **RetryChain 错误反馈重试**：DSL 验证失败时，将错误信息注入 prompt 让 LLM 自我修正，最多重试 3 次。Mock 生成器不会触发重试（关键词匹配是确定性的）。
+3. **LLM 路径与 Mock 路径独立**：LLM 未配置时使用 Mock（开发环境），LLM 配置正常时只走 LLM。LLM 调用失败时不给出低质量 Mock 结果，而是明确报错。
 
-4. **歧义检测前置（Clarification）**：在 DSL 生成前检测用户问题的歧义（时间缺失、指标/维度歧义、比较基准不明），返回澄清问题而非猜测，降低错误生成概率。
+4. **验证子图内循环修正**：DSL 验证失败时，correct_dsl_node 将错误信息反馈给 LLM 重新生成，最多重试 3 次。
 
-5. **Sandbox 预执行检查**：在正式执行 SQL 前运行 EXPLAIN + LIMIT 预览，检测全表扫描、执行超时、缺少 WHERE 等风险，拦截危险查询。
+5. **歧义检测前置（Clarification）**：在 DSL 生成前检测用户问题的歧义（时间缺失、指标/维度歧义），返回澄清问题而非猜测，降低错误生成概率。
 
-6. **语义层隔离业务与物理模型**：指标/维度通过 YAML 注册，LLM 只使用语义名，SQL 构建阶段再展开为物理列。
+6. **Sandbox 预执行检查**：在正式执行 SQL 前运行 EXPLAIN + LIMIT 预览，检测全表扫描、执行超时、缺少 WHERE 等风险，拦截危险查询。
 
-7. **RAG 混合检索**：jieba 关键词分割 + BGE 向量语义检索，提升上下文召回精度。
+7. **语义层隔离业务与物理模型**：指标/维度通过 YAML 注册，LLM 只使用语义名，SQL 构建阶段再展开为物理列。
 
 8. **SQL 安全扫描白名单模式**：禁止一切非 SELECT 操作（DML/DDL/注释/UNION/多语句）。
 
 9. **行级权限自动注入**：在 DSL 编译为 SQL 之前注入过滤条件，确保用户只能看到授权数据。
+
+10. **统一错误处理**: `@with_error_handler` 装饰器捕获所有节点异常，转换为标准错误状态（status=error, error_code, trace）。
