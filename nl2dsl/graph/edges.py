@@ -6,10 +6,7 @@ and returns a string label used by StateGraph.add_conditional_edges().
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from nl2dsl.graph.state import QueryState
+from nl2dsl.graph.state import QueryState
 
 
 # ---------------------------------------------------------------------------

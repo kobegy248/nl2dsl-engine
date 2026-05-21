@@ -309,6 +309,152 @@ def _restore_metric_fields(dsl: DSL) -> DSL:
 
 
 # ---------------------------------------------------------------------------
+# Standalone node factories (for use in subgraphs)
+# ---------------------------------------------------------------------------
+
+
+def _make_inject_row_permission_node(row_security: RowLevelSecurity):
+    """Create an inject_row_permission node with injected row_security."""
+    @with_error_handler("inject_row_permission")
+    def inject_row_permission_node(state: QueryState) -> dict:
+        dsl = state.get("dsl")
+        if dsl is None:
+            raise ValidationError("DSL is None, cannot inject row permissions")
+        dsl = row_security.inject(dsl, state["user_id"])
+        return {
+            "dsl": dsl,
+            "trace": {"step": "inject_row_permission", "status": "success"},
+        }
+    return inject_row_permission_node
+
+
+def _make_check_col_permission_node(col_security: ColumnLevelSecurity):
+    """Create a check_col_permission node with injected col_security."""
+    @with_error_handler("check_col_permission")
+    def check_col_permission_node(state: QueryState) -> dict:
+        dsl = state.get("dsl")
+        if dsl is None:
+            raise ValidationError("DSL is None, cannot check column permissions")
+        col_security.check(dsl, state["user_id"])
+        return {"trace": {"step": "check_col_permission", "status": "success"}}
+    return check_col_permission_node
+
+
+def _make_validate_dsl_node(validator: DSLValidator):
+    """Create a validate_dsl node with injected validator."""
+    @with_error_handler("validate_dsl")
+    def validate_dsl_node(state: QueryState) -> dict:
+        dsl = state.get("dsl")
+        if dsl is None:
+            raise ValidationError("DSL is None, cannot validate")
+        validator.validate(dsl)
+        return {"trace": {"step": "validate_dsl", "status": "success"}}
+    return validate_dsl_node
+
+
+def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = ""):
+    """Create a generate_dsl node with injected LLM and RAG dependencies."""
+    @with_error_handler("generate_dsl")
+    def generate_dsl_node(state: QueryState) -> dict:
+        question = state["question"]
+        data_source = state.get("data_source")
+
+        if llm_client is None:
+            raise ValidationError("LLM client not available")
+
+        if rag_retriever is not None:
+            prompt = rag_retriever.build_prompt(question)
+        else:
+            prompt = _build_fallback_prompt(question)
+
+        raw = llm_client.generate(prompt, llm_system_prompt)
+        if not raw:
+            raise ValidationError("LLM returned empty response")
+
+        dsl_dict = _parse_llm_output(raw)
+        dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
+        dsl = DSL.model_validate(dsl_dict)
+
+        return {
+            "dsl": dsl,
+            "llm_used": True,
+            "dsl_attempts": {
+                "source": "llm",
+                "dsl": dsl.model_dump(),
+                "timestamp": time.time(),
+            },
+            "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
+        }
+    return generate_dsl_node
+
+
+def _make_mock_dsl_node(registry_dict: dict):
+    """Create a mock_dsl node that generates DSL without LLM."""
+    @with_error_handler("mock_dsl")
+    def mock_dsl_node(state: QueryState) -> dict:
+        dsl = _mock_dsl_from_question(state["question"], state.get("data_source"))
+        return {
+            "dsl": dsl,
+            "llm_used": False,
+            "dsl_attempts": {
+                "source": "mock",
+                "dsl": dsl.model_dump(),
+                "timestamp": time.time(),
+            },
+            "trace": {"step": "mock_dsl", "status": "success", "source": "mock"},
+        }
+    return mock_dsl_node
+
+
+def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_system_prompt: str = ""):
+    """Create a correct_dsl node that regenerates DSL with error feedback."""
+    @with_error_handler("correct_dsl")
+    def correct_dsl_node(state: QueryState) -> dict:
+        question = state["question"]
+        data_source = state.get("data_source")
+        error = state.get("error")
+
+        if llm_client is not None:
+            feedback = f"""Previous generation failed with error: {error}
+
+Please fix the errors and generate a correct DSL JSON.
+
+【用户问题】
+{question}
+
+请输出 DSL JSON："""
+            raw = llm_client.generate(feedback, llm_system_prompt)
+            if raw:
+                dsl_dict = _parse_llm_output(raw)
+                dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
+                dsl = DSL.model_validate(dsl_dict)
+                return {
+                    "dsl": dsl,
+                    "dsl_attempts": {
+                        "source": "llm_corrected",
+                        "dsl": dsl.model_dump(),
+                        "timestamp": time.time(),
+                        "error_feedback": error,
+                    },
+                    "trace": {"step": "correct_dsl", "status": "success", "source": "llm_corrected"},
+                }
+
+        # Fallback: try mock with a note that it was corrected
+        dsl = _mock_dsl_from_question(question, data_source)
+        return {
+            "dsl": dsl,
+            "dsl_attempts": {
+                "source": "mock_corrected",
+                "dsl": dsl.model_dump(),
+                "timestamp": time.time(),
+                "error_feedback": error,
+            },
+            "trace": {"step": "correct_dsl", "status": "success", "source": "mock_corrected"},
+        }
+    return correct_dsl_node
+
+
+# ---------------------------------------------------------------------------
 # Node factory
 # ---------------------------------------------------------------------------
 
