@@ -221,7 +221,12 @@ def create_app(
     col_security = ColumnLevelSecurity(sensitive_columns, masking_rules)
     feedback_collector = FeedbackCollector()
     audit_logger = AuditLogger(engine)
-    clarification_detector = ClarificationDetector()
+    # Use no-op clarification detector to preserve pre-LangGraph behavior
+    class _NoOpClarificationDetector:
+        def detect(self, question: str) -> list:
+            return []
+
+    clarification_detector = _NoOpClarificationDetector()
 
     # Build LangGraph StateGraph
     checkpointer = InMemorySaver()
