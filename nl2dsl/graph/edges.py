@@ -58,23 +58,26 @@ def route_after_validate(state: QueryState) -> str:
 
     Returns:
         - "error"  if the current status is "error" (validation failed fatally)
-        - "retry"  if validation failed but we have retry attempts left
+        - "retry"  if the last validation attempt failed but we have retry attempts left
         - "ok"     if validation passed
     """
     status = state.get("status")
     if status == "error":
         return "error"
 
-    # Check if there were previous failed attempts
     dsl_attempts = state.get("dsl_attempts")
-    attempt_count = len(dsl_attempts) if dsl_attempts else 0
-    max_retries = 2
+    if not dsl_attempts:
+        return "ok"
 
-    if attempt_count > max_retries:
-        return "error"
+    last_attempt = dsl_attempts[-1]
+    if last_attempt.get("valid") is False:
+        # Validation failed, check retry limit
+        attempt_count = len(dsl_attempts)
+        max_retries = 3
+        if attempt_count >= max_retries:
+            return "error"
+        return "retry"
 
-    # If we have attempts but no error status, validation passed
-    # If status is not error and we haven't exceeded retries, it's ok
     return "ok"
 
 

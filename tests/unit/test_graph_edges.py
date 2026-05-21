@@ -111,13 +111,20 @@ class TestRouteAfterValidate:
         )
         assert route_after_validate(state) == "ok"
 
+    def test_returns_retry_when_last_attempt_invalid(self):
+        state = make_state(
+            status="pending",
+            dsl_attempts=[{"dsl": {}, "valid": False}],
+        )
+        assert route_after_validate(state) == "retry"
+
     def test_returns_error_when_exceeded_max_retries(self):
         state = make_state(
             status="pending",
             dsl_attempts=[
-                {"source": "llm"},
-                {"source": "mock"},
-                {"source": "llm"},
+                {"dsl": {}, "valid": False},
+                {"dsl": {}, "valid": False},
+                {"dsl": {}, "valid": False},
             ],
         )
         assert route_after_validate(state) == "error"
