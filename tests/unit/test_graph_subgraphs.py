@@ -228,8 +228,8 @@ class TestBuildValidationSubgraph:
         # The generate node runs, then validate passes (DSL is valid)
         assert result["dsl"] is not None
 
-    def test_validation_error_with_no_llm(self, test_registry):
-        """When LLM is None, generate_dsl should fail."""
+    def test_validation_fallback_to_mock_with_no_llm(self, test_registry):
+        """When LLM is None, entry point routes to mock_dsl and succeeds."""
         validator = DSLValidator(test_registry)
         llm_client = None
         rag_retriever = None
@@ -239,9 +239,10 @@ class TestBuildValidationSubgraph:
         state = make_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # generate_dsl should fail because llm_client is None
-        assert result["status"] == "error"
-        assert "LLM client not available" in result["error"]
+        # Entry point routes to mock_dsl when llm_client is None
+        assert result["status"] in ("success", "pending")
+        assert result["dsl"] is not None
+        assert result["llm_used"] is False
 
     def test_mock_dsl_node_exists(self, test_registry):
         """The mock_dsl node should be part of the graph."""

@@ -1,27 +1,43 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime, insert, text
 
 from nl2dsl.audit.logger import AuditLogger
 from nl2dsl.config import settings
-from nl2dsl.dsl.models import DSL, Aggregation, Filter, OrderBy
+from nl2dsl.utils.logger import setup_logging, get_logger
+
+setup_logging()
+logger = get_logger("api")
+from nl2dsl.dsl.models import DSL
 from nl2dsl.dsl.validator import DSLValidator
-from nl2dsl.exceptions import NL2DSLException
+from nl2dsl.exceptions import NL2DSLException, NotFoundError, ValidationError
+from nl2dsl.query.clarification import ClarificationDetector
+from nl2dsl.query.sandbox import QuerySandbox
 from nl2dsl.feedback.collector import FeedbackCollector
+from nl2dsl.llm.client import LLMClient
+from nl2dsl.llm.prompts import DSL_SYSTEM_PROMPT
 from nl2dsl.permission.column_level import ColumnLevelSecurity
 from nl2dsl.permission.row_level import RowLevelSecurity
+from nl2dsl.rag.embedder import BGEEmbedder
+from nl2dsl.rag.retriever import RAGRetriever
+from nl2dsl.rag.store import MilvusLiteStore
 from nl2dsl.semantic.registry import SemanticRegistry
 from nl2dsl.semantic.resolver import SemanticResolver
 from nl2dsl.sql_engine.builder import SQLBuilder
 from nl2dsl.sql_engine.scanner import SQLScanner
+from nl2dsl.sql_engine.executor import SQLExecutor
+from nl2dsl.graph.builder import build_graph
+from nl2dsl.graph.state import QueryState
+from langgraph.checkpoint.memory import InMemorySaver
 
 app = FastAPI(title="NL2DSL", version="0.1.0")
 
@@ -68,19 +84,112 @@ if _permissions_yaml_path.exists():
 # ---------------------------------------------------------------------------
 _engine = create_engine(settings.db_url, echo=False)
 
-# Ensure the order_fact table exists for SQLBuilder metadata reflection
+# Ensure tables exist for SQLBuilder metadata reflection
 _metadata = MetaData()
+
 Table(
     "order_fact", _metadata,
     Column("id", Integer, primary_key=True),
+    Column("product_id", Integer),
     Column("product_name", String),
+    Column("brand", String),
+    Column("category", String),
     Column("region", String),
     Column("region_code", String),
+    Column("channel", String),
+    Column("customer_id", Integer),
+    Column("customer_type", String),
     Column("order_amount", Float),
-    Column("order_date", DateTime),
+    Column("discount_amount", Float),
+    Column("pay_amount", Float),
+    Column("quantity", Integer),
+    Column("order_date", String),
     Column("tenant_id", String),
 )
+
+Table(
+    "product_dim", _metadata,
+    Column("product_id", Integer, primary_key=True),
+    Column("product_name", String),
+    Column("brand", String),
+    Column("category", String),
+    Column("price", Float),
+)
+
+Table(
+    "customer_dim", _metadata,
+    Column("customer_id", Integer, primary_key=True),
+    Column("customer_name", String),
+    Column("customer_type", String),
+    Column("register_date", String),
+    Column("region", String),
+)
+
 _metadata.create_all(_engine)
+
+# Insert mock data if tables are empty
+with _engine.connect() as conn:
+    result = conn.execute(text("SELECT COUNT(*) FROM order_fact"))
+    count = result.scalar()
+    if count == 0:
+        # Insert products
+        products = [
+            {"product_id": 1, "product_name": "iPhone 15 Pro", "brand": "苹果", "category": "手机", "price": 7999.0},
+            {"product_id": 2, "product_name": "华为 Mate 60 Pro", "brand": "华为", "category": "手机", "price": 6999.0},
+            {"product_id": 3, "product_name": "小米 14", "brand": "小米", "category": "手机", "price": 3999.0},
+            {"product_id": 4, "product_name": "联想拯救者 Y9000P", "brand": "联想", "category": "电脑", "price": 8999.0},
+            {"product_id": 5, "product_name": "MacBook Pro 14", "brand": "苹果", "category": "电脑", "price": 14999.0},
+            {"product_id": 6, "product_name": "海尔冰箱 500L", "brand": "海尔", "category": "家电", "price": 3999.0},
+            {"product_id": 7, "product_name": "美的空调 1.5匹", "brand": "美的", "category": "家电", "price": 2699.0},
+            {"product_id": 8, "product_name": "Nike Air Max", "brand": "Nike", "category": "服饰", "price": 899.0},
+            {"product_id": 9, "product_name": "索尼电视 65寸", "brand": "索尼", "category": "家电", "price": 5999.0},
+            {"product_id": 10, "product_name": "优衣库羽绒服", "brand": "优衣库", "category": "服饰", "price": 499.0},
+        ]
+        conn.execute(insert(_metadata.tables["product_dim"]), products)
+
+        # Insert customers
+        customers = [
+            {"customer_id": 1, "customer_name": "张三", "customer_type": "VIP", "register_date": "2023-01-15", "region": "华东"},
+            {"customer_id": 2, "customer_name": "李四", "customer_type": "老客", "register_date": "2023-03-20", "region": "华东"},
+            {"customer_id": 3, "customer_name": "王五", "customer_type": "新客", "register_date": "2024-01-05", "region": "华南"},
+            {"customer_id": 4, "customer_name": "赵六", "customer_type": "VIP", "register_date": "2022-08-10", "region": "华北"},
+            {"customer_id": 5, "customer_name": "孙七", "customer_type": "老客", "register_date": "2023-06-18", "region": "西南"},
+        ]
+        conn.execute(insert(_metadata.tables["customer_dim"]), customers)
+
+        # Insert orders
+        import random
+        random.seed(42)
+        regions = ["华东", "华南", "华北", "西南"]
+        order_records = []
+        for i in range(50):
+            pid = random.randint(1, 10)
+            cid = random.randint(1, 5)
+            region = regions[i % 4]
+            qty = random.randint(1, 5)
+            price = products[pid - 1]["price"]
+            amount = round(price * qty, 2)
+            discount = round(amount * random.choice([0, 0.05, 0.10, 0.15]), 2)
+            order_records.append({
+                "id": i + 1,
+                "product_id": pid,
+                "product_name": products[pid - 1]["product_name"],
+                "brand": products[pid - 1]["brand"],
+                "category": products[pid - 1]["category"],
+                "region": region,
+                "region_code": region[:2],
+                "channel": random.choice(["线上", "线下", "分销"]),
+                "customer_id": cid,
+                "customer_type": random.choice(["VIP", "老客", "新客"]),
+                "order_amount": amount,
+                "discount_amount": discount,
+                "pay_amount": round(amount - discount, 2),
+                "quantity": qty,
+                "order_date": f"2024-01-{random.randint(1, 31):02d}",
+                "tenant_id": "t001" if random.random() < 0.6 else "t002",
+            })
+        conn.execute(insert(_metadata.tables["order_fact"]), order_records)
+        conn.commit()
 
 _sql_builder = SQLBuilder(_engine, {k: v.get("table", k) for k, v in _registry.data_sources.items()})
 _validator = DSLValidator(_registry_dict)
@@ -90,6 +199,145 @@ _row_security = RowLevelSecurity(_permissions)
 _col_security = ColumnLevelSecurity(_sensitive_columns, _masking_rules)
 _feedback_collector = FeedbackCollector()
 _audit_logger = AuditLogger(_engine)
+# No-op clarification detector to preserve pre-LangGraph behavior
+# (old api.py did not have clarification detection)
+class _NoOpClarificationDetector:
+    def detect(self, question: str) -> list:
+        return []
+
+_clarification_detector = _NoOpClarificationDetector()
+_sandbox = QuerySandbox(_engine)
+_executor = SQLExecutor(_engine)
+
+# ---------------------------------------------------------------------------
+# LLM client (only initialized if API key is available)
+# ---------------------------------------------------------------------------
+_llm_client: LLMClient | None = None
+_rag_retriever: RAGRetriever | None = None
+if settings.llm_api_key:
+    _llm_client = LLMClient(
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+    )
+    logger.info("LLM client initialized: model=%s, base_url=%s", settings.llm_model, settings.llm_base_url)
+    try:
+        _rag_store = MilvusLiteStore(uri=settings.milvus_uri)
+        logger.info("Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...")
+        _rag_embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
+        logger.info("BGE model loaded, dimension=%d", _rag_embedder._dim)
+
+        dim = _rag_embedder._dim
+        for col in ["schema", "metrics", "history", "terms"]:
+            _rag_store.create_collection(col, dimension=dim)
+
+        # Schema records
+        schema_texts = [
+            (1, "table_order_fact", "订单事实表: order_fact, 字段: id, product_id, product_name, brand, category, region, channel, customer_id, customer_type, order_amount, discount_amount, pay_amount, quantity, order_date, tenant_id"),
+            (2, "table_product_dim", "产品维度表: product_dim, 字段: product_id, product_name, brand, category, price"),
+            (3, "table_customer_dim", "客户维度表: customer_dim, 字段: customer_id, customer_name, customer_type, register_date, region"),
+        ]
+        schema_records = []
+        for sid, sname, text in schema_texts:
+            schema_records.append({
+                "id": sid,
+                "vector": _rag_embedder.embed(text),
+                "text": f"表: {sname.replace('table_', '')}, 说明: {text}",
+                "type": "table", "name": sname.replace("table_", ""),
+            })
+        _rag_store.upsert("schema", schema_records)
+
+        # Metric records
+        metric_records = []
+        metric_id = 100
+        for name, info in _registry.metrics.items():
+            text = f"指标: {name}, 计算方式: {info.get('expr', '')}, 说明: {info.get('description', '')}"
+            metric_records.append({
+                "id": metric_id,
+                "vector": _rag_embedder.embed(text),
+                "text": text,
+                "type": "metric",
+                "name": name,
+            })
+            metric_id += 1
+        _rag_store.upsert("metrics", metric_records)
+
+        # History records
+        history_texts = [
+            (200, "hist_001", "查询华东地区销售额最高的产品"),
+            (201, "hist_002", "各品类的订单量对比"),
+            (202, "hist_003", "线上渠道的客单价排名"),
+            (203, "hist_004", "查询华东地区高价值客户的手机品牌偏好"),
+        ]
+        history_records = []
+        for hid, hname, text in history_texts:
+            history_records.append({
+                "id": hid,
+                "vector": _rag_embedder.embed(text),
+                "text": f"历史查询: {text}",
+                "type": "history",
+            })
+        _rag_store.upsert("history", history_records)
+
+        # Terms records (business terms for keyword matching)
+        term_texts = [
+            (300, "term_region_hd", "华东", "华东地区, 包括上海、江苏、浙江、安徽、福建、江西、山东"),
+            (301, "term_region_hn", "华南", "华南地区, 包括广东、广西、海南"),
+            (302, "term_region_hb", "华北", "华北地区, 包括北京、天津、河北、山西、内蒙古"),
+            (303, "term_region_xn", "西南", "西南地区, 包括四川、重庆、贵州、云南、西藏"),
+            (304, "term_channel_online", "线上", "线上渠道, 电商、APP、小程序等线上销售方式"),
+            (305, "term_channel_offline", "线下", "线下渠道, 实体店、门店等线下销售方式"),
+            (306, "term_channel_dist", "分销", "分销渠道, 经销商、代理商等分销方式"),
+            (307, "term_vip", "VIP", "VIP客户, 高价值客户, 重要客户"),
+            (308, "term_new_cust", "新客", "新客户, 首次购买的客户"),
+            (309, "term_old_cust", "老客", "老客户, 多次购买的客户"),
+            (310, "term_cat_phone", "手机", "手机品类, 包括iPhone、华为、小米等手机产品"),
+            (311, "term_cat_computer", "电脑", "电脑品类, 包括笔记本、台式机等电脑产品"),
+            (312, "term_cat_appliance", "家电", "家电品类, 包括冰箱、空调、电视等家电产品"),
+            (313, "term_cat_clothing", "服饰", "服饰品类, 包括衣服、鞋子等服饰产品"),
+            (314, "term_sales", "销售额", "销售额, sales amount, 销售总金额, 营收, 收入"),
+            (315, "term_gmv", "gmv", "GMV, 成交总额, 交易总额, gross merchandise value"),
+        ]
+        term_records = []
+        for tid, tname, name, desc in term_texts:
+            term_records.append({
+                "id": tid,
+                "vector": _rag_embedder.embed(f"{name}: {desc}"),
+                "text": f"术语: {name}, 说明: {desc}",
+                "type": "term",
+                "name": name,
+            })
+        _rag_store.upsert("terms", term_records)
+
+        _rag_retriever = RAGRetriever(store=_rag_store, embedder=_rag_embedder)
+        logger.info("LLM + RAG (BGE embedder + keyword-split) initialized successfully")
+    except Exception as e:
+        logger.warning("RAG store initialization failed: %s. LLM will work without RAG context.", e)
+        _rag_retriever = None
+else:
+    logger.warning("LLM API key not configured, using mock DSL generation only")
+
+# ---------------------------------------------------------------------------
+# Build LangGraph StateGraph
+# ---------------------------------------------------------------------------
+_checkpointer = InMemorySaver()
+_query_graph = build_graph(
+    llm_client=_llm_client,
+    rag_retriever=_rag_retriever,
+    validator=_validator,
+    row_security=_row_security,
+    col_security=_col_security,
+    resolver=_resolver,
+    sql_builder=_sql_builder,
+    scanner=_scanner,
+    sandbox=_sandbox,
+    executor=_executor,
+    clarification_detector=_clarification_detector,
+    registry_dict=_registry_dict,
+    llm_system_prompt=DSL_SYSTEM_PROMPT,
+    checkpointer=_checkpointer,
+)
+logger.info("LangGraph StateGraph built and compiled successfully")
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -109,6 +357,7 @@ class QueryResponse(BaseModel):
     dsl: dict | None = None
     sql: str | None = None
     execution_time_ms: int = 0
+    clarification: dict | None = None
 
 
 class DSLExecuteRequest(BaseModel):
@@ -160,95 +409,111 @@ class RefreshEnumsResponse(BaseModel):
     status: str
 
 
+class AuditQueryDetailItem(BaseModel):
+    query_id: str
+    user_id: str
+    tenant_id: str | None = None
+    question: str
+    dsl: dict | None = None
+    sql: str | None = None
+    status: str
+    execution_time_ms: int | None = None
+    rows_scanned: int | None = None
+    rows_returned: int | None = None
+    trace: list[dict] = []
+    error_code: str | None = None
+    error_message: str | None = None
+    created_at: str
+
+
+class AuditQueryDetailResponse(BaseModel):
+    status: str = "success"
+    item: AuditQueryDetailItem
+
+
+class AuditQueryListItem(BaseModel):
+    query_id: str
+    user_id: str
+    tenant_id: str | None = None
+    question: str
+    status: str
+    execution_time_ms: int | None = None
+    rows_returned: int | None = None
+    error_code: str | None = None
+    created_at: str
+
+
+class AuditQueryListResponse(BaseModel):
+    status: str = "success"
+    total: int
+    limit: int
+    offset: int
+    items: list[AuditQueryListItem]
+
+
+class StreamRequest(BaseModel):
+    question: str
+    user_id: str
+    tenant_id: str
+    data_source: str | None = None
+
+
+class ResumeRequest(BaseModel):
+    query_id: str
+    action: str = "approve"  # "approve" | "reject"
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _mock_dsl_from_question(question: str, data_source: str | None = None) -> DSL:
-    """Generate a mock DSL based on question keywords (no LLM key needed)."""
-    ds = data_source or "orders"
-    metrics = []
-    dimensions = []
-    filters = []
-    order_by = []
-    limit = 10
+def _build_query_response(result: dict, elapsed: int, query_id: str, question: str) -> QueryResponse:
+    """Build QueryResponse from graph result state."""
+    status = result.get("status", "error")
 
-    q = question.lower()
+    if status == "clarification":
+        ambiguities = result.get("ambiguities")
+        return QueryResponse(
+            status="clarification",
+            clarification={
+                "message": "查询存在歧义，请确认以下信息",
+                "items": [a.model_dump() for a in ambiguities] if ambiguities else [],
+            },
+            execution_time_ms=elapsed,
+        )
 
-    # Metrics
-    if "销售额" in question or "sales" in q or "业绩" in question or "营收" in question:
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="sales_amount"))
-    elif "gmv" in q or "成交总额" in question or "交易额" in question:
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="gmv"))
-    elif "订单量" in question or "订单数" in question or "单量" in question or "order count" in q:
-        metrics.append(Aggregation(func="count", field="id", alias="order_count"))
-    else:
-        # Default metric
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="sales_amount"))
+    if status == "error":
+        raise ValidationError(result.get("error", "Unknown error"))
 
-    # Dimensions
-    if "产品" in question or "product" in q:
-        dimensions.append("product_name")
-    if "地区" in question or "区域" in question or "region" in q:
-        dimensions.append("region")
-    if "时间" in question or "日期" in question or "date" in q:
-        dimensions.append("order_date")
+    if status == "warning" or status == "pending_review":
+        return QueryResponse(
+            status=status,
+            data=[],
+            dsl=result.get("dsl").model_dump() if result.get("dsl") else None,
+            sql=result.get("sql"),
+            execution_time_ms=elapsed,
+        )
 
-    if not dimensions:
-        dimensions.append("product_name")
-
-    # Filters
-    if "华东" in question:
-        filters.append(Filter(field="region", operator="=", value="华东"))
-    if "华南" in question:
-        filters.append(Filter(field="region", operator="=", value="华南"))
-
-    # Order by
-    if metrics:
-        order_by.append(OrderBy(field=metrics[0].alias or metrics[0].field, direction="desc"))
-
-    # Limit
-    if "top" in q or "最高" in question or "最多" in question:
-        limit = 10
-    elif "全部" in question or "所有" in question:
-        limit = 100
-
-    return DSL(
-        metrics=metrics,
-        dimensions=dimensions,
-        filters=filters or None,
-        order_by=order_by or None,
-        limit=limit,
-        data_source=ds,
+    # success
+    dsl = result.get("dsl")
+    return QueryResponse(
+        status="success",
+        data=result.get("data"),
+        dsl=dsl.model_dump() if dsl else None,
+        sql=result.get("sql"),
+        execution_time_ms=elapsed,
     )
 
 
-import re
-
-
-def _restore_metric_fields(dsl: DSL) -> DSL:
-    """After SemanticResolver replaces metric.field with expr like SUM(col),
-    restore the raw column name so SQLBuilder can look it up.
-    """
-    if not dsl.metrics:
-        return dsl
-    restored = []
-    for m in dsl.metrics:
-        field = m.field
-        # Extract column name from expressions like SUM(order_amount), COUNT(id), etc.
-        match = re.match(r"^[A-Z]+\((.+?)\)$", field, re.IGNORECASE)
-        if match:
-            field = match.group(1)
-        restored.append(m.model_copy(update={"field": field}))
-    return dsl.model_copy(update={"metrics": restored})
-
-
-def _build_sql(dsl: DSL) -> str:
-    """Build SQL from DSL using SQLBuilder."""
-    # Restore raw column names before passing to builder
-    dsl_for_build = _restore_metric_fields(dsl)
-    return _sql_builder.build(dsl_for_build)
+def _build_trace(result: dict) -> list[dict]:
+    """Extract trace entries from graph result state."""
+    trace = result.get("trace")
+    if trace is None:
+        return []
+    if isinstance(trace, list):
+        return trace
+    return [trace] if trace else []
 
 
 # ---------------------------------------------------------------------------
@@ -264,9 +529,39 @@ async def health():
 @app.post("/api/v1/query/dsl")
 async def query_dsl(req: QueryRequest) -> DSLGenerateResponse:
     start = time.time()
-    dsl = _mock_dsl_from_question(req.question, req.data_source)
+    query_id = str(uuid.uuid4())
+
+    state = QueryState(
+        question=req.question,
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
+        data_source=req.data_source,
+        ambiguities=None,
+        dsl=None,
+        dsl_attempts=None,
+        sql=None,
+        sandbox_result=None,
+        complexity=None,
+        data=None,
+        status="pending",
+        error=None,
+        error_code=None,
+        trace=None,
+        query_id=query_id,
+        started_at=start,
+        llm_used=False,
+    )
+
+    config = {"configurable": {"thread_id": query_id}}
+    result = await _query_graph.ainvoke(state, config)
+
     elapsed = int((time.time() - start) * 1000)
-    return DSLGenerateResponse(status="success", dsl=dsl.model_dump(), execution_time_ms=elapsed)
+    dsl = result.get("dsl")
+    return DSLGenerateResponse(
+        status="success",
+        dsl=dsl.model_dump() if dsl else None,
+        execution_time_ms=elapsed,
+    )
 
 
 @app.post("/api/v1/query")
@@ -274,51 +569,62 @@ async def query(req: QueryRequest) -> QueryResponse:
     start = time.time()
     query_id = str(uuid.uuid4())
 
+    state = QueryState(
+        question=req.question,
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
+        data_source=req.data_source,
+        ambiguities=None,
+        dsl=None,
+        dsl_attempts=None,
+        sql=None,
+        sandbox_result=None,
+        complexity=None,
+        data=None,
+        status="pending",
+        error=None,
+        error_code=None,
+        trace=None,
+        query_id=query_id,
+        started_at=start,
+        llm_used=False,
+    )
+
+    config = {"configurable": {"thread_id": query_id}}
+
+    logger.info("[query_id=%s] question=%s user=%s tenant=%s", query_id, req.question, req.user_id, req.tenant_id)
+
     try:
-        # 1. Generate DSL
-        dsl = _mock_dsl_from_question(req.question, req.data_source)
-
-        # 2. Validate
-        _validator.validate(dsl)
-
-        # 3. Row-level permission injection
-        dsl = _row_security.inject(dsl, req.user_id)
-
-        # 4. Column-level permission check
-        _col_security.check(dsl, req.user_id)
-
-        # 5. Resolve semantics
-        dsl = _resolver.resolve(dsl)
-
-        # 6. Build SQL
-        sql = _build_sql(dsl)
-
-        # 7. Scan SQL
-        _scanner.scan(sql)
-
+        result = await _query_graph.ainvoke(state, config)
         elapsed = int((time.time() - start) * 1000)
 
+        trace_entries = _build_trace(result)
+
         # Audit log
+        dsl = result.get("dsl")
+        sql = result.get("sql")
+        status = result.get("status", "error")
+        data = result.get("data")
+
         _audit_logger.log(
             query_id=query_id,
             user_id=req.user_id,
             tenant_id=req.tenant_id,
             question=req.question,
-            dsl_json=dsl.model_dump(),
+            dsl_json=dsl.model_dump() if dsl else None,
             sql_text=sql,
-            status="success",
+            status=status,
             execution_time_ms=elapsed,
+            rows_returned=len(data) if data else 0,
+            trace_json=trace_entries,
+            error_code=result.get("error_code"),
+            error_message=result.get("error"),
         )
 
-        return QueryResponse(
-            status="success",
-            data=[],
-            dsl=dsl.model_dump(),
-            sql=sql,
-            execution_time_ms=elapsed,
-        )
+        return _build_query_response(result, elapsed, query_id, req.question)
     except NL2DSLException as exc:
         elapsed = int((time.time() - start) * 1000)
+        logger.error("[query_id=%s] error=%s message=%s time=%dms", query_id, exc.error_code, exc.message, elapsed)
         _audit_logger.log(
             query_id=query_id,
             user_id=req.user_id,
@@ -328,6 +634,7 @@ async def query(req: QueryRequest) -> QueryResponse:
             execution_time_ms=elapsed,
             error_code=exc.error_code,
             error_message=exc.message,
+            trace_json=[],
         )
         raise
 
@@ -335,34 +642,118 @@ async def query(req: QueryRequest) -> QueryResponse:
 @app.post("/api/v1/query/execute")
 async def query_execute(req: DSLExecuteRequest) -> DSLExecuteResponse:
     start = time.time()
+    query_id = str(uuid.uuid4())
 
     dsl = DSL(**req.dsl)
 
-    # Validate
-    _validator.validate(dsl)
+    state = QueryState(
+        question="",
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
+        data_source=None,
+        ambiguities=None,
+        dsl=dsl,
+        dsl_attempts=None,
+        sql=None,
+        sandbox_result=None,
+        complexity=None,
+        data=None,
+        status="pending",
+        error=None,
+        error_code=None,
+        trace=None,
+        query_id=query_id,
+        started_at=start,
+        llm_used=False,
+    )
 
-    # Row-level permission injection
-    dsl = _row_security.inject(dsl, req.user_id)
-
-    # Column-level permission check
-    _col_security.check(dsl, req.user_id)
-
-    # Resolve semantics
-    dsl = _resolver.resolve(dsl)
-
-    # Build SQL
-    sql = _build_sql(dsl)
-
-    # Scan SQL
-    _scanner.scan(sql)
+    config = {"configurable": {"thread_id": query_id}}
+    result = await _query_graph.ainvoke(state, config)
 
     elapsed = int((time.time() - start) * 1000)
 
+    status = result.get("status", "error")
+    if status == "error":
+        raise ValidationError(result.get("error", "Query execution failed"))
+
     return DSLExecuteResponse(
         status="success",
-        data=[],
-        sql=sql,
+        data=result.get("data"),
+        sql=result.get("sql"),
         execution_time_ms=elapsed,
+    )
+
+
+@app.post("/api/v1/query/stream")
+async def query_stream(req: StreamRequest):
+    """Stream query execution updates via SSE."""
+    query_id = str(uuid.uuid4())
+
+    state = QueryState(
+        question=req.question,
+        user_id=req.user_id,
+        tenant_id=req.tenant_id,
+        data_source=req.data_source,
+        ambiguities=None,
+        dsl=None,
+        dsl_attempts=None,
+        sql=None,
+        sandbox_result=None,
+        complexity=None,
+        data=None,
+        status="pending",
+        error=None,
+        error_code=None,
+        trace=None,
+        query_id=query_id,
+        started_at=time.time(),
+        llm_used=False,
+    )
+
+    config = {"configurable": {"thread_id": query_id}}
+
+    async def event_generator():
+        import json
+        async for chunk in _query_graph.astream(state, config, stream_mode="updates"):
+            yield f"data: {json.dumps(chunk, default=str)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )
+
+
+@app.post("/api/v1/query/resume")
+async def query_resume(req: ResumeRequest):
+    """Resume a paused query (human-in-the-loop approval/rejection)."""
+    config = {"configurable": {"thread_id": req.query_id}}
+
+    # Get current state
+    current_state = await _query_graph.aget_state(config)
+    if current_state is None:
+        raise NotFoundError(f"Query not found: query_id={req.query_id}")
+
+    # Update state with approval/rejection
+    if req.action == "approve":
+        # Continue execution from human_review node
+        result = await _query_graph.ainvoke(
+            None,
+            config,
+        )
+    else:
+        # Reject: mark as error and end
+        result = await _query_graph.ainvoke(
+            {"status": "error", "error": "Human review rejected", "error_code": "REJECTED"},
+            config,
+        )
+
+    return QueryResponse(
+        status=result.get("status", "error"),
+        data=result.get("data"),
+        dsl=result.get("dsl").model_dump() if result.get("dsl") else None,
+        sql=result.get("sql"),
+        execution_time_ms=0,
     )
 
 
@@ -411,6 +802,51 @@ async def get_enums() -> EnumsResponse:
 @app.post("/api/v1/admin/enums/refresh")
 async def refresh_enums() -> RefreshEnumsResponse:
     return RefreshEnumsResponse(status="refreshed")
+
+
+@app.get("/api/v1/admin/audit/queries/{query_id}")
+async def get_audit_query(query_id: str) -> AuditQueryDetailResponse:
+    row = _audit_logger.get_query(query_id)
+    if row is None:
+        raise NotFoundError(f"audit record not found: query_id={query_id}")
+    row["created_at"] = str(row.get("created_at") or "")
+    return AuditQueryDetailResponse(item=AuditQueryDetailItem(**row))
+
+
+@app.get("/api/v1/admin/audit/queries")
+async def list_audit_queries(
+    user_id: str | None = None,
+    tenant_id: str | None = None,
+    status_: str | None = Query(None, alias="status"),
+    start_time: str | None = None,
+    end_time: str | None = None,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> AuditQueryListResponse:
+    if not (1 <= limit <= 100):
+        raise ValidationError("limit must be between 1 and 100")
+    if offset < 0:
+        raise ValidationError("offset must be >= 0")
+
+    items, total = _audit_logger.list_queries(
+        user_id=user_id,
+        tenant_id=tenant_id,
+        status=status_,
+        start_time=start_time,
+        end_time=end_time,
+        question_like=q,
+        limit=limit,
+        offset=offset,
+    )
+    for it in items:
+        it["created_at"] = str(it.get("created_at") or "")
+    return AuditQueryListResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        items=[AuditQueryListItem(**r) for r in items],
+    )
 
 
 # ---------------------------------------------------------------------------

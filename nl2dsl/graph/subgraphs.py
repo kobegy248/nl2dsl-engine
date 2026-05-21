@@ -122,17 +122,40 @@ def build_validation_subgraph(
     builder.add_node("correct_dsl", correct_node)
     builder.add_node("mock_dsl", mock_node)
 
-    builder.set_entry_point("generate_dsl")
+    # Entry point: route to generate_dsl if LLM available, else mock_dsl
+    def _route_entry(state: QueryState) -> str:
+        if llm_client is not None:
+            return "llm"
+        return "mock"
 
-    # Route from generate_dsl: stop on error, continue to validation otherwise
+    builder.set_conditional_entry_point(
+        _route_entry,
+        {
+            "llm": "generate_dsl",
+            "mock": "mock_dsl",
+        },
+    )
+
+    # Route from generate_dsl:
+    #   - on success -> validate_dsl
+    #   - on error (e.g. LLM connection failure) -> mock_dsl (fallback)
+    def _route_after_generate_dsl(state: QueryState) -> str:
+        if state.get("status") == "error":
+            # Clear error state so mock_dsl can proceed
+            return "fallback"
+        return "continue"
+
     builder.add_conditional_edges(
         "generate_dsl",
-        _route_on_error,
+        _route_after_generate_dsl,
         {
-            "end": END,
+            "fallback": "mock_dsl",
             "continue": "validate_dsl",
         },
     )
+
+    # Mock DSL path goes directly to validation
+    builder.add_edge("mock_dsl", "validate_dsl")
 
     # Conditional routing after validation
     builder.add_conditional_edges(
@@ -147,8 +170,5 @@ def build_validation_subgraph(
 
     # After correction, loop back to validation
     builder.add_edge("correct_dsl", "validate_dsl")
-
-    # Mock DSL path (used when LLM is not available)
-    builder.add_edge("mock_dsl", "validate_dsl")
 
     return builder.compile()

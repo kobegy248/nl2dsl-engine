@@ -199,7 +199,7 @@ class TestBuildGraphInvocation:
         assert "human_review" in trace_steps
 
     def test_error_in_validation_subgraph(self, mock_services):
-        """If validation subgraph fails, error status is set."""
+        """If LLM returns invalid JSON, graph falls back to mock_dsl and succeeds."""
         mock_services["clarification_detector"].detect.return_value = []
         # Make LLM return invalid JSON so generate_dsl fails
         mock_services["llm_client"].generate = MagicMock(return_value="invalid json {{{")
@@ -209,8 +209,10 @@ class TestBuildGraphInvocation:
         state = make_minimal_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Validation subgraph should fail (LLM returned invalid JSON)
-        assert result["status"] == "error"
+        # Validation subgraph falls back to mock_dsl when LLM fails
+        assert result["status"] == "success"
+        assert result["dsl"] is not None
+        assert result["llm_used"] is False
 
     def test_complex_query_routes_through_scan(self, mock_services):
         """Complex queries should still route to scan_sql."""

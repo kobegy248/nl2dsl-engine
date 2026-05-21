@@ -396,6 +396,9 @@ def _make_mock_dsl_node(registry_dict: dict):
         return {
             "dsl": dsl,
             "llm_used": False,
+            "status": "pending",  # Clear any previous error status
+            "error": None,
+            "error_code": None,
             "dsl_attempts": {
                 "source": "mock",
                 "dsl": dsl.model_dump(),
