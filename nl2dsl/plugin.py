@@ -1,5 +1,6 @@
 """Plugin framework core."""
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 from nl2dsl.graph.state import QueryState
@@ -95,3 +96,17 @@ def _wrap(func, before_hooks, after_hooks):
                 result = {**result, **hr}
         return {**state, **result}
     return wrapper
+
+
+class Plugin(ABC):
+    @abstractmethod
+    def register(self, engine: "Engine") -> None:
+        pass
+
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__
+
+    @property
+    def priority(self) -> int:
+        return 100
