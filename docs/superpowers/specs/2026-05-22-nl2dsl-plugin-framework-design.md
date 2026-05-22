@@ -1,0 +1,424 @@
+# NL2DSL Plugin Framework 设计文档
+
+> 目标：将 NL2DSL 从特定业务场景的 demo 升级为可插拔、可扩展的通用 NL2DSL 引擎框架。
+>
+> 核心能力：A. 可插拔（替换组件） + B. 可扩展（插入节点/钩子）
+
+---
+
+## 1. 架构概览
+
+在现有代码和 LangGraph 之上新增一层**引擎层**，负责插件加载、组件注册和管道编译。
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         NLDEngine                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │  Registry   │  │  Pipeline   │  │   Plugin Loader     │ │
+│  │  组件注册表  │  │  节点+钩子  │  │   加载用户插件       │ │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘ │
+│         │                │                                   │
+│         └────────────────┘                                   │
+│                   │                                          │
+│                   ▼                                          │
+│         ┌─────────────────┐                                  │
+│         │  LangGraph      │  ← 现有代码复用，不改核心链路     │
+│         │  StateGraph     │                                  │
+│         └─────────────────┘                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**三个核心对象**：
+
+1. **`Registry`** — key-value 组件注册表。存储所有组件实例（LLM、SQLBuilder、Validator 等），支持按名称查找和覆盖。
+2. **`Pipeline`** — 节点链路 + 钩子映射。维护默认节点链路，支持 before/after/replace/add_node 操作，最终编译为 LangGraph StateGraph。
+3. **`Plugin`** — 用户扩展入口。通过 `register(engine)` 方法向 Registry 和 Pipeline 注册自定义组件和钩子。
+
+---
+
+## 2. Plugin API
+
+### 2.1 Plugin 基类
+
+```python
+from abc import ABC, abstractmethod
+
+
+class Plugin(ABC):
+    """插件基类。用户通过继承此类并实现 register() 方法来扩展引擎。"""
+
+    @abstractmethod
+    def register(self, engine: "Engine") -> None:
+        """在此方法中注册组件和钩子。
+
+        Args:
+            engine: Engine 实例，提供 registry 和 pipeline 访问。
+        """
+        pass
+
+    @property
+    def name(self) -> str:
+        """插件名称，用于日志和调试。"""
+        return self.__class__.__name__
+
+    @property
+    def priority(self) -> int:
+        """加载优先级。数字越小越先加载。
+
+        内置默认组件 priority=0，用户插件默认 100。
+        后加载的插件可以覆盖先加载的同名组件。
+        """
+        return 100
+```
+
+### 2.2 Engine 入口（链式 API）
+
+```python
+from nl2dsl import Engine
+
+# 方式1：零配置开箱即用
+engine = Engine()
+app = engine.build_fastapi_app()
+
+# 方式2：用插件扩展
+engine = Engine()
+engine.use(MyLLMPlugin())      # 替换 LLM 后端
+engine.use(MyAuditPlugin())    # 插入审计钩子
+app = engine.build_fastapi_app()
+
+# 方式3：直接注册组件（简单场景）
+engine = Engine()
+engine.register("llm", OllamaLLM(model="qwen3:8b"))
+graph = engine.build()
+```
+
+**Engine 核心方法**：
+
+| 方法 | 说明 |
+|------|------|
+| `use(plugin)` | 注册一个 Plugin 实例（链式调用） |
+| `register(name, component)` | 直接向 Registry 注册组件 |
+| `build()` | 构建并编译为 LangGraph StateGraph |
+| `build_fastapi_app()` | 构建 FastAPI 应用 |
+
+---
+
+## 3. 组件抽象（Protocol）
+
+将现有代码中硬编码的依赖抽象为接口，现有实现无需修改即可适配。
+
+```python
+from typing import Protocol
+from nl2dsl.dsl.models import DSL
+from nl2dsl.semantic.resolver import SemanticResolver
+
+
+class LLMBackend(Protocol):
+    """LLM 后端接口。"""
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        """生成文本，返回字符串。"""
+        ...
+
+    @property
+    def model_name(self) -> str:
+        """模型标识名。"""
+        ...
+
+
+class DSLGenerator(Protocol):
+    """DSL 生成器接口。"""
+
+    def generate(self, question: str, schema: dict) -> DSL:
+        """自然语言 → DSL。"""
+        ...
+
+
+class SQLBuilder(Protocol):
+    """SQL 构建器接口。"""
+
+    def build(self, dsl: DSL, resolver: SemanticResolver) -> str:
+        """DSL → SQL 字符串。"""
+        ...
+
+
+class SQLExecutor(Protocol):
+    """SQL 执行器接口。"""
+
+    def execute(self, sql: str, timeout: int = 30) -> list[dict]:
+        """执行 SQL，返回结果列表。"""
+        ...
+
+
+class VectorStore(Protocol):
+    """向量存储接口。"""
+
+    def search(self, query: str, top_k: int = 5) -> list[dict]:
+        """向量检索。"""
+        ...
+
+    def add(self, texts: list[str], metadata: list[dict]) -> None:
+        """添加文档到向量库。"""
+        ...
+
+
+class Validator(Protocol):
+    """DSL 校验器接口。"""
+
+    def validate(self, dsl: DSL) -> list[str]:
+        """校验 DSL，返回错误列表（空列表表示通过）。"""
+        ...
+```
+
+**现有代码适配**：当前 `LLMClient`、`SQLBuilder`、`SQLExecutor` 等类的接口形状已经符合上述 Protocol，只需显式声明契约即可。
+
+---
+
+## 4. 钩子机制
+
+### 4.1 Pipeline 四种操作
+
+```python
+class Pipeline:
+    def before(self, node: str, handler: Callable[[QueryState], dict]) -> "Pipeline":
+        """在指定节点前插入钩子。钩子返回 error 则中断链路。"""
+
+    def after(self, node: str, handler: Callable[[QueryState], dict]) -> "Pipeline":
+        """在指定节点后插入钩子。"""
+
+    def replace(self, node: str, handler: Callable[[QueryState], dict]) -> "Pipeline":
+        """完全替换某个节点的实现。"""
+
+    def add_node(self, name: str, handler: Callable[[QueryState], dict],
+                 after: str) -> "Pipeline":
+        """在指定节点后插入一个全新的节点。"""
+```
+
+### 4.2 编译过程
+
+Pipeline 最终编译为 LangGraph StateGraph，步骤如下：
+
+1. **加载默认节点链路**：`clarification → validation → permission_check → resolve_semantic → build_sql → scan_sql → sandbox_check → human_review → execute_sql → simplify_dsl`
+2. **应用 replace()**：替换指定节点函数
+3. **应用 add_node()**：在图中插入新节点和边
+4. **应用 before()/after()**：用包装器模式包装节点函数（非侵入）
+5. **编译为 StateGraph**：调用 `builder.compile()`
+
+### 4.3 包装器实现
+
+```python
+def _wrap_with_hooks(node_func, before_hooks, after_hooks):
+    """包装节点函数，在前后插入钩子。"""
+
+    def wrapper(state: QueryState) -> dict:
+        # 1. 执行 before 钩子
+        for hook in before_hooks:
+            result = hook(state)
+            if result.get("status") == "error":
+                return result  # 中断，不执行原节点
+            state = {**state, **result}
+
+        # 2. 执行原节点
+        result = node_func(state)
+
+        # 3. 执行 after 钩子
+        for hook in after_hooks:
+            hook_result = hook({**state, **result})
+            if hook_result.get("status") == "error":
+                return hook_result
+            result = {**result, **hook_result}
+
+        return result
+
+    return wrapper
+```
+
+钩子函数的签名和 LangGraph 节点一致：`QueryState -> dict`，用户无学习成本。
+
+---
+
+## 5. 使用示例
+
+### 5.1 替换 LLM 后端
+
+```python
+from nl2dsl import Engine, Plugin
+
+
+class OllamaLLM:
+    def __init__(self, model: str):
+        self.model = model
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        # 调用 Ollama API
+        ...
+
+    @property
+    def model_name(self) -> str:
+        return self.model
+
+
+class OllamaPlugin(Plugin):
+    def register(self, engine):
+        engine.register("llm", OllamaLLM(model="qwen3:8b"))
+
+
+engine = Engine()
+engine.use(OllamaPlugin())
+app = engine.build_fastapi_app()
+```
+
+### 5.2 插入审计钩子
+
+```python
+class AuditPlugin(Plugin):
+    """在 execute_sql 后记录审计日志。"""
+
+    def register(self, engine):
+        engine.pipeline.after("execute_sql", self._log_audit)
+
+    def _log_audit(self, state: QueryState) -> dict:
+        audit_log.record(
+            question=state["question"],
+            sql=state["sql"],
+            user_id=state["user_id"],
+            elapsed_ms=state.get("execution_time_ms"),
+        )
+        return {}  # 不修改状态，只记录
+```
+
+### 5.3 查询成本控制
+
+```python
+class CostControlPlugin(Plugin):
+    """在 execute_sql 前检查查询成本。"""
+
+    def register(self, engine):
+        engine.pipeline.before("execute_sql", self._check_cost)
+
+    def _check_cost(self, state: QueryState) -> dict:
+        if state.get("estimated_scan_rows", 0) > 1_000_000:
+            return {
+                "status": "error",
+                "error": "查询扫描行数超限",
+                "error_code": "COST_LIMIT_EXCEEDED",
+            }
+        return {}  # 通过，继续执行
+```
+
+### 5.4 添加自定义节点
+
+```python
+class BusinessRulePlugin(Plugin):
+    """在 build_sql 后添加业务规则校验节点。"""
+
+    def register(self, engine):
+        engine.pipeline.add_node(
+            name="business_rule_check",
+            handler=self._check_rules,
+            after="build_sql",
+        )
+
+    def _check_rules(self, state: QueryState) -> dict:
+        # 自定义业务规则校验
+        ...
+        return {}
+```
+
+---
+
+## 6. 默认组件 + 向后兼容
+
+### 6.1 零配置开箱即用
+
+`Engine` 初始化时自动加载现有代码中的默认组件，用户不写任何插件也能直接运行：
+
+```python
+from nl2dsl import Engine
+
+engine = Engine()  # 自动注册所有默认组件
+app = engine.build_fastapi_app()
+```
+
+自动注册的默认组件：
+
+| 名称 | 默认实现 | 配置来源 |
+|------|----------|----------|
+| `llm` | `LLMClient`（OpenAI 兼容） | `.env`：`NL2DSL_LLM_*` |
+| `dsl_generator` | `LLMDSLGenerator` / `MockDSLGenerator` | `.env`：API Key 是否存在 |
+| `sql_builder` | `SQLBuilder`（SQLAlchemy Core） | 内置 |
+| `executor` | `SQLExecutor` | `.env`：`NL2DSL_DB_URL` |
+| `validator` | `DSLValidator` | 内置 |
+| `vector_store` | `MilvusLiteStore` | `.env`：`NL2DSL_MILVUS_URI` |
+| `resolver` | `SemanticResolver` | `configs/metrics.yaml` |
+| `row_security` | `RowLevelSecurity` | `configs/permissions.yaml` |
+| `col_security` | `ColumnLevelSecurity` | `configs/permissions.yaml` |
+
+### 6.2 插件覆盖机制
+
+插件按 `priority` 排序加载，后加载的同名组件覆盖先加载的：
+
+```python
+engine = Engine()           # 加载默认组件 (priority=0)
+engine.use(OllamaPlugin())  # priority=100，覆盖默认 llm
+```
+
+### 6.3 向后兼容策略
+
+| 现有文件 | 处理方式 |
+|----------|----------|
+| `build_graph()` | 保留，内部改用 Engine 实现 |
+| `api.py` | 路由逻辑不动，初始化方式改为 Engine |
+| `api_factory.py` | 同样适配 Engine |
+| `config.py` | 保留，Engine 内部读取环境变量 |
+| 单元测试 | 默认组件不变，现有测试无需修改 |
+
+---
+
+## 7. 新增文件结构
+
+```
+nl2dsl/
+├── engine.py              # 新增：Engine 入口类
+├── plugin.py              # 新增：Plugin ABC + Registry + Pipeline
+├── protocols.py           # 新增：组件 Protocol 定义
+├── __init__.py            # 修改：导出 Engine, Plugin
+├── config.py              # 现有：保留
+├── api.py                 # 现有：适配 Engine
+├── api_factory.py         # 现有：适配 Engine
+├── llm/
+│   ├── client.py          # 现有：适配 LLMBackend Protocol
+│   ├── generator.py       # 现有：适配 DSLGenerator Protocol
+│   ├── backends/          # 新增目录：各 LLM 后端实现
+│   │   ├── __init__.py
+│   │   ├── openai.py      # OpenAI 兼容后端（默认）
+│   │   └── ollama.py      # Ollama 后端
+│   └── prompts.py         # 现有：保留
+├── sql_engine/
+│   ├── builder.py         # 现有：适配 SQLBuilder Protocol
+│   ├── scanner.py         # 现有：保留
+│   ├── executor.py        # 现有：适配 SQLExecutor Protocol
+│   └── dialect.py         # 现有：保留
+├── rag/
+│   ├── store.py           # 现有：适配 VectorStore Protocol
+│   ├── embedder.py        # 现有：保留
+│   └── retriever.py       # 现有：保留
+└── ... 其他现有文件基本不动
+```
+
+---
+
+## 8. 实现优先级
+
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| P0 | `protocols.py` | 定义所有组件 Protocol |
+| P0 | `plugin.py` — Registry | 组件注册表 |
+| P0 | `plugin.py` — Pipeline | 节点链路 + 钩子编译 |
+| P0 | `plugin.py` — Plugin ABC | 插件基类 |
+| P0 | `engine.py` | Engine 入口类 |
+| P1 | 适配现有组件 | 让现有类符合 Protocol |
+| P1 | `llm/backends/` | 提取 OpenAI/Ollama 后端 |
+| P2 | `api.py` / `api_factory.py` | 改用 Engine 初始化 |
+| P2 | 示例插件 | OllamaPlugin、AuditPlugin |
+| P3 | 文档 | 插件开发指南 |
