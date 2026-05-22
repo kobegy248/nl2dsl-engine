@@ -1,9 +1,47 @@
+# Environment variables
 .env
-*.db
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+
+# Test and lint caches
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+
+# Build artifacts
 dist/
 build/
 *.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Databases
+*.db
+milvus_lite.db/
+
+# Logs
+logs/
+*.log
+server*.log
+
+# Runtime data
+feedback.jsonl
+
+# Generated docs
+docs.zip
+docs/*.pdf
