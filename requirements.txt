@@ -1,0 +1,15 @@
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+sqlalchemy>=2.0.25
+sqlglot>=20.0.0
+langgraph>=0.0.50
+langchain>=0.1.0
+openai>=1.10.0
+pymilvus>=2.3.0
+sentence-transformers>=2.2.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+httpx>=0.26.0
+jieba>=0.42
