@@ -187,65 +187,44 @@ def create_app(
     """
     app = FastAPI(title="NL2DSL", version="0.1.0")
 
-    # Defaults
-    if engine is None:
-        engine = create_engine("sqlite:///./nl2dsl.db", echo=False)
+    from nl2dsl.engine import Engine
 
-    if registry_dict is None:
-        registry = SemanticRegistry()
-        metrics_path = Path(__file__).parent.parent / "configs" / "metrics.yaml"
-        if metrics_path.exists():
-            registry.load(str(metrics_path))
-        registry_dict = {
-            "metrics": registry.metrics,
-            "dimensions": registry.dimensions,
-            "data_sources": registry.data_sources,
-        }
+    _nl2dsl_engine = Engine()
 
-    if permissions is None:
-        permissions = {}
-    if sensitive_columns is None:
-        sensitive_columns = {}
-    if masking_rules is None:
-        masking_rules = {}
+    # Override db_engine if provided
+    if engine is not None:
+        _nl2dsl_engine.register("db_engine", engine)
 
-    # Build services
-    dsl_generator = RuleBasedDSLGenerator(registry_dict)
-    sql_builder = SQLBuilder(engine, {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()})
-    validator = DSLValidator(registry_dict)
-    resolver = SemanticResolver(registry_dict)
-    scanner = SQLScanner()
-    sandbox = QuerySandbox(engine)
-    executor = SQLExecutor(engine)
-    row_security = RowLevelSecurity(permissions)
-    col_security = ColumnLevelSecurity(sensitive_columns, masking_rules)
-    feedback_collector = FeedbackCollector()
-    audit_logger = AuditLogger(engine)
+    # Override registry and dependent components if provided
+    if registry_dict is not None:
+        _nl2dsl_engine.register("registry_dict", registry_dict)
+        _nl2dsl_engine.register("validator", DSLValidator(registry_dict))
+        _nl2dsl_engine.register("resolver", SemanticResolver(registry_dict))
+        _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
+        _nl2dsl_engine.register("sql_builder", SQLBuilder(
+            _db_engine,
+            {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()},
+        ))
+
+    # Override permission components
+    _nl2dsl_engine.register("row_security", RowLevelSecurity(permissions or {}))
+    _nl2dsl_engine.register("col_security", ColumnLevelSecurity(sensitive_columns or {}, masking_rules or {}))
+
     # Use no-op clarification detector to preserve pre-LangGraph behavior
     class _NoOpClarificationDetector:
         def detect(self, question: str) -> list:
             return []
 
     clarification_detector = _NoOpClarificationDetector()
+    _nl2dsl_engine.register("clarification_detector", clarification_detector)
+
+    # Services used directly by routes
+    feedback_collector = FeedbackCollector()
+    _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
+    audit_logger = AuditLogger(_db_engine)
 
     # Build LangGraph StateGraph
-    checkpointer = InMemorySaver()
-    query_graph = build_graph(
-        llm_client=None,
-        rag_retriever=None,
-        validator=validator,
-        row_security=row_security,
-        col_security=col_security,
-        resolver=resolver,
-        sql_builder=sql_builder,
-        scanner=scanner,
-        sandbox=sandbox,
-        executor=executor,
-        clarification_detector=clarification_detector,
-        registry_dict=registry_dict,
-        llm_system_prompt="",
-        checkpointer=checkpointer,
-    )
+    query_graph = _nl2dsl_engine.build()
 
     # -----------------------------------------------------------------------
     # Helpers
