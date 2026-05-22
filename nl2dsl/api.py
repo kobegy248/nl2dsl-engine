@@ -35,6 +35,7 @@ from nl2dsl.semantic.resolver import SemanticResolver
 from nl2dsl.sql_engine.builder import SQLBuilder
 from nl2dsl.sql_engine.scanner import SQLScanner
 from nl2dsl.sql_engine.executor import SQLExecutor
+from nl2dsl.engine import Engine
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.graph.state import QueryState
 from langgraph.checkpoint.memory import InMemorySaver
@@ -42,7 +43,13 @@ from langgraph.checkpoint.memory import InMemorySaver
 app = FastAPI(title="NL2DSL", version="0.1.0")
 
 # ---------------------------------------------------------------------------
-# Load semantic registry
+# Engine initialization
+# ---------------------------------------------------------------------------
+_nl2dsl_engine = Engine()
+_db_engine = _nl2dsl_engine.registry.get("db_engine")
+
+# ---------------------------------------------------------------------------
+# Load semantic registry (for route compatibility)
 # ---------------------------------------------------------------------------
 _registry = SemanticRegistry()
 _metrics_yaml_path = Path(__file__).parent.parent / "configs" / "metrics.yaml"
@@ -79,12 +86,13 @@ if _permissions_yaml_path.exists():
     for field, template in _masking_rules_raw.items():
         _masking_rules[field] = _make_masker(template)
 
-# ---------------------------------------------------------------------------
-# Shared services
-# ---------------------------------------------------------------------------
-_engine = create_engine(settings.db_url, echo=False)
+# Re-register permission components with loaded permissions
+_nl2dsl_engine.register("row_security", RowLevelSecurity(_permissions))
+_nl2dsl_engine.register("col_security", ColumnLevelSecurity(_sensitive_columns, _masking_rules))
 
+# ---------------------------------------------------------------------------
 # Ensure tables exist for SQLBuilder metadata reflection
+# ---------------------------------------------------------------------------
 _metadata = MetaData()
 
 Table(
@@ -125,10 +133,10 @@ Table(
     Column("region", String),
 )
 
-_metadata.create_all(_engine)
+_metadata.create_all(_db_engine)
 
 # Insert mock data if tables are empty
-with _engine.connect() as conn:
+with _db_engine.connect() as conn:
     result = conn.execute(text("SELECT COUNT(*) FROM order_fact"))
     count = result.scalar()
     if count == 0:
@@ -191,41 +199,43 @@ with _engine.connect() as conn:
         conn.execute(insert(_metadata.tables["order_fact"]), order_records)
         conn.commit()
 
-_sql_builder = SQLBuilder(_engine, {k: v.get("table", k) for k, v in _registry.data_sources.items()})
-_validator = DSLValidator(_registry_dict)
-_resolver = SemanticResolver(_registry_dict)
-_scanner = SQLScanner()
-_row_security = RowLevelSecurity(_permissions)
-_col_security = ColumnLevelSecurity(_sensitive_columns, _masking_rules)
+# Re-register sql_builder after mock data (tables now exist)
+_sql_builder = SQLBuilder(_db_engine, {k: v.get("table", k) for k, v in _registry.data_sources.items()})
+_nl2dsl_engine.register("sql_builder", _sql_builder)
+
+# ---------------------------------------------------------------------------
+# Service instances for routes
+# ---------------------------------------------------------------------------
 _feedback_collector = FeedbackCollector()
-_audit_logger = AuditLogger(_engine)
+_audit_logger = AuditLogger(_db_engine)
+
 # No-op clarification detector to preserve pre-LangGraph behavior
-# (old api.py did not have clarification detection)
 class _NoOpClarificationDetector:
     def detect(self, question: str) -> list:
         return []
 
 _clarification_detector = _NoOpClarificationDetector()
-_sandbox = QuerySandbox(_engine)
-_executor = SQLExecutor(_engine)
+_nl2dsl_engine.register("clarification_detector", _clarification_detector)
 
 # ---------------------------------------------------------------------------
-# LLM client (only initialized if API key is available)
+# LLM client and RAG (use Engine's if available, else create manually)
 # ---------------------------------------------------------------------------
-_llm_client: LLMClient | None = None
-_rag_retriever: RAGRetriever | None = None
-if settings.llm_api_key:
-    _llm_client = LLMClient(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-        model=settings.llm_model,
-    )
+_llm_client = _nl2dsl_engine.registry.get("llm") if _nl2dsl_engine.registry.has("llm") else None
+_rag_retriever = None
+
+if _llm_client is not None:
     logger.info("LLM client initialized: model=%s, base_url=%s", settings.llm_model, settings.llm_base_url)
     try:
-        _rag_store = MilvusLiteStore(uri=settings.milvus_uri)
-        logger.info("Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...")
-        _rag_embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
-        logger.info("BGE model loaded, dimension=%d", _rag_embedder._dim)
+        # Check if Engine already created RAG retriever
+        if _nl2dsl_engine.registry.has("rag_retriever"):
+            _rag_retriever = _nl2dsl_engine.registry.get("rag_retriever")
+            _rag_store = _rag_retriever._store
+            _rag_embedder = _rag_retriever._embedder
+        else:
+            _rag_store = MilvusLiteStore(uri=settings.milvus_uri)
+            logger.info("Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...")
+            _rag_embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
+            logger.info("BGE model loaded, dimension=%d", _rag_embedder._dim)
 
         dim = _rag_embedder._dim
         for col in ["schema", "metrics", "history", "terms"]:
@@ -310,6 +320,7 @@ if settings.llm_api_key:
         _rag_store.upsert("terms", term_records)
 
         _rag_retriever = RAGRetriever(store=_rag_store, embedder=_rag_embedder)
+        _nl2dsl_engine.register("rag_retriever", _rag_retriever)
         logger.info("LLM + RAG (BGE embedder + keyword-split) initialized successfully")
     except Exception as e:
         logger.warning("RAG store initialization failed: %s. LLM will work without RAG context.", e)
@@ -320,23 +331,7 @@ else:
 # ---------------------------------------------------------------------------
 # Build LangGraph StateGraph
 # ---------------------------------------------------------------------------
-_checkpointer = InMemorySaver()
-_query_graph = build_graph(
-    llm_client=_llm_client,
-    rag_retriever=_rag_retriever,
-    validator=_validator,
-    row_security=_row_security,
-    col_security=_col_security,
-    resolver=_resolver,
-    sql_builder=_sql_builder,
-    scanner=_scanner,
-    sandbox=_sandbox,
-    executor=_executor,
-    clarification_detector=_clarification_detector,
-    registry_dict=_registry_dict,
-    llm_system_prompt=DSL_SYSTEM_PROMPT,
-    checkpointer=_checkpointer,
-)
+_query_graph = _nl2dsl_engine.build()
 logger.info("LangGraph StateGraph built and compiled successfully")
 
 # ---------------------------------------------------------------------------
