@@ -13,6 +13,10 @@ class LLMClient:
         self._model = model
         logger.info("LLMClient initialized: model=%s base_url=%s", model, base_url)
 
+    @property
+    def model_name(self) -> str:
+        return self._model
+
     def generate(self, user_prompt: str, system_prompt: str) -> str:
         start = time.time()
         logger.info("LLM request: model=%s prompt_length=%d", self._model, len(user_prompt))
