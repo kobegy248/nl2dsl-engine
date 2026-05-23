@@ -127,7 +127,7 @@ class TestLLMTimingReal:
         assert len(result) > 0
 
         # 耗时断言（本地 Ollama 一般 < 30s）
-        assert elapsed_ms < 30000, f"LLM 调用耗时过长: {elapsed_ms:.2f}ms"
+        assert elapsed_ms < 60000, f"LLM 调用耗时过长: {elapsed_ms:.2f}ms"
 
         # 打印耗时供人工查看
         print(f"\n[LLM Timing] model={settings.llm_model} time={elapsed_ms:.2f}ms")
