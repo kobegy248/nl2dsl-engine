@@ -855,3 +855,14 @@ async def nl2dsl_exception_handler(request: Request, exc: NL2DSLException):
         status_code=exc.status_code,
         content={"status": "error", "error_code": exc.error_code, "message": exc.message},
     )
+
+
+# ---------------------------------------------------------------------------
+# Static files (frontend)
+# ---------------------------------------------------------------------------
+
+from fastapi.staticfiles import StaticFiles
+
+_frontend_dir = Path(__file__).parent.parent / "web" / "dist"
+if _frontend_dir.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="static")

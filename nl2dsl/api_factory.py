@@ -12,6 +12,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, Query, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Engine, MetaData, Table, Column, Integer, String, Float, DateTime
@@ -622,5 +623,10 @@ def create_app(
             status_code=exc.status_code,
             content={"status": "error", "error_code": exc.error_code, "message": exc.message},
         )
+
+    # Static files (frontend)
+    _frontend_dir = Path(__file__).parent.parent / "web" / "dist"
+    if _frontend_dir.exists():
+        app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="static")
 
     return app
