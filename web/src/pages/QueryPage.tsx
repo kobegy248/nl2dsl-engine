@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, message } from 'antd';
 import QueryInput from '../components/query/QueryInput';
 import ResultTable from '../components/query/ResultTable';
+import ResultTabs from '../components/query/ResultTabs';
 import Loading from '../components/common/Loading';
 import ErrorAlert from '../components/common/ErrorAlert';
 import { queryAPI } from '../api/query';
@@ -43,9 +44,18 @@ export default function QueryPage() {
       {error && <ErrorAlert message={error} onRetry={() => result && handleQuery(result.dsl ? 'retry' : '')} />}
 
       {result && (
-        <Card title={`查询结果（${result.data.length} 条，耗时 ${result.execution_time_ms}ms）`}>
-          <ResultTable data={result.data} />
-        </Card>
+        <>
+          <Card title={`查询结果（${result.data.length} 条，耗时 ${result.execution_time_ms}ms）`}>
+            <ResultTable data={result.data} />
+          </Card>
+          <Card className="mt-4">
+            <ResultTabs
+              dsl={result.dsl}
+              sql={result.sql}
+              trace={[]}
+            />
+          </Card>
+        </>
       )}
     </div>
   );
