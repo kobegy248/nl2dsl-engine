@@ -38,6 +38,13 @@
 | [33-testing](agent/33-testing.md) | 单元/集成/E2E 测试策略 | 测试、开发 |
 | [34-llm-risks](agent/34-llm-risks.md) | LLM 成本、延迟、幻觉、稳定性、版本漂移 | 技术负责人 |
 
+### 插件框架（superpowers/）
+
+| 文档 | 内容 | 读者 |
+|------|------|------|
+| [插件框架设计](superpowers/specs/2026-05-22-插件框架设计.md) | Registry + Pipeline + Plugin ABC + Protocol 定义 | 后端开发、架构师 |
+| [插件框架实现计划](superpowers/plans/2026-05-22-插件框架.md) | 分 Task 实现计划（已完成） | 开发 |
+
 ---
 
 *设计文档版本: 2.0*

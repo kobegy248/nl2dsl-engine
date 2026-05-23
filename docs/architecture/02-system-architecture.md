@@ -99,9 +99,17 @@ nl2dsl/
 │   ├── audit/
 │   │   ├── __init__.py
 │   │   └── logger.py        # 审计日志记录
-│   └── feedback/
-│       ├── __init__.py
-│       └── collector.py     # 反馈收集与学习
+│   ├── feedback/
+│   │   ├── __init__.py
+│   │   └── collector.py     # 反馈收集与学习
+│   ├── engine.py            # 引擎入口（插件加载 + 默认组件注册）
+│   ├── plugin.py            # 插件框架（Registry + Pipeline + Plugin ABC）
+│   └── protocols.py         # 组件 Protocol 定义
+│
+examples/
+└── plugins/
+    └── ollama_plugin.py     # 示例：Ollama LLM 后端插件
+
 ├── tests/
 │   ├── unit/
 │   ├── integration/
