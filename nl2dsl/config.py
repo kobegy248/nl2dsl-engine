@@ -8,9 +8,9 @@ class Settings(BaseSettings):
         env_prefix="NL2DSL_",
     )
 
-    llm_api_key: str = "ollama"
-    llm_base_url: str = "http://localhost:11434/v1"
-    llm_model: str = "qwen3:8b"
+    llm_api_key: str = ""
+    llm_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
+    llm_model: str = "glm-4.5-air"
 
     db_url: str = "sqlite:///./nl2dsl.db"
     max_limit: int = 10000
