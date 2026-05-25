@@ -41,6 +41,7 @@ server*.log
 
 # Runtime data
 feedback.jsonl
+.rag_sync_state.json
 
 # Generated docs
 docs.zip
