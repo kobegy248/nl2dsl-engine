@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Menu } from 'antd';
 import MetricTable from '../components/admin/MetricTable';
 import AuditLogTable from '../components/admin/AuditLogTable';
 import AuditTraceDetail from '../components/admin/AuditTraceDetail';
 import PermissionTable from '../components/admin/PermissionTable';
 
+type TabKey = 'metrics' | 'audit' | 'permissions';
+
 export default function AdminPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<TabKey>('metrics');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -18,26 +18,23 @@ export default function AdminPage() {
   };
 
   const menuItems = [
-    { key: '/admin/metrics', label: '指标管理' },
-    { key: '/admin/audit', label: '审计日志' },
-    { key: '/admin/permissions', label: '权限配置' },
+    { key: 'metrics', label: '指标管理' },
+    { key: 'audit', label: '审计日志' },
+    { key: 'permissions', label: '权限配置' },
   ];
 
   return (
     <div className="page-container">
       <Menu
         mode="horizontal"
-        selectedKeys={[location.pathname]}
+        selectedKeys={[activeTab]}
         items={menuItems}
-        onClick={({ key }) => navigate(key)}
+        onClick={({ key }) => setActiveTab(key as TabKey)}
         className="mb-4"
       />
-      <Routes>
-        <Route index element={<MetricTable />} />
-        <Route path="metrics" element={<MetricTable />} />
-        <Route path="audit" element={<AuditLogTable onViewDetail={handleViewDetail} />} />
-        <Route path="permissions" element={<PermissionTable />} />
-      </Routes>
+      {activeTab === 'metrics' && <MetricTable />}
+      {activeTab === 'audit' && <AuditLogTable onViewDetail={handleViewDetail} />}
+      {activeTab === 'permissions' && <PermissionTable />}
       <AuditTraceDetail
         id={detailId}
         open={detailOpen}

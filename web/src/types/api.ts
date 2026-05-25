@@ -48,9 +48,9 @@ export interface QueryRequest {
 
 export interface QueryResponse {
   status: string;
-  data: Record<string, unknown>[];
-  dsl: DSL;
-  sql: string;
+  data: Record<string, unknown>[] | null;
+  dsl: DSL | null;
+  sql: string | null;
   execution_time_ms: number;
 }
 
@@ -72,12 +72,17 @@ export interface ClarificationResponse {
 }
 
 export interface AuditItem {
-  id: string;
-  timestamp: string;
+  id?: string;
+  query_id: string;
+  created_at: string;
+  timestamp?: string;
   user_id: string;
+  tenant_id?: string;
   question: string;
   status: 'success' | 'error' | 'clarification' | 'pending_review';
   execution_time_ms: number;
+  rows_returned?: number;
+  error_code?: string | null;
 }
 
 export interface AuditListResponse {

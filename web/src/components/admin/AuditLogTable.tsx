@@ -25,7 +25,7 @@ export default function AuditLogTable({ onViewDetail }: Props) {
   if (error) return <ErrorAlert message={(error as Error).message} onRetry={refetch} />;
 
   const columns = [
-    { title: '时间', dataIndex: 'timestamp', key: 'timestamp', width: 180 },
+    { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
     { title: '用户', dataIndex: 'user_id', key: 'user_id', width: 100 },
     { title: '问题', dataIndex: 'question', key: 'question', ellipsis: true },
     {
@@ -50,7 +50,7 @@ export default function AuditLogTable({ onViewDetail }: Props) {
       key: 'action',
       width: 100,
       render: (_: unknown, record: AuditItem) => (
-        <Button size="small" type="link" onClick={() => onViewDetail(record.id)}>
+        <Button size="small" type="link" onClick={() => onViewDetail(record.query_id || record.id)}>
           详情
         </Button>
       ),
@@ -61,7 +61,7 @@ export default function AuditLogTable({ onViewDetail }: Props) {
     <Table
       dataSource={data?.items || []}
       columns={columns}
-      rowKey="id"
+      rowKey={(record) => record.query_id || record.id}
       pagination={{
         current: page,
         pageSize,

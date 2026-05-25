@@ -50,7 +50,17 @@ class AuditLogger:
 
         placeholders = ", ".join([f":{k}" for k in fields])
         columns = ", ".join(fields)
-        sql = f"INSERT INTO nl2dsl_audit_log ({columns}) VALUES ({placeholders})"
+        # UPSERT: 冲突时按 COALESCE 仅更新非空字段，保留 created_at（不在 UPDATE 列表中）
+        # 防止 except 分支二次写入清空 try 分支已存的 dsl_json/sql_text
+        update_clauses = ", ".join(
+            f"{f} = COALESCE(excluded.{f}, {f})"
+            for f in fields
+            if f != "query_id"
+        )
+        sql = (
+            f"INSERT INTO nl2dsl_audit_log ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(query_id) DO UPDATE SET {update_clauses}"
+        )
 
         with self._engine.connect() as conn:
             conn.execute(text(sql), data)

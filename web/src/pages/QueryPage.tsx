@@ -32,6 +32,9 @@ export default function QueryPage() {
         user_id: 'web_user',
         tenant_id: 'default',
       });
+      if (data.status !== 'success' || !data.data) {
+        throw new Error(data.status === 'clarification' ? '查询存在歧义' : '查询执行失败，请重试');
+      }
       setResult(data);
       setProgressEvents([
         { node: 'clarification', status: 'success' },
@@ -66,43 +69,47 @@ export default function QueryPage() {
         </Card>
       )}
       {loading && progressEvents.length === 0 && <Loading tip="正在查询..." />}
-      {error && <ErrorAlert message={error} onRetry={() => result && handleQuery(result.dsl ? 'retry' : '')} />}
+      {error && <ErrorAlert message={error} onRetry={() => handleQuery('retry')} />}
 
       {result && (
         <>
-          <Card
-            title={
-              <div className="flex justify-between items-center">
-                <span>查询结果（{result.data.length} 条，耗时 {result.execution_time_ms}ms）</span>
-                <Segmented
-                  options={[
-                    { label: '表格', value: 'table' },
-                    { label: '柱状图', value: 'bar' },
-                    { label: '折线图', value: 'line' },
-                  ]}
-                  value={viewType}
-                  onChange={(v) => setViewType(v as typeof viewType)}
+          {result.data && (
+            <Card
+              title={
+                <div className="flex justify-between items-center">
+                  <span>查询结果（{result.data.length} 条，耗时 {result.execution_time_ms}ms）</span>
+                  <Segmented
+                    options={[
+                      { label: '表格', value: 'table' },
+                      { label: '柱状图', value: 'bar' },
+                      { label: '折线图', value: 'line' },
+                    ]}
+                    value={viewType}
+                    onChange={(v) => setViewType(v as typeof viewType)}
+                  />
+                </div>
+              }
+            >
+              {viewType === 'table' && <ResultTable data={result.data} />}
+              {viewType !== 'table' && result.dsl?.dimensions?.[0] && result.dsl?.metrics?.[0] && (
+                <ResultChart
+                  data={result.data}
+                  xField={result.dsl.dimensions[0]}
+                  yField={result.dsl.metrics[0].alias || result.dsl.metrics[0].field}
+                  chartType={viewType}
                 />
-              </div>
-            }
-          >
-            {viewType === 'table' && <ResultTable data={result.data} />}
-            {viewType !== 'table' && result.dsl?.dimensions?.[0] && result.dsl?.metrics?.[0] && (
-              <ResultChart
-                data={result.data}
-                xField={result.dsl.dimensions[0]}
-                yField={result.dsl.metrics[0].alias || result.dsl.metrics[0].field}
-                chartType={viewType}
+              )}
+            </Card>
+          )}
+          {result.dsl && (
+            <Card className="mt-4">
+              <ResultTabs
+                dsl={result.dsl}
+                sql={result.sql}
+                trace={[]}
               />
-            )}
-          </Card>
-          <Card className="mt-4">
-            <ResultTabs
-              dsl={result.dsl}
-              sql={result.sql}
-              trace={[]}
-            />
-          </Card>
+            </Card>
+          )}
         </>
       )}
     </div>

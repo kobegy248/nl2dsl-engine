@@ -1,5 +1,5 @@
 import { client } from './client';
-import type { QueryRequest, QueryResponse, DSL, ClarificationResponse } from '../types/api';
+import type { QueryRequest, QueryResponse, DSL } from '../types/api';
 
 export const queryAPI = {
   query: (req: QueryRequest) =>
