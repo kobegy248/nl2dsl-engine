@@ -534,42 +534,120 @@ def _make_mock_dsl_node(registry_dict: dict):
 
 
 def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_system_prompt: str = ""):
-    """Create a correct_dsl node that regenerates DSL with error feedback."""
+    """Create an agentic correct_dsl node.
+
+    Unlike the previous "stuff error into prompt and retry" approach, this node
+    asks the LLM to first decide what extra knowledge it needs (based on the
+    error), retrieves that targeted context, then regenerates with it. Inspired
+    by self-correcting / verify-then-answer RAG patterns.
+    """
+
+    def _decide_retrieval_query(error: str, prev_dsl: dict | None) -> str:
+        """LLM Step 1: read the error, output ONE focused retrieval query.
+
+        Returns the natural-language query to feed back into RAG. Falls back
+        to the original error message if the LLM is unavailable / mis-formats.
+        """
+        if llm_client is None:
+            return error or ""
+
+        decide_prompt = f"""你正在修正一个失败的 DSL 查询。任务：根据错误信息，提取一个**最相关的检索关键词**，用于在业务知识库中查找正确答案。
+
+【上一次生成的 DSL】
+{json.dumps(prev_dsl, ensure_ascii=False) if prev_dsl else "(无)"}
+
+【失败原因】
+{error}
+
+【输出规则】
+- 只输出一行：最相关的中文检索关键词
+- 比如错误是 "指标 'xxx' 不存在" → 输出 "xxx"
+- 比如错误是 "维度 'customer_type' 取值不合法 VVIP" → 输出 "customer_type"
+- 不要解释，不要 JSON，只输出关键词
+"""
+        try:
+            raw = llm_client.generate(decide_prompt, "你是一个简洁的关键词提取助手。")
+            keyword = (raw or "").strip().split("\n")[0].strip()
+            # 限长，避免 LLM 输出整段话
+            return keyword[:50] if keyword else (error or "")
+        except Exception as exc:
+            logger.warning("[correct_dsl] decide step failed, using raw error: %s", exc)
+            return error or ""
+
     @with_error_handler("correct_dsl")
     def correct_dsl_node(state: QueryState) -> dict:
         question = state["question"]
         data_source = state.get("data_source")
-        error = state.get("error")
+        error = state.get("error") or ""
+        prev_dsl_obj = state.get("dsl")
+        prev_dsl = prev_dsl_obj.model_dump() if prev_dsl_obj else None
 
         if llm_client is not None:
-            feedback = f"""Previous generation failed with error: {error}
+            # Step 1: 让 LLM 决定要补充检索什么
+            retrieval_query = _decide_retrieval_query(error, prev_dsl)
 
-Please fix the errors and generate a correct DSL JSON.
+            # Step 2: 用决策结果做定向 RAG 检索
+            extra_context = ""
+            if rag_retriever is not None and retrieval_query:
+                try:
+                    extra_context = rag_retriever.build_context(retrieval_query, top_k=5)
+                except Exception as exc:
+                    logger.warning("[correct_dsl] retrieval failed: %s", exc)
 
-【用户问题】
+            # Step 3: 拿着 error + 原 DSL + 定向 context + 原问题 重新生成
+            feedback = f"""上一次生成的 DSL 校验失败，请修正。
+
+【用户原始问题】
 {question}
 
-请输出 DSL JSON："""
+【上一次生成的 DSL】
+{json.dumps(prev_dsl, ensure_ascii=False) if prev_dsl else "(无)"}
+
+【失败原因】
+{error}
+
+【针对失败原因补充的业务知识】
+{extra_context or "(无额外上下文)"}
+
+【修正要求】
+1. 不要重复上次的错误
+2. 严格按补充的业务知识中的 metric alias / dimension 名称
+3. 只输出修正后的 DSL JSON，不要解释
+
+请输出修正后的 DSL JSON："""
             raw = llm_client.generate(feedback, llm_system_prompt)
             if raw:
                 dsl_dict = _parse_llm_output(raw)
                 dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
+                dsl_dict = _semantic_fix_dsl(dsl_dict, question)
                 dsl = DSL.model_validate(dsl_dict)
                 return {
                     "dsl": dsl,
+                    "status": "pending",  # 清掉错误状态，让 validate 再判一次
+                    "error": None,
+                    "error_code": None,
                     "dsl_attempts": {
-                        "source": "llm_corrected",
+                        "source": "llm_corrected_agentic",
                         "dsl": dsl.model_dump(),
                         "timestamp": time.time(),
                         "error_feedback": error,
+                        "retrieval_query": retrieval_query,
                     },
-                    "trace": {"step": "correct_dsl", "status": "success", "source": "llm_corrected"},
+                    "trace": {
+                        "step": "correct_dsl",
+                        "status": "success",
+                        "source": "llm_corrected_agentic",
+                        "retrieval_query": retrieval_query,
+                    },
                 }
 
         # Fallback: try mock with a note that it was corrected
         dsl = _mock_dsl_from_question(question, data_source)
         return {
             "dsl": dsl,
+            "status": "pending",
+            "error": None,
+            "error_code": None,
             "dsl_attempts": {
                 "source": "mock_corrected",
                 "dsl": dsl.model_dump(),
@@ -689,55 +767,14 @@ def create_node_functions(
         return {"trace": {"step": "validate_dsl", "status": "success"}}
 
     # -----------------------------------------------------------------------
-    # correct_dsl_node (regenerates with error feedback)
+    # correct_dsl_node — see _make_correct_dsl_node (agentic version) above.
+    # The validation subgraph uses _make_correct_dsl_node directly; we keep
+    # this slot in create_node_functions only as a thin delegate so callers
+    # can still look it up by name.
     # -----------------------------------------------------------------------
-    @with_error_handler("correct_dsl")
-    def correct_dsl_node(state: QueryState) -> dict:
-        """Regenerate DSL with error feedback from previous attempts.
-
-        Uses LLM if available, otherwise falls back to mock with a warning.
-        """
-        question = state["question"]
-        data_source = state.get("data_source")
-        error = state.get("error")
-
-        if llm_client is not None:
-            feedback = f"""Previous generation failed with error: {error}
-
-Please fix the errors and generate a correct DSL JSON.
-
-【用户问题】
-{question}
-
-请输出 DSL JSON："""
-            raw = llm_client.generate(feedback, llm_system_prompt)
-            if raw:
-                dsl_dict = _parse_llm_output(raw)
-                dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-                dsl = DSL.model_validate(dsl_dict)
-                return {
-                    "dsl": dsl,
-                    "dsl_attempts": {
-                        "source": "llm_corrected",
-                        "dsl": dsl.model_dump(),
-                        "timestamp": time.time(),
-                        "error_feedback": error,
-                    },
-                    "trace": {"step": "correct_dsl", "status": "success", "source": "llm_corrected"},
-                }
-
-        # Fallback: try mock with a note that it was corrected
-        dsl = _mock_dsl_from_question(question, data_source)
-        return {
-            "dsl": dsl,
-            "dsl_attempts": {
-                "source": "mock_corrected",
-                "dsl": dsl.model_dump(),
-                "timestamp": time.time(),
-                "error_feedback": error,
-            },
-            "trace": {"step": "correct_dsl", "status": "success", "source": "mock_corrected"},
-        }
+    correct_dsl_node = _make_correct_dsl_node(
+        llm_client, rag_retriever, {}, llm_system_prompt
+    )
 
     # -----------------------------------------------------------------------
     # inject_row_permission_node
