@@ -218,113 +218,22 @@ _clarification_detector = _NoOpClarificationDetector()
 _nl2dsl_engine.register("clarification_detector", _clarification_detector)
 
 # ---------------------------------------------------------------------------
-# LLM client and RAG (use Engine's if available, else create manually)
+# LLM client and RAG (use Engine's components; Engine._load_defaults + auto_sync
+# is the single source of truth for RAG data — do NOT manually write here)
 # ---------------------------------------------------------------------------
 _llm_client = _nl2dsl_engine.registry.get("llm") if _nl2dsl_engine.registry.has("llm") else None
-_rag_retriever = None
+_rag_retriever = (
+    _nl2dsl_engine.registry.get("rag_retriever")
+    if _nl2dsl_engine.registry.has("rag_retriever")
+    else None
+)
 
 if _llm_client is not None:
     logger.info("LLM client initialized: model=%s, base_url=%s", settings.llm_model, settings.llm_base_url)
-    try:
-        # Check if Engine already created RAG retriever
-        if _nl2dsl_engine.registry.has("rag_retriever"):
-            _rag_retriever = _nl2dsl_engine.registry.get("rag_retriever")
-            _rag_store = _rag_retriever._store
-            _rag_embedder = _rag_retriever._embedder
-        else:
-            _rag_store = MilvusLiteStore(uri=settings.milvus_uri)
-            logger.info("Loading BGE embedding model from D:/claude_work/model/bge-base-zh-v1.5 ...")
-            _rag_embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
-            logger.info("BGE model loaded, dimension=%d", _rag_embedder._dim)
-
-        dim = _rag_embedder._dim
-        for col in ["schema", "metrics", "history", "terms"]:
-            _rag_store.create_collection(col, dimension=dim)
-
-        # Schema records
-        schema_texts = [
-            (1, "table_order_fact", "订单事实表: order_fact, 字段: id, product_id, product_name, brand, category, region, channel, customer_id, customer_type, order_amount, discount_amount, pay_amount, quantity, order_date, tenant_id"),
-            (2, "table_product_dim", "产品维度表: product_dim, 字段: product_id, product_name, brand, category, price"),
-            (3, "table_customer_dim", "客户维度表: customer_dim, 字段: customer_id, customer_name, customer_type, register_date, region"),
-        ]
-        schema_records = []
-        for sid, sname, text in schema_texts:
-            schema_records.append({
-                "id": sid,
-                "vector": _rag_embedder.embed(text),
-                "text": f"表: {sname.replace('table_', '')}, 说明: {text}",
-                "type": "table", "name": sname.replace("table_", ""),
-            })
-        _rag_store.upsert("schema", schema_records)
-
-        # Metric records
-        metric_records = []
-        metric_id = 100
-        for name, info in _registry.metrics.items():
-            text = f"指标: {name}, 计算方式: {info.get('expr', '')}, 说明: {info.get('description', '')}"
-            metric_records.append({
-                "id": metric_id,
-                "vector": _rag_embedder.embed(text),
-                "text": text,
-                "type": "metric",
-                "name": name,
-            })
-            metric_id += 1
-        _rag_store.upsert("metrics", metric_records)
-
-        # History records
-        history_texts = [
-            (200, "hist_001", "查询华东地区销售额最高的产品"),
-            (201, "hist_002", "各品类的订单量对比"),
-            (202, "hist_003", "线上渠道的客单价排名"),
-            (203, "hist_004", "查询华东地区高价值客户的手机品牌偏好"),
-        ]
-        history_records = []
-        for hid, hname, text in history_texts:
-            history_records.append({
-                "id": hid,
-                "vector": _rag_embedder.embed(text),
-                "text": f"历史查询: {text}",
-                "type": "history",
-            })
-        _rag_store.upsert("history", history_records)
-
-        # Terms records (business terms for keyword matching)
-        term_texts = [
-            (300, "term_region_hd", "华东", "华东地区, 包括上海、江苏、浙江、安徽、福建、江西、山东"),
-            (301, "term_region_hn", "华南", "华南地区, 包括广东、广西、海南"),
-            (302, "term_region_hb", "华北", "华北地区, 包括北京、天津、河北、山西、内蒙古"),
-            (303, "term_region_xn", "西南", "西南地区, 包括四川、重庆、贵州、云南、西藏"),
-            (304, "term_channel_online", "线上", "线上渠道, 电商、APP、小程序等线上销售方式"),
-            (305, "term_channel_offline", "线下", "线下渠道, 实体店、门店等线下销售方式"),
-            (306, "term_channel_dist", "分销", "分销渠道, 经销商、代理商等分销方式"),
-            (307, "term_vip", "VIP", "VIP客户, 高价值客户, 重要客户"),
-            (308, "term_new_cust", "新客", "新客户, 首次购买的客户"),
-            (309, "term_old_cust", "老客", "老客户, 多次购买的客户"),
-            (310, "term_cat_phone", "手机", "手机品类, 包括iPhone、华为、小米等手机产品"),
-            (311, "term_cat_computer", "电脑", "电脑品类, 包括笔记本、台式机等电脑产品"),
-            (312, "term_cat_appliance", "家电", "家电品类, 包括冰箱、空调、电视等家电产品"),
-            (313, "term_cat_clothing", "服饰", "服饰品类, 包括衣服、鞋子等服饰产品"),
-            (314, "term_sales", "销售额", "销售额, sales amount, 销售总金额, 营收, 收入"),
-            (315, "term_gmv", "gmv", "GMV, 成交总额, 交易总额, gross merchandise value"),
-        ]
-        term_records = []
-        for tid, tname, name, desc in term_texts:
-            term_records.append({
-                "id": tid,
-                "vector": _rag_embedder.embed(f"{name}: {desc}"),
-                "text": f"术语: {name}, 说明: {desc}",
-                "type": "term",
-                "name": name,
-            })
-        _rag_store.upsert("terms", term_records)
-
-        _rag_retriever = RAGRetriever(store=_rag_store, embedder=_rag_embedder)
-        _nl2dsl_engine.register("rag_retriever", _rag_retriever)
-        logger.info("LLM + RAG (BGE embedder + keyword-split) initialized successfully")
-    except Exception as e:
-        logger.warning("RAG store initialization failed: %s. LLM will work without RAG context.", e)
-        _rag_retriever = None
+    if _rag_retriever is not None:
+        logger.info("RAG retriever ready (data synced from configs/*.yaml via auto_sync)")
+    else:
+        logger.warning("LLM available but RAG retriever missing — auto_sync may have failed")
 else:
     logger.warning("LLM API key not configured, using mock DSL generation only")
 
@@ -481,9 +390,9 @@ def _build_query_response(result: dict, elapsed: int, query_id: str, question: s
     if status == "error":
         raise ValidationError(result.get("error", "Unknown error"))
 
-    if status == "warning" or status == "pending_review":
+    if status == "warning" or status == "pending_review" or status == "pending":
         return QueryResponse(
-            status=status,
+            status="pending_review" if status == "pending" else status,
             data=[],
             dsl=result.get("dsl").model_dump() if result.get("dsl") else None,
             sql=result.get("sql"),
@@ -778,6 +687,35 @@ async def get_metrics() -> MetricsResponse:
     return MetricsResponse(metrics=metrics)
 
 
+@app.get("/api/v1/debug/rag")
+async def debug_rag(q: str) -> dict:
+    """调试接口：查看 RAG 检索的实际内容。"""
+    if _rag_retriever is None:
+        return {"error": "RAG not initialized"}
+    results = _rag_retriever.retrieve_hybrid(q, top_k=5)
+    context = _rag_retriever.build_context(q, top_k=5)
+    return {
+        "query": q,
+        "schema": [
+            {"name": r.get("name"), "text": r.get("text"), "distance": r.get("distance")}
+            for r in results.get("schema", [])
+        ],
+        "metrics": [
+            {"name": r.get("name"), "text": r.get("text"), "distance": r.get("distance")}
+            for r in results.get("metrics", [])
+        ],
+        "terms": [
+            {"name": r.get("name"), "text": r.get("text"), "distance": r.get("distance")}
+            for r in results.get("terms", [])
+        ],
+        "history": [
+            {"name": r.get("name"), "text": r.get("text"), "distance": r.get("distance")}
+            for r in results.get("history", [])
+        ],
+        "context": context,
+    }
+
+
 @app.post("/api/v1/feedback")
 async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
     _feedback_collector.collect(
@@ -862,7 +800,27 @@ async def nl2dsl_exception_handler(request: Request, exc: NL2DSLException):
 # ---------------------------------------------------------------------------
 
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 _frontend_dir = Path(__file__).parent.parent / "web" / "dist"
+
 if _frontend_dir.exists():
-    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="static")
+    # Serve static assets (JS/CSS/fonts)
+    app.mount("/assets", StaticFiles(directory=str(_frontend_dir / "assets")), name="assets")
+
+    class SPAFallbackMiddleware(BaseHTTPMiddleware):
+        """Return index.html for non-API routes to support React Router SPA."""
+
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            if response.status_code == 404:
+                path = request.url.path
+                # Only serve index.html for non-API, non-static paths
+                if not path.startswith("/api/") and not path.startswith("/health") and not path.startswith("/assets/"):
+                    index_file = _frontend_dir / "index.html"
+                    if index_file.exists():
+                        return FileResponse(str(index_file))
+            return response
+
+    app.add_middleware(SPAFallbackMiddleware)

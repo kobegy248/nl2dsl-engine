@@ -70,8 +70,8 @@ class QuerySandbox:
                 f"预览执行时间 {elapsed_ms:.0f}ms，超过阈值 {self._max_exec_time_ms:.0f}ms"
             )
 
-        # 3. Heuristic: detect full scan or missing filters
-        if "WHERE" not in sql.upper():
+        # 3. Heuristic: detect full scan or missing filters (only flag if scan is large)
+        if "WHERE" not in sql.upper() and estimated_rows > self._max_scan_rows:
             risks.append("SQL 缺少 WHERE 条件，可能触发全表扫描")
 
         return SandboxResult(

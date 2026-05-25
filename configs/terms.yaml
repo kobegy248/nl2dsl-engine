@@ -1,15 +1,135 @@
 terms:
-  sales_amount:
-    aliases: ["销售额", "业绩", "销售收入", "营收", "营业额"]
-    metric: sales_amount
-    description: "含税销售额，不含退款"
-
+  avg_order_value:
+    aliases:
+    - 客单价
+    - AOV
+    - 平均订单金额
+    - 平均订单价值
+    - 单均价
+    description: 平均订单金额 AVG(order_amount)
+    metric: avg_order_value
+  avg_price:
+    aliases:
+    - 平均单价
+    - 均价
+    - 平均价格
+    - 单价均值
+    description: 平均单价 AVG(price)
+    metric: avg_price
+  brand:
+    aliases:
+    - 品牌
+    - 牌子
+    description: 品牌维度
+    dimension: brand
+  category:
+    aliases:
+    - 品类
+    - 分类
+    - 类目
+    - 类别
+    - 产品类型
+    description: 产品品类维度
+    dimension: category
+  channel:
+    aliases:
+    - 渠道
+    - 销售渠道
+    - 销售方式
+    - 售卖方式
+    description: 销售渠道维度（线上/线下/分销）
+    dimension: channel
+  customer_count:
+    aliases:
+    - 客户数
+    - 用户数
+    - 人数
+    - 客户数量
+    - 客户总数
+    - 多少客户
+    - 多少人
+    description: 去重客户数 COUNT(DISTINCT customer_id)
+    metric: customer_count
+  customer_type:
+    aliases:
+    - 客户类型
+    - 客户分群
+    - 客户分类
+    - 用户类型
+    description: 客户类型维度（新客/老客/VIP）
+    dimension: customer_type
   gmv:
-    aliases: ["GMV", "成交总额", "交易额"]
+    aliases:
+    - GMV
+    - 成交总额
+    - 交易额
+    - 交易总额
+    - 成交金额
+    - 流水
+    description: 成交总额 SUM(order_amount)
     metric: gmv
-    description: "订单成交总额"
-
+  max_price:
+    aliases:
+    - 最高单价
+    - 最贵单价
+    - 最高价
+    - 最贵的价格
+    - 单价最高
+    description: 最高单价 MAX(price)
+    metric: max_price
   order_count:
-    aliases: ["订单量", "订单数", "单量"]
+    aliases:
+    - 订单量
+    - 订单数
+    - 单量
+    - 订单数量
+    - 下单次数
+    - 多少单
+    description: 订单总数 COUNT(id)
     metric: order_count
-    description: "订单数量"
+  order_date:
+    aliases:
+    - 时间
+    - 日期
+    - 订单日期
+    - 下单时间
+    - 哪天
+    description: 订单日期维度
+    dimension: order_date
+  product_name:
+    aliases:
+    - 产品
+    - 商品
+    - 产品名
+    - 商品名
+    - 货品
+    description: 产品名称维度
+    dimension: product_name
+  region:
+    aliases:
+    - 地区
+    - 区域
+    - 大区
+    - 地域
+    description: 销售地区维度
+    dimension: region
+  sales_amount:
+    aliases:
+    - 销售额
+    - 营业额
+    - 销售收入
+    - 营收
+    - 业绩
+    - 卖出去多少钱
+    - 银子
+    description: 订单金额求和 SUM(order_amount)
+    metric: sales_amount
+  total_discount:
+    aliases:
+    - 优惠总额
+    - 折扣金额
+    - 优惠金额
+    - 让利金额
+    - 折扣总额
+    description: 优惠总额 SUM(discount_amount)
+    metric: total_discount

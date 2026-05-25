@@ -1,0 +1,259 @@
+# 历史"问题 -> DSL"示例库
+# 用于 RAG few-shot 检索，作为 LLM 生成 DSL 时的样本
+
+examples:
+  # ============= 单指标 + 单维度 =============
+  - question: "按地区查询销售额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [region]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "各品牌的订单数量"
+    dsl:
+      metrics: [{func: count, field: id, alias: order_count}]
+      dimensions: [brand]
+      order_by: [{field: order_count, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "按客户类型统计客户数量"
+    dsl:
+      metrics: [{func: count, field: customer_id, alias: customer_count}]
+      dimensions: [customer_type]
+      order_by: [{field: customer_count, direction: desc}]
+      limit: 10
+      data_source: customers
+
+  - question: "按品类统计客单价"
+    dsl:
+      metrics: [{func: avg, field: order_amount, alias: avg_order_value}]
+      dimensions: [category]
+      order_by: [{field: avg_order_value, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= 带过滤条件 =============
+  - question: "查询华东地区销售额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [region]
+      filters: [{field: region, operator: "=", value: "华东"}]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "华南地区各品牌的成交总额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [brand]
+      filters: [{field: region, operator: "=", value: "华南"}]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "线上渠道的客单价"
+    dsl:
+      metrics: [{func: avg, field: order_amount, alias: avg_order_value}]
+      dimensions: [channel]
+      filters: [{field: channel, operator: "=", value: "线上"}]
+      order_by: [{field: avg_order_value, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "VIP客户的销售额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [customer_type]
+      filters: [{field: customer_type, operator: "=", value: "VIP"}]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= Top-N 查询 =============
+  - question: "销售额最高的5个产品"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [product_name]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 5
+      data_source: orders
+
+  - question: "GMV前10的品牌"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [brand]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "卖得最好的3款货"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [product_name]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 3
+      data_source: orders
+
+  - question: "订单量最多的5个渠道"
+    dsl:
+      metrics: [{func: count, field: id, alias: order_count}]
+      dimensions: [channel]
+      order_by: [{field: order_count, direction: desc}]
+      limit: 5
+      data_source: orders
+
+  # ============= 多指标 =============
+  - question: "各地区的销售额和订单数"
+    dsl:
+      metrics:
+        - {func: sum, field: order_amount, alias: sales_amount}
+        - {func: count, field: id, alias: order_count}
+      dimensions: [region]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "各品牌的销售额、订单数和客单价"
+    dsl:
+      metrics:
+        - {func: sum, field: order_amount, alias: sales_amount}
+        - {func: count, field: id, alias: order_count}
+        - {func: avg, field: order_amount, alias: avg_order_value}
+      dimensions: [brand]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= 多维度 =============
+  - question: "各地区各品牌的销售额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [region, brand]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "按渠道和品类统计成交总额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [channel, category]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= 优惠/折扣类 =============
+  - question: "各品牌的优惠总额"
+    dsl:
+      metrics: [{func: sum, field: discount_amount, alias: total_discount}]
+      dimensions: [brand]
+      order_by: [{field: total_discount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= 产品价格类 =============
+  - question: "各品类的平均单价"
+    dsl:
+      metrics: [{func: avg, field: price, alias: avg_price}]
+      dimensions: [category]
+      order_by: [{field: avg_price, direction: desc}]
+      limit: 10
+      data_source: products
+
+  - question: "最贵的5个产品"
+    dsl:
+      metrics: [{func: max, field: price, alias: max_price}]
+      dimensions: [product_name]
+      order_by: [{field: max_price, direction: desc}]
+      limit: 5
+      data_source: products
+
+  # ============= 客户类 =============
+  - question: "查询每个客户的订单总额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [customer_name]
+      joins:
+        - {table: customer_dim, on_field: customer_id, join_type: left, alias: c}
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "高价值客户的销售额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [customer_type]
+      filters:
+        - {field: customer_type, operator: "=", value: "VIP"}
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  # ============= 别名锚定：强化术语→alias 的对应关系 =============
+  - question: "各品牌的流水"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [brand]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "GMV"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [product_name]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "各渠道的成交总额"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: gmv}]
+      dimensions: [channel]
+      order_by: [{field: gmv, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "AOV最高的地区"
+    dsl:
+      metrics: [{func: avg, field: order_amount, alias: avg_order_value}]
+      dimensions: [region]
+      order_by: [{field: avg_order_value, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "VIP有多少人"
+    dsl:
+      metrics: [{func: count, field: customer_id, alias: customer_count}]
+      dimensions: [customer_type]
+      filters:
+        - {field: customer_type, operator: "=", value: "VIP"}
+      order_by: [{field: customer_count, direction: desc}]
+      limit: 10
+      data_source: customers
+
+  - question: "各品牌的让利金额"
+    dsl:
+      metrics: [{func: sum, field: discount_amount, alias: total_discount}]
+      dimensions: [brand]
+      order_by: [{field: total_discount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "让利最多的品牌"
+    dsl:
+      metrics: [{func: sum, field: discount_amount, alias: total_discount}]
+      dimensions: [brand]
+      order_by: [{field: total_discount, direction: desc}]
+      limit: 10
+      data_source: orders
+
+  - question: "卖得最好的几款货"
+    dsl:
+      metrics: [{func: sum, field: order_amount, alias: sales_amount}]
+      dimensions: [product_name]
+      order_by: [{field: sales_amount, direction: desc}]
+      limit: 5
+      data_source: orders

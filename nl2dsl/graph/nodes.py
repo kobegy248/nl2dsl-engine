@@ -110,14 +110,130 @@ def _build_fallback_prompt(question: str) -> str:
 
 
 def _parse_llm_output(raw: str) -> dict:
-    """Clean up LLM response (remove markdown code fences) and parse JSON."""
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned[cleaned.find("\n") + 1 :]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[: cleaned.rfind("\n")]
-    cleaned = cleaned.replace("json\n", "").strip()
-    return json.loads(cleaned)
+    """Extract JSON object from LLM response, even if surrounded by markdown / commentary.
+
+    支持三种格式：
+    1. 纯 JSON: {"metrics":[...]}
+    2. Markdown 代码块: ```json\n{...}\n```
+    3. 包含解释文字 + 代码块: 推理文字...\n```json\n{...}\n```\n更多解释...
+    """
+    text = raw.strip()
+
+    # 优先匹配 markdown 代码块（最稳）
+    fence_match = re.search(r"```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```", text)
+    if fence_match:
+        return json.loads(fence_match.group(1))
+
+    # 退而求其次：抓第一个 { 到最后一个 } 之间的内容（贪婪）
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        candidate = text[start:end + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # 最后尝试：原始字符串
+    return json.loads(text)
+
+
+# Hard-coded metric mapping for LLM format recovery
+_METRIC_MAP = {
+    "sales_amount": ("sum", "order_amount"),
+    "gmv": ("sum", "order_amount"),
+    "order_count": ("count", "id"),
+    "avg_order_value": ("avg", "order_amount"),
+    "total_discount": ("sum", "discount_amount"),
+    "customer_count": ("count", "customer_id"),
+    "max_price": ("max", "price"),
+    "avg_price": ("avg", "price"),
+}
+
+
+def _fix_metric_format(m: dict) -> dict:
+    """Fix LLM-generated metric dict to ensure func/field/alias exist."""
+    # LLM may use 'name' or 'metric' instead of 'alias'
+    alias = m.get("alias") or m.get("name") or m.get("metric")
+    if alias:
+        alias = alias.strip().lower().replace(" ", "_")
+        mapped = _METRIC_MAP.get(alias)
+        if mapped:
+            m.setdefault("func", mapped[0])
+            m.setdefault("field", mapped[1])
+            m.setdefault("alias", alias)
+    # Ensure required fields exist
+    if not m.get("func"):
+        m["func"] = "sum"
+    if not m.get("field"):
+        m["field"] = "order_amount"
+    if not m.get("alias"):
+        m["alias"] = m["field"]
+    return m
+
+
+_CN_NUM_MAP = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+
+
+def _extract_top_n(question: str, default: int = 10) -> int:
+    """Extract top-N number from question like '前5', 'top10', '最好的3款', '前十名'."""
+    # 主正则：匹配 "前/TOP/最X的/排名前" 后接数字（含中文）
+    # 关键改进：不再限定形容词字符集，允许 "最[任意形容词]的" 模式
+    m = re.search(
+        r"(?:前|TOP|top|最[^0-9一二三四五六七八九十]{0,3}的?|排名前)\s*(\d+|[一二三四五六七八九十])\s*(?:个|名|条|位|款|项|家)?",
+        question,
+    )
+    if m:
+        s = m.group(1)
+        n = int(s) if s.isdigit() else _CN_NUM_MAP.get(s, default)
+        if 1 <= n <= 100:
+            return n
+    if "全部" in question or "所有" in question:
+        return 100
+    return default
+
+
+def _semantic_fix_dsl(dsl_dict: dict, question: str) -> dict:
+    """Fix DSL semantics based on keywords in the user's question.
+
+    设计原则：metrics/dimensions 的语义识别完全交给 LLM + RAG（terms 集合提供别名映射）。
+    本函数只做 RAG 难以覆盖的"硬性兜底"：
+    - 过滤条件：用户问句中明确出现的地区/渠道/客户类型，确保进入 filters
+    - top-N 数字：从问句中提取，覆盖 LLM 的 limit
+    """
+    # --- Fix filters based on question keywords ---
+    filters = dsl_dict.get("filters") or []
+    if not isinstance(filters, list):
+        filters = []
+    existing_fields = {f.get("field") for f in filters if isinstance(f, dict)}
+
+    region_map = {"华东": "华东", "华南": "华南", "华北": "华北", "西南": "西南", "东北": "东北", "西北": "西北"}
+    for name, value in region_map.items():
+        if name in question and "region" not in existing_fields:
+            filters.append({"field": "region", "operator": "=", "value": value})
+            existing_fields.add("region")
+            break
+
+    if "线上" in question and "channel" not in existing_fields:
+        filters.append({"field": "channel", "operator": "=", "value": "线上"})
+    elif "线下" in question and "channel" not in existing_fields:
+        filters.append({"field": "channel", "operator": "=", "value": "线下"})
+    elif "分销" in question and "channel" not in existing_fields:
+        filters.append({"field": "channel", "operator": "=", "value": "分销"})
+
+    if "VIP" in question.upper() and "customer_type" not in existing_fields:
+        filters.append({"field": "customer_type", "operator": "=", "value": "VIP"})
+    elif ("新客" in question or "新客户" in question) and "customer_type" not in existing_fields:
+        filters.append({"field": "customer_type", "operator": "=", "value": "新客"})
+    elif ("老客" in question or "老客户" in question) and "customer_type" not in existing_fields:
+        filters.append({"field": "customer_type", "operator": "=", "value": "老客"})
+
+    dsl_dict["filters"] = filters if filters else None
+
+    # --- Fix limit: extract top-N from question ---
+    dsl_dict["limit"] = _extract_top_n(question, default=dsl_dict.get("limit", 10))
+
+    return dsl_dict
 
 
 def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> dict:
@@ -126,22 +242,30 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
     if "data_source" not in dsl_dict or dsl_dict["data_source"] not in ["orders", "products", "customers"]:
         dsl_dict["data_source"] = default_data_source
 
-    # 2. Ensure metrics is non-empty list
+    # 2. Ensure metrics is a list of dicts
     metrics = dsl_dict.get("metrics")
-    if not metrics:
-        dsl_dict["metrics"] = [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}]
+    if isinstance(metrics, str):
+        # LLM returned a string instead of array
+        metrics = [{"alias": metrics}]
+    if not metrics or not isinstance(metrics, list):
+        metrics = [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}]
+    dsl_dict["metrics"] = [_fix_metric_format(m if isinstance(m, dict) else {"alias": str(m)}) for m in metrics]
 
     # 3. Normalize metric fields: strip SUM/AVG/COUNT/MAX/MIN wrappers
     for m in dsl_dict.get("metrics", []):
         field = m.get("field", "")
         if isinstance(field, str):
-            match = re.match(r"^[A-Z]+\((.+)\)$", field.strip())
+            match = re.match(r"^[A-Z]+\(\s*(?:DISTINCT\s+)?(.+?)\s*\)$", field.strip(), re.IGNORECASE)
             if match:
                 m["field"] = match.group(1)
 
     # 4. Ensure dimensions is non-empty list
     dimensions = dsl_dict.get("dimensions")
-    if not dimensions:
+    if not dimensions or not isinstance(dimensions, list):
+        dsl_dict["dimensions"] = ["product_name"]
+    # Remove non-string items
+    dsl_dict["dimensions"] = [d for d in dsl_dict["dimensions"] if isinstance(d, str)]
+    if not dsl_dict["dimensions"]:
         dsl_dict["dimensions"] = ["product_name"]
 
     # 5. Ensure limit is reasonable
@@ -166,9 +290,10 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
     # 8. Validate filters operator values
     valid_ops = {"=", "!=", ">", "<", ">=", "<=", "in", "like", "between", "is_null"}
     for f in dsl_dict.get("filters", []):
-        op = f.get("operator", "")
-        if op not in valid_ops:
-            f["operator"] = "="
+        if isinstance(f, dict):
+            op = f.get("operator", "")
+            if op not in valid_ops:
+                f["operator"] = "="
 
     return dsl_dict
 
@@ -276,10 +401,7 @@ def _mock_dsl_from_question(question: str, data_source: str | None = None) -> DS
         order_by.append(OrderBy(field=metrics[0].alias or metrics[0].field, direction="desc"))
 
     # Limit
-    if "top" in q or "最高" in question or "最多" in question:
-        limit = 10
-    elif "全部" in question or "所有" in question:
-        limit = 100
+    limit = _extract_top_n(question, default=10)
 
     return DSL(
         metrics=metrics,
@@ -301,7 +423,7 @@ def _restore_metric_fields(dsl: DSL) -> DSL:
     restored = []
     for m in dsl.metrics:
         field = m.field
-        match = re.match(r"^[A-Z]+\((.+?)\)$", field, re.IGNORECASE)
+        match = re.match(r"^[A-Z]+\(\s*(?:DISTINCT\s+)?(.+?)\s*\)$", field, re.IGNORECASE)
         if match:
             field = match.group(1)
         restored.append(m.model_copy(update={"field": field}))
@@ -370,9 +492,11 @@ def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = 
         raw = llm_client.generate(prompt, llm_system_prompt)
         if not raw:
             raise ValidationError("LLM returned empty response")
+        logger.info("[generate_dsl] LLM raw output (len=%d): %s", len(raw), raw)
 
         dsl_dict = _parse_llm_output(raw)
         dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
+        dsl_dict = _semantic_fix_dsl(dsl_dict, question)
         dsl = DSL.model_validate(dsl_dict)
 
         return {
@@ -518,9 +642,11 @@ def create_node_functions(
         raw = llm_client.generate(prompt, llm_system_prompt)
         if not raw:
             raise ValidationError("LLM returned empty response")
+        logger.info("[generate_dsl] LLM raw output (len=%d): %s", len(raw), raw)
 
         dsl_dict = _parse_llm_output(raw)
         dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
+        dsl_dict = _semantic_fix_dsl(dsl_dict, question)
         dsl = DSL.model_validate(dsl_dict)
 
         return {

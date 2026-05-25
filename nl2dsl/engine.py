@@ -129,6 +129,15 @@ class Engine:
             try:
                 store = MilvusLiteStore(uri=settings.milvus_uri)
                 emb = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
+                # 启动自检：对比 YAML mtime，按需同步到向量库
+                from nl2dsl.rag.sync import auto_sync
+                configs_dir = Path(__file__).parent.parent / "configs"
+                state_file = Path(__file__).parent.parent / ".rag_sync_state.json"
+                try:
+                    auto_sync(store=store, embedder=emb, configs_dir=configs_dir, state_file=state_file)
+                except Exception as sync_err:
+                    logger.warning("RAG auto-sync failed: %s", sync_err)
+                # 同步完成后再创建 retriever（确保 _load_keywords 能读到数据）
                 ret = RAGRetriever(store=store, embedder=emb)
                 self._registry.register("rag_retriever", ret)
             except Exception as e:

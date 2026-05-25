@@ -35,7 +35,12 @@ class RAGRetriever:
 
     def __init__(self, store: VectorStore, embedder: BGEEmbedder | MockEmbedder | None = None):
         self._store = store
-        self._embedder = embedder or MockEmbedder()
+        if embedder is None:
+            raise ValueError(
+                "RAGRetriever requires an embedder explicitly. "
+                "Pass BGEEmbedder() for production or MockEmbedder() in tests."
+            )
+        self._embedder = embedder
         # Load keywords dynamically from vector store
         self._keywords = self._load_keywords()
         # Register keywords into jieba for accurate segmentation
@@ -108,10 +113,16 @@ class RAGRetriever:
         return results
 
     def retrieve_by_keywords(self, query: str, top_k: int = 3) -> dict[str, list[dict]]:
-        """Retrieve by jieba-segmented keywords from vector store names."""
+        """Retrieve by jieba-segmented keywords from vector store names.
+
+        Note: only applies to schema/metrics/terms (短命名实体). For history,
+        we use full-query semantic search via retrieve_hybrid instead.
+        """
+        # history is excluded - use full-query semantic search instead
+        keyword_cols = [c for c in self.COLLECTIONS if c != "history"]
         results: dict[str, list[dict]] = {col: [] for col in self.COLLECTIONS}
 
-        for col in self.COLLECTIONS:
+        for col in keyword_cols:
             if not self._store.has_collection(col):
                 continue
 
@@ -133,22 +144,32 @@ class RAGRetriever:
         return results
 
     def retrieve_hybrid(self, query: str, top_k: int = 5, keyword_top_k: int = 3) -> dict[str, list[dict]]:
-        """Hybrid retrieval: full query semantic + keyword-split, then merge."""
-        semantic_results = self.retrieve(query, top_k=top_k)
-        keyword_results = self.retrieve_by_keywords(query, top_k=keyword_top_k)
+        """Hybrid retrieval:
+        - schema/metrics/terms: jieba keyword-split (短命名实体精准匹配)
+        - history: full-query semantic search (找语义最相似的历史问题)
+        """
+        # 1. history: 整句语义检索
+        history_results = []
+        if self._store.has_collection("history"):
+            query_vector = self._embedder.embed(query)
+            history_results = self._store.search("history", query_vector, limit=top_k)
 
-        merged: dict[str, list[dict]] = {}
+        # 2. schema/metrics/terms: 关键词检索 + 整句兜底
+        keyword_results = self.retrieve_by_keywords(query, top_k=keyword_top_k)
+        semantic_results = self.retrieve(query, top_k=top_k)
+
+        merged: dict[str, list[dict]] = {"history": history_results}
         for col in self.COLLECTIONS:
+            if col == "history":
+                continue
             seen_ids = set()
             merged[col] = []
-
             # Keyword results first (more precise)
             for hit in keyword_results.get(col, []):
                 hit_id = hit.get("id")
                 if hit_id not in seen_ids:
                     seen_ids.add(hit_id)
                     merged[col].append(hit)
-
             # Semantic results supplement
             for hit in semantic_results.get(col, []):
                 hit_id = hit.get("id")
@@ -162,13 +183,17 @@ class RAGRetriever:
         results = self.retrieve_hybrid(query, top_k=top_k)
         parts = []
         if results.get("schema"):
-            parts.append("【表结构】\n" + "\n".join(f"- {r['text']}" for r in results["schema"]))
+            parts.append("【可用 Schema】\n" + "\n".join(f"- {r['text']}" for r in results["schema"]))
         if results.get("metrics"):
-            parts.append("【指标定义】\n" + "\n".join(f"- {r['text']}" for r in results["metrics"]))
-        if results.get("history"):
-            parts.append("【历史查询示例】\n" + "\n".join(f"- {r['text']}" for r in results["history"]))
+            parts.append("【可用指标】\n" + "\n".join(f"- {r['text']}" for r in results["metrics"]))
         if results.get("terms"):
-            parts.append("【业务术语】\n" + "\n".join(f"- {r['text']}" for r in results["terms"]))
+            # terms 是强约束：用户用的词必须映射到 alias
+            parts.append(
+                "【业务术语映射（用户问题中出现这些词时，metric 的 alias 必须用箭头右边的值）】\n"
+                + "\n".join(f"- {r['text']}" for r in results["terms"])
+            )
+        if results.get("history"):
+            parts.append("【相似历史示例（参考它们的结构生成 DSL）】\n" + "\n\n".join(f"{r['text']}" for r in results["history"]))
         return "\n\n".join(parts)
 
     def build_prompt(self, query: str, top_k: int = 5) -> str:
@@ -178,5 +203,10 @@ class RAGRetriever:
 
 【用户问题】
 {query}
+
+【强制要求】
+1. 严格遵循上方"业务术语映射"：用户问句中出现术语映射表里的词，metrics 的 alias 必须用映射目标值，不要默认用 sales_amount。
+2. 不要凭直觉选 alias，必须先在术语映射中查找。
+3. 例：用户说"流水"→ alias=gmv；说"客单价/AOV"→ alias=avg_order_value；说"客户数/多少人"→ alias=customer_count；说"让利"→ alias=total_discount。
 
 请根据上下文将用户问题转换为 DSL JSON。"""
