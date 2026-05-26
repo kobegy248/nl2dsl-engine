@@ -54,13 +54,24 @@ def build_graph(
     Graph structure::
 
         START -> clarification -> [clarification] END
-                             |--[continue] -> validation -> permission_check
-                             -> resolve_semantic -> build_sql -> [simple/complex]
-                             -> scan_sql -> sandbox_check -> [review] -> human_review
-                                                                        |--[rebuild] -> build_sql
-                                                                        |--[execute] -> execute_sql
-                                                                                      |--[retry] -> simplify_dsl -> build_sql
-                                                                                      |--[end] -> END
+                             |--[continue] -> decompose -> validation
+                             -> permission_check -> resolve_semantic
+                             -> build_sql -> scan_sql -> sandbox_check
+                                                       |--[review] -> human_review
+                                                       |              |--[rebuild] -> build_sql
+                                                       |              |--[execute] -> execute_sql
+                                                       |--[execute] -> execute_sql
+                                                                       |--[retry] -> simplify_dsl -> build_sql
+                                                                       |--[end] -> verify_dsl -> END
+
+    Agentic enhancements:
+    - ``decompose`` (NEW): for questions with complexity markers (对比/同比/趋势/今年...),
+      asks LLM to rewrite into a single-DSL-expressible form. No-op for simple
+      questions so latency cost is bounded.
+    - ``correct_dsl`` (in validation subgraph): on validation failure, LLM picks a
+      retrieval keyword, RAG searches targeted context, then regenerates.
+    - ``verify_dsl`` (NEW): after execute_sql succeeds, LLM self-checks whether
+      DSL/result actually answers the original question. Currently warning-only.
 
     Args:
         llm_client: LLM client for DSL generation (may be None).
@@ -116,6 +127,7 @@ def build_graph(
 
     # Add nodes
     builder.add_node("clarification", nodes["clarification_node"])
+    builder.add_node("decompose", nodes["decompose_node"])
     builder.add_node("validation", validation_subgraph)
     builder.add_node("permission_check", permission_subgraph)
     builder.add_node("resolve_semantic", nodes["resolve_semantic_node"])
@@ -125,19 +137,23 @@ def build_graph(
     builder.add_node("human_review", nodes["human_review_node"])
     builder.add_node("execute_sql", nodes["execute_sql_node"])
     builder.add_node("simplify_dsl", nodes["simplify_dsl_node"])
+    builder.add_node("verify_dsl", nodes["verify_dsl_node"])
 
     # Entry point
     builder.set_entry_point("clarification")
 
-    # 1. clarification -> END (needs clarification) or validation (continue)
+    # 1. clarification -> END (needs clarification) or decompose (continue)
     builder.add_conditional_edges(
         "clarification",
         route_after_clarification,
         {
             "clarification": END,
-            "continue": "validation",
+            "continue": "decompose",
         },
     )
+
+    # 1b. decompose -> validation (always; decompose only rewrites or no-ops)
+    builder.add_edge("decompose", "validation")
 
     # 2. validation -> permission_check
     builder.add_edge("validation", "permission_check")
@@ -196,18 +212,21 @@ def build_graph(
         },
     )
 
-    # 9. execute_sql -> simplify_dsl (retry) or END
+    # 9. execute_sql -> simplify_dsl (retry) or verify_dsl (success path)
     builder.add_conditional_edges(
         "execute_sql",
         route_after_execute,
         {
             "retry": "simplify_dsl",
-            "end": END,
+            "end": "verify_dsl",
         },
     )
 
     # 10. simplify_dsl -> build_sql (loop back)
     builder.add_edge("simplify_dsl", "build_sql")
+
+    # 11. verify_dsl -> END (currently warning-only; future: route FAIL back to correct_dsl)
+    builder.add_edge("verify_dsl", END)
 
     # -----------------------------------------------------------------------
     # Compile

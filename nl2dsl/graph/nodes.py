@@ -193,20 +193,98 @@ def _extract_top_n(question: str, default: int = 10) -> int:
     return default
 
 
-def _semantic_fix_dsl(dsl_dict: dict, question: str) -> dict:
+def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
     """Fix DSL semantics based on keywords in the user's question.
+
+    Agentic 改造：当 llm_client 可用时，让 LLM 自己识别问题中的过滤条件；
+    否则回退到硬编码兜底逻辑。
 
     设计原则：metrics/dimensions 的语义识别完全交给 LLM + RAG（terms 集合提供别名映射）。
     本函数只做 RAG 难以覆盖的"硬性兜底"：
-    - 过滤条件：用户问句中明确出现的地区/渠道/客户类型，确保进入 filters
+    - 过滤条件：用户问句中明确出现的地区/渠道/客户类型/时间等，确保进入 filters
     - top-N 数字：从问句中提取，覆盖 LLM 的 limit
     """
-    # --- Fix filters based on question keywords ---
     filters = dsl_dict.get("filters") or []
     if not isinstance(filters, list):
         filters = []
     existing_fields = {f.get("field") for f in filters if isinstance(f, dict)}
 
+    # ------------------------------------------------------------------
+    # Agentic path (preferred when llm_client is available)
+    # ------------------------------------------------------------------
+    if llm_client is not None:
+        try:
+            agentic_prompt = f"""你是一个查询语义分析助手。请分析用户的自然语言问题，识别其中隐含的过滤条件。
+
+【用户问题】
+{question}
+
+【当前 DSL 已包含的 filters】
+{json.dumps(filters, ensure_ascii=False, indent=2)}
+
+【可用字段】
+- region: 地区（华东、华南、华北、西南、东北、西北）
+- channel: 渠道（线上、线下、分销）
+- customer_type: 客户类型（VIP、新客、老客）
+- order_date: 订单日期（支持年份如 2023、2024，或相对时间如"今年"、"去年"、"本月"）
+- brand: 品牌
+- category: 品类
+
+【任务】
+判断用户问题中是否包含上述字段的过滤条件，但当前 DSL 的 filters 中还没有体现。
+只输出需要补充的 filters，格式为 JSON 数组。
+
+【输出格式】
+[{{"field": "region", "operator": "=", "value": "华东"}}]
+
+如果没有需要补充的，输出空数组 []。
+不要输出解释文字。只输出 JSON 数组。"""
+
+            raw = llm_client.generate(
+                agentic_prompt,
+                "你是一个简洁的查询语义分析助手。只输出 JSON 数组，不要 markdown 代码块标记。",
+            )
+            if raw:
+                text = raw.strip()
+                # 尝试从 markdown 代码块中提取
+                fence_match = re.search(r"```(?:json)?\s*\n?(\[[\s\S]*?\])\s*\n?```", text)
+                if fence_match:
+                    text = fence_match.group(1)
+                # 兜底：直接找方括号包裹的内容
+                if not text.startswith("["):
+                    bracket_match = re.search(r"(\[[\s\S]*\])", text)
+                    if bracket_match:
+                        text = bracket_match.group(1)
+                try:
+                    suggested = json.loads(text)
+                    if isinstance(suggested, list):
+                        added = []
+                        for f in suggested:
+                            if (
+                                isinstance(f, dict)
+                                and f.get("field")
+                                and f.get("field") not in existing_fields
+                            ):
+                                filters.append(f)
+                                existing_fields.add(f.get("field"))
+                                added.append(f)
+                        if added:
+                            logger.info("[semantic_fix] agentic: added filters %s", added)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "[semantic_fix] agentic: failed to parse LLM output: %s", raw
+                    )
+
+            dsl_dict["filters"] = filters if filters else None
+            dsl_dict["limit"] = _extract_top_n(question, default=dsl_dict.get("limit", 10))
+            return dsl_dict
+        except Exception as exc:
+            logger.warning("[semantic_fix] agentic failed, falling back to hardcoded: %s", exc)
+            # 继续执行下面的硬编码兜底逻辑
+
+    # ------------------------------------------------------------------
+    # Fallback: hardcoded filter detection
+    # ------------------------------------------------------------------
     region_map = {"华东": "华东", "华南": "华南", "华北": "华北", "西南": "西南", "东北": "东北", "西北": "西北"}
     for name, value in region_map.items():
         if name in question and "region" not in existing_fields:
@@ -496,7 +574,7 @@ def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = 
 
         dsl_dict = _parse_llm_output(raw)
         dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-        dsl_dict = _semantic_fix_dsl(dsl_dict, question)
+        dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
         dsl = DSL.model_validate(dsl_dict)
 
         return {
@@ -619,7 +697,7 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
             if raw:
                 dsl_dict = _parse_llm_output(raw)
                 dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-                dsl_dict = _semantic_fix_dsl(dsl_dict, question)
+                dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
                 dsl = DSL.model_validate(dsl_dict)
                 return {
                     "dsl": dsl,
@@ -657,6 +735,220 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
             "trace": {"step": "correct_dsl", "status": "success", "source": "mock_corrected"},
         }
     return correct_dsl_node
+
+
+# ---------------------------------------------------------------------------
+# Agentic helpers: decompose (rewrite complex questions) + verify (self-check)
+# ---------------------------------------------------------------------------
+
+
+_COMPLEX_QUESTION_PATTERNS = (
+    "对比", "比较", "同比", "环比", "增长率", "占比", "比上", "相对",
+    "去年", "今年", "上月", "本月", "上季度", "本季度",
+    "趋势", "变化", "分组", "和", "及", "以及", "vs", "VS",
+)
+
+
+def _looks_complex(question: str) -> bool:
+    """快速判断问题是否可能需要 decompose。
+
+    避免对每个问题都额外调一次 LLM——只在 question 含有"对比/同比/趋势/今年"
+    等明显多条件信号时才触发 decompose。其他情况直接透传。
+    """
+    return any(p in question for p in _COMPLEX_QUESTION_PATTERNS)
+
+
+def _make_decompose_node(llm_client, llm_system_prompt: str = ""):
+    """Decompose / rewrite complex questions into a single-DSL-expressible form.
+
+    输入复杂问题（"对比今年和去年华东销售额"），让 LLM 把它改写成可以用一个
+    DSL 一次性查出来的等价问题（"按年度分组统计华东销售额，只看 2024 和 2023"）。
+    若问题已经足够简单，直接透传不改写。
+    """
+
+    @with_error_handler("decompose")
+    def decompose_node(state: QueryState) -> dict:
+        question = state["question"]
+
+        # 没启用 LLM，或问题看着不复杂，直接跳过
+        if llm_client is None or not _looks_complex(question):
+            return {
+                "complexity": "simple",
+                "trace": {"step": "decompose", "status": "skipped", "reason": "looks_simple"},
+            }
+
+        decompose_prompt = f"""你是一个智能问数系统的查询改写助手。任务：把可能需要多次查询的复杂问题，改写成一个可以用单个 DSL 查询表达的等价问题。
+
+【原始问题】
+{question}
+
+【判断规则】
+- 如果原问题只涉及一次 SQL 聚合（一组 metrics + dimensions + filters），输出 KEEP
+- 如果原问题涉及"对比 / 同比 / 环比 / 趋势 / 多个时间段并列"，把它改写成"按时间维度分组+filter 限定范围"形式
+- 如果原问题涉及"多个不相关的指标用不同口径查询"，输出 SPLIT（系统会回退用原问题尽力而为）
+
+【输出格式】
+第一行: KEEP / REWRITE / SPLIT 之一
+第二行（只在 REWRITE 时）: 改写后的等价问题（一句话，能用单个 DSL 表达）
+不要输出 JSON，不要解释。
+
+【示例】
+输入: "对比今年和去年华东销售额"
+输出:
+REWRITE
+按年度分组统计华东地区销售额（限定 2023 和 2024 年）
+
+输入: "查询华东销售额"
+输出:
+KEEP
+
+输入: "对比 VIP 客户的客单价和普通客户的订单量"
+输出:
+SPLIT
+"""
+        try:
+            raw = llm_client.generate(decompose_prompt, "你是一个简洁的查询改写助手。")
+            lines = [ln.strip() for ln in (raw or "").splitlines() if ln.strip()]
+            verdict = lines[0].upper() if lines else "KEEP"
+
+            if verdict == "REWRITE" and len(lines) >= 2:
+                new_question = lines[1]
+                logger.info("[decompose] rewrite: %r -> %r", question, new_question)
+                return {
+                    "original_question": question,
+                    "question": new_question,
+                    "rewrite_reason": "complex query rewritten to single-DSL form",
+                    "complexity": "complex_rewritten",
+                    "trace": {
+                        "step": "decompose",
+                        "status": "success",
+                        "verdict": "rewrite",
+                        "original": question,
+                        "rewritten": new_question,
+                    },
+                }
+            if verdict == "SPLIT":
+                logger.info("[decompose] split detected, keep original: %r", question)
+                return {
+                    "complexity": "complex",
+                    "rewrite_reason": "split-style query, processing best-effort with original",
+                    "trace": {
+                        "step": "decompose",
+                        "status": "warning",
+                        "verdict": "split",
+                        "note": "system does not yet support fan-out; falling back to original",
+                    },
+                }
+            # KEEP 或无法识别
+            return {
+                "complexity": "simple",
+                "trace": {"step": "decompose", "status": "success", "verdict": "keep"},
+            }
+        except Exception as exc:
+            logger.warning("[decompose] LLM call failed, keeping original: %s", exc)
+            return {
+                "complexity": "simple",
+                "trace": {"step": "decompose", "status": "warning", "error": str(exc)},
+            }
+
+    return decompose_node
+
+
+def _make_verify_dsl_node(llm_client, llm_system_prompt: str = ""):
+    """Verify-then-Answer: ask the LLM to self-check if the executed DSL/result
+    truly answers the user's original question.
+
+    Runs AFTER execute_sql, when we have:
+      - the original (user-typed) question
+      - the final DSL
+      - sample data rows
+
+    The LLM outputs PASS / WARN / FAIL with a short reason. We surface this
+    in the response but do NOT block on it (warnings only). A future iteration
+    can route FAIL back into correct_dsl.
+    """
+
+    @with_error_handler("verify_dsl")
+    def verify_dsl_node(state: QueryState) -> dict:
+        if llm_client is None:
+            return {
+                "verify_status": "skipped",
+                "trace": {"step": "verify_dsl", "status": "skipped", "reason": "no_llm"},
+            }
+
+        # 优先用原始问题，没改写就用当前 question
+        original = state.get("original_question") or state["question"]
+        dsl_obj = state.get("dsl")
+        data = state.get("data") or []
+        if dsl_obj is None:
+            return {
+                "verify_status": "skipped",
+                "trace": {"step": "verify_dsl", "status": "skipped", "reason": "no_dsl"},
+            }
+
+        # 只取样本数据避免 prompt 太长
+        sample = data[:3]
+        # 安全序列化：测试环境可能出现 MagicMock，用 default=str 兜底
+        try:
+            dsl_json = json.dumps(dsl_obj.model_dump(), ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            dsl_json = str(dsl_obj)
+        verify_prompt = f"""你是一个查询质量检查员。任务：判断一个 DSL 查询和它的执行结果是否真的回答了用户原始问题。
+
+【用户原始问题】
+{original}
+
+【系统生成的 DSL】
+{dsl_json}
+
+【执行结果样本（前 3 行）】
+{json.dumps(sample, ensure_ascii=False, indent=2, default=str)}
+（共 {len(data)} 条）
+
+【判断维度】
+1. metrics 是否对应用户问的"指标"？（如用户问"销售额"，DSL 用 sales_amount 才对）
+2. dimensions 是否对应用户问的"按什么分组"？
+3. filters 是否覆盖用户问题中的具体条件（地区、时间、客户类型等）？
+4. 结果数据看起来是否合理？
+
+【输出格式】
+第一行: PASS / WARN / FAIL 之一
+第二行（只在 WARN 或 FAIL 时输出）: 一句话说明哪里有问题
+不要 JSON，不要解释。
+
+【判定示例】
+- 用户问"销售额" → DSL 用 sales_amount → PASS
+- 用户问"销售额" → DSL 用 customer_count → FAIL: 指标不匹配
+- 用户问"华东销售额" → DSL 无 region filter → WARN: 缺少华东过滤
+- 用户问"前 5 的产品" → DSL limit=10 → WARN: limit 与"前5"不符
+"""
+        try:
+            raw = llm_client.generate(verify_prompt, "你是一个简洁的质量检查员。")
+            lines = [ln.strip() for ln in (raw or "").splitlines() if ln.strip()]
+            verdict = (lines[0].upper() if lines else "PASS").split(":")[0].strip()
+            reason = lines[1] if len(lines) >= 2 else None
+
+            if verdict not in {"PASS", "WARN", "FAIL"}:
+                verdict = "PASS"
+
+            return {
+                "verify_status": verdict.lower(),
+                "verify_reason": reason,
+                "trace": {
+                    "step": "verify_dsl",
+                    "status": "success" if verdict == "PASS" else "warning",
+                    "verdict": verdict,
+                    "reason": reason,
+                },
+            }
+        except Exception as exc:
+            logger.warning("[verify_dsl] LLM call failed: %s", exc)
+            return {
+                "verify_status": "skipped",
+                "trace": {"step": "verify_dsl", "status": "warning", "error": str(exc)},
+            }
+
+    return verify_dsl_node
 
 
 # ---------------------------------------------------------------------------
@@ -724,7 +1016,7 @@ def create_node_functions(
 
         dsl_dict = _parse_llm_output(raw)
         dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-        dsl_dict = _semantic_fix_dsl(dsl_dict, question)
+        dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
         dsl = DSL.model_validate(dsl_dict)
 
         return {
@@ -939,8 +1231,15 @@ def create_node_functions(
             "trace": {"step": "simplify_dsl", "status": "success"},
         }
 
+    # -----------------------------------------------------------------------
+    # decompose_node + verify_dsl_node (agentic helpers, see factories above)
+    # -----------------------------------------------------------------------
+    decompose_node = _make_decompose_node(llm_client, llm_system_prompt)
+    verify_dsl_node_fn = _make_verify_dsl_node(llm_client, llm_system_prompt)
+
     return {
         "clarification_node": clarification_node,
+        "decompose_node": decompose_node,
         "generate_dsl_node": generate_dsl_node,
         "mock_dsl_node": mock_dsl_node,
         "validate_dsl_node": validate_dsl_node,
@@ -954,4 +1253,5 @@ def create_node_functions(
         "human_review_node": human_review_node,
         "execute_sql_node": execute_sql_node,
         "simplify_dsl_node": simplify_dsl_node,
+        "verify_dsl_node": verify_dsl_node_fn,
     }

@@ -199,6 +199,7 @@ class TestCreateNodeFunctions:
     def test_returns_all_expected_nodes(self, nodes):
         expected = {
             "clarification_node",
+            "decompose_node",
             "generate_dsl_node",
             "mock_dsl_node",
             "validate_dsl_node",
@@ -212,6 +213,7 @@ class TestCreateNodeFunctions:
             "human_review_node",
             "execute_sql_node",
             "simplify_dsl_node",
+            "verify_dsl_node",
         }
         assert set(nodes.keys()) == expected
 
@@ -263,7 +265,8 @@ class TestGenerateDSLNode:
         assert result["dsl"] is not None
         assert result["llm_used"] is True
         assert result["dsl_attempts"]["source"] == "llm"
-        mock_llm_client.generate.assert_called_once()
+        # LLM is called at least once (DSL generation + optional agentic semantic fix)
+        assert mock_llm_client.generate.call_count >= 1
 
     def test_raises_when_llm_none(self, base_state, test_registry):
         """When llm_client is None, generate_dsl_node should raise ValidationError."""
@@ -356,7 +359,7 @@ class TestCorrectDSLNode:
         base_state["error"] = "Invalid metric 'foo'"
         result = nodes["correct_dsl_node"](base_state)
         assert result["dsl"] is not None
-        assert result["dsl_attempts"]["source"] == "llm_corrected"
+        assert result["dsl_attempts"]["source"] == "llm_corrected_agentic"
         assert result["dsl_attempts"]["error_feedback"] == "Invalid metric 'foo'"
 
     def test_falls_back_to_mock_when_llm_none(self, base_state, test_registry):

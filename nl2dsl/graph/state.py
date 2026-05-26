@@ -50,13 +50,19 @@ class QueryState(TypedDict):
     tenant_id: str
     data_source: str | None
 
+    # Agentic rewrites
+    original_question: str | None  # 用户最初的问题，decompose 改写时保留原始版本
+    rewrite_reason: str | None     # decompose 改写理由，用于审计追溯
+    verify_status: str | None      # verify_dsl 自检结果："pass" | "warn" | "fail"
+    verify_reason: str | None      # 自检不通过时的具体理由
+
     # Intermediate outputs
     ambiguities: list[ClarificationItem] | None
     dsl: DSL | None
     dsl_attempts: Annotated[list[dict] | None, add_to_attempts]
     sql: str | None
     sandbox_result: SandboxResult | None
-    complexity: str | None  # "simple" | "complex"
+    complexity: str | None  # "simple" | "complex" | "complex_rewritten"
 
     # Final outputs
     data: list[dict] | None

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NL2DSL Query Pipeline DAG</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #555;
+        }
+        .legend-box {
+            width: 20px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid #ccc;
+        }
+        .legend-agentic { background: #e1f5fe; border-color: #01579b; }
+        .legend-endpoint { background: #ffebee; border-color: #b71c1c; }
+        .legend-loop { background: #fff3e0; border-color: #e65100; }
+        .legend-subgraph { background: #fafafa; border-style: dashed; }
+        .diagram {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        .mermaid { text-align: center; }
+        .note {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            border-radius: 6px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #666;
+        }
+        .note strong { color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NL2DSL Query Pipeline DAG</h1>
+        <p class="subtitle">LangGraph StateGraph 调用链路 | 蓝色框 = Agentic 节点 | 橙色虚线 = 循环</p>
+
+        <div class="legend">
+            <div class="legend-item"><div class="legend-box legend-agentic"></div>Agentic 节点 (LLM 参与)</div>
+            <div class="legend-item"><div class="legend-box legend-endpoint"></div>终点</div>
+            <div class="legend-item"><div class="legend-box legend-loop"></div>循环/重试</div>
+            <div class="legend-item"><div class="legend-box legend-subgraph"></div>子图</div>
+        </div>
+
+        <div class="diagram">
+            <div class="mermaid">
+flowchart TD
+    subgraph MainPipeline["主链路"]
+        direction TB
+        START([START]) --> clarification
+        clarification -->|需要澄清| END1([END])
+        clarification -->|继续| decompose
+        decompose --> validation
+        validation --> permission_check
+        permission_check --> resolve_semantic
+        resolve_semantic --> build_sql
+        build_sql -->|错误| END2([END])
+        build_sql -->|简单/复杂| scan_sql
+        scan_sql --> sandbox_check
+        sandbox_check -->|需审核| human_review
+        sandbox_check -->|通过| execute_sql
+        human_review -->|通过| execute_sql
+        human_review -->|拒绝/错误| END3([END])
+        execute_sql -->|重试| simplify_dsl
+        execute_sql -->|成功| verify_dsl
+        simplify_dsl --> build_sql
+        verify_dsl --> END4([END])
+    end
+
+    subgraph ValidationSubgraph["验证子图 (Validation Subgraph)"]
+        direction TB
+        ENTRY1([入口]) -->|LLM可用| gen_dsl[generate_dsl]
+        ENTRY1 -->|无LLM| mock_dsl[mock_dsl]
+        gen_dsl -->|错误| mock_dsl
+        gen_dsl -->|成功| validate_dsl
+        mock_dsl --> validate_dsl
+        validate_dsl -->|通过| END5([END])
+        validate_dsl -->|失败| correct_dsl
+        validate_dsl -->|错误| END6([END])
+        correct_dsl --> validate_dsl
+    end
+
+    subgraph PermissionSubgraph["权限子图 (Permission Subgraph)"]
+        direction TB
+        ENTRY2([入口]) --> inject_row[inject_row_permission]
+        inject_row -->|错误| END7([END])
+        inject_row -->|成功| check_col[check_col_permission]
+        check_col --> END8([END])
+    end
+
+    validation -.->|包含| ValidationSubgraph
+    permission_check -.->|包含| PermissionSubgraph
+
+    classDef agentic fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef endpoint fill:#ffebee,stroke:#b71c1c
+    classDef loop fill:#fff3e0,stroke:#e65100
+    classDef subgraphStyle fill:#fafafa,stroke:#666,stroke-dasharray:5
+
+    class decompose,verify_dsl,correct_dsl agentic
+    class END1,END2,END3,END4,END5,END6,END7,END8 endpoint
+    class correct_dsl,simplify_dsl loop
+    class ValidationSubgraph,PermissionSubgraph subgraphStyle
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>循环路径说明：</strong><br>
+            1. <code>correct_dsl → validate_dsl</code>：DSL 修正后重新校验，最多 3 次重试<br>
+            2. <code>simplify_dsl → build_sql</code>：执行失败后简化 DSL 重新生成 SQL<br><br>
+            <strong>Agentic 节点：</strong><br>
+            • <code>decompose</code>：LLM 将复杂查询（对比/同比/趋势）改写为单 DSL 可表达形式<br>
+            • <code>correct_dsl</code>：LLM 决策检索词 → 定向 RAG → 重生成（self-correcting RAG）<br>
+            • <code>verify_dsl</code>：LLM 自检 DSL/结果是否真正回答了用户原始问题
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

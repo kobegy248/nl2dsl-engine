@@ -1,0 +1,99 @@
+digraph NL2DSL {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fillcolor="#e8eaf6", fontname="Microsoft YaHei"];
+    edge [fontname="Microsoft YaHei", fontsize=10];
+
+    START [label="START", shape=circle, fillcolor="#c8e6c9"];
+    END [label="END", shape=doublecircle, fillcolor="#ffcdd2"];
+
+    clarification [label="clarification
+歧义检测"];
+    decompose [label="decompose
+复杂查询改写", fillcolor="#e1f5fe", style="rounded,filled,bold"];
+    validation [label="validation
+DSL生成校验子图", fillcolor="#f5f5f5", style="rounded,filled,dashed"];
+    permission [label="permission_check
+权限子图", fillcolor="#f5f5f5", style="rounded,filled,dashed"];
+    resolve [label="resolve_semantic
+语义解析"];
+    build_sql [label="build_sql
+DSL→SQL"];
+    scan_sql [label="scan_sql
+SQL扫描"];
+    sandbox [label="sandbox_check
+沙箱检查"];
+    human_review [label="human_review
+人工审核"];
+    execute [label="execute_sql
+执行SQL"];
+    simplify [label="simplify_dsl
+简化重试", fillcolor="#fff3e0"];
+    verify [label="verify_dsl
+结果自检", fillcolor="#e1f5fe", style="rounded,filled,bold"];
+
+    START -> clarification;
+    clarification -> END [label="需澄清", color="#d32f2f", fontcolor="#d32f2f"];
+    clarification -> decompose [label="继续"];
+    decompose -> validation;
+    validation -> permission;
+    permission -> resolve;
+    resolve -> build_sql;
+    build_sql -> END [label="错误", color="#d32f2f", fontcolor="#d32f2f"];
+    build_sql -> scan_sql [label="简单/复杂"];
+    scan_sql -> sandbox;
+    sandbox -> human_review [label="需审核", color="#f57c00", fontcolor="#f57c00"];
+    sandbox -> execute [label="通过", color="#388e3c", fontcolor="#388e3c"];
+    human_review -> execute [label="通过", color="#388e3c", fontcolor="#388e3c"];
+    human_review -> END [label="拒绝/错误", color="#d32f2f", fontcolor="#d32f2f"];
+    execute -> simplify [label="重试", color="#f57c00", fontcolor="#f57c00"];
+    execute -> verify [label="成功", color="#388e3c", fontcolor="#388e3c"];
+    simplify -> build_sql [color="#e65100", style=dashed];
+    verify -> END;
+
+    subgraph cluster_validation {
+        label="Validation Subgraph";
+        style="rounded,dashed";
+        color="#666666";
+        bgcolor="#fafafa";
+
+        val_entry [label="入口", shape=point, width=0.15, height=0.15];
+        gen_dsl [label="generate_dsl
+LLM生成"];
+        mock_dsl [label="mock_dsl
+兜底生成"];
+        validate [label="validate_dsl
+结构校验"];
+        correct [label="correct_dsl
+Agentic修正", fillcolor="#e1f5fe", style="rounded,filled,bold"];
+        val_end [label="END", shape=doublecircle, fillcolor="#ffcdd2"];
+
+        val_entry -> gen_dsl [label="LLM可用"];
+        val_entry -> mock_dsl [label="无LLM"];
+        gen_dsl -> mock_dsl [label="错误", color="#d32f2f", fontcolor="#d32f2f"];
+        gen_dsl -> validate [label="成功"];
+        mock_dsl -> validate;
+        validate -> val_end [label="通过", color="#388e3c", fontcolor="#388e3c"];
+        validate -> correct [label="失败", color="#f57c00", fontcolor="#f57c00"];
+        validate -> val_end [label="错误", color="#d32f2f", fontcolor="#d32f2f"];
+        correct -> validate [color="#e65100", style=dashed];
+    }
+
+    subgraph cluster_permission {
+        label="Permission Subgraph";
+        style="rounded,dashed";
+        color="#666666";
+        bgcolor="#fafafa";
+
+        perm_entry [label="入口", shape=point, width=0.15, height=0.15];
+        inject [label="inject_row
+行级过滤"];
+        check [label="check_col
+列级权限"];
+        perm_end [label="END", shape=doublecircle, fillcolor="#ffcdd2"];
+
+        perm_entry -> inject;
+        inject -> perm_end [label="错误", color="#d32f2f", fontcolor="#d32f2f"];
+        inject -> check [label="成功"];
+        check -> perm_end;
+    }
+}

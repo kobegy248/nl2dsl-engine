@@ -262,6 +262,11 @@ class QueryResponse(BaseModel):
     sql: str | None = None
     execution_time_ms: int = 0
     clarification: dict | None = None
+    # Agentic metadata (optional, surfaced for UI / debugging)
+    original_question: str | None = None
+    rewrite_reason: str | None = None
+    verify_status: str | None = None  # "pass" | "warn" | "fail" | "skipped"
+    verify_reason: str | None = None
 
 
 class DSLExecuteRequest(BaseModel):
@@ -407,6 +412,10 @@ def _build_query_response(result: dict, elapsed: int, query_id: str, question: s
         dsl=dsl.model_dump() if dsl else None,
         sql=result.get("sql"),
         execution_time_ms=elapsed,
+        original_question=result.get("original_question"),
+        rewrite_reason=result.get("rewrite_reason"),
+        verify_status=result.get("verify_status"),
+        verify_reason=result.get("verify_reason"),
     )
 
 
@@ -454,6 +463,10 @@ async def query_dsl(req: QueryRequest) -> DSLGenerateResponse:
         query_id=query_id,
         started_at=start,
         llm_used=False,
+        original_question=None,
+        rewrite_reason=None,
+        verify_status=None,
+        verify_reason=None,
     )
 
     config = {"configurable": {"thread_id": query_id}}
@@ -492,6 +505,10 @@ async def query(req: QueryRequest) -> QueryResponse:
         query_id=query_id,
         started_at=start,
         llm_used=False,
+        original_question=None,
+        rewrite_reason=None,
+        verify_status=None,
+        verify_reason=None,
     )
 
     config = {"configurable": {"thread_id": query_id}}
@@ -569,6 +586,10 @@ async def query_execute(req: DSLExecuteRequest) -> DSLExecuteResponse:
         query_id=query_id,
         started_at=start,
         llm_used=False,
+        original_question=None,
+        rewrite_reason=None,
+        verify_status=None,
+        verify_reason=None,
     )
 
     config = {"configurable": {"thread_id": query_id}}
