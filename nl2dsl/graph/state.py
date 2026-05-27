@@ -46,6 +46,7 @@ def add_to_attempts(existing: list[dict] | None, new_attempt: dict | None) -> li
 class QueryState(TypedDict):
     # Input fields (set once at start)
     question: str
+    domain: str
     user_id: str
     tenant_id: str
     data_source: str | None
