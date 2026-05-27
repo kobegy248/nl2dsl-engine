@@ -208,6 +208,7 @@ def auto_sync(
     configs_dir: str | Path = "configs",
     state_file: str | Path = ".rag_sync_state.json",
     force: bool = False,
+    yaml_prefix: str = "",
 ) -> dict[str, int]:
     """启动时自检：对比 YAML mtime 和上次同步状态，按需增量同步。
 
@@ -217,6 +218,7 @@ def auto_sync(
         configs_dir: YAML 配置目录
         state_file: 状态文件路径
         force: 强制全量同步
+        yaml_prefix: YAML 文件名前缀（如 "bank_"），用于多业务域隔离
 
     Returns:
         每个 YAML 同步的记录数字典
@@ -229,7 +231,7 @@ def auto_sync(
     embedder_instance = None  # 延迟初始化，避免无需同步时加载 BGE
 
     for yaml_name, collections in _CONFIG_COLLECTIONS.items():
-        yaml_path = configs_dir / yaml_name
+        yaml_path = configs_dir / f"{yaml_prefix}{yaml_name}"
         if not yaml_path.exists():
             continue
 
