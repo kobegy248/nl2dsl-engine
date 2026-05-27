@@ -1,5 +1,7 @@
-"""NL2DSL Engine entry point."""
+"""NL2DSL Engine entry point with multi-domain support."""
+
 from __future__ import annotations
+
 from pathlib import Path
 
 import yaml
@@ -8,6 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy import create_engine
 
 from nl2dsl.config import settings
+from nl2dsl.domain_context import DomainContext
 from nl2dsl.plugin import Registry, Pipeline, Plugin
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.utils.logger import get_logger
@@ -15,30 +18,69 @@ from nl2dsl.utils.logger import get_logger
 logger = get_logger("engine")
 
 
+def _discover_domains(config_dir: Path) -> list[str]:
+    """Scan configs/ directory to discover all domains.
+
+    Rules:
+    - metrics.yaml (no prefix) -> domain="ecommerce"
+    - xxx_metrics.yaml -> domain="xxx"
+    """
+    domains = []
+    if (config_dir / "metrics.yaml").exists():
+        domains.append("ecommerce")
+
+    for f in config_dir.glob("*_metrics.yaml"):
+        prefix = f.name.replace("_metrics.yaml", "")
+        if prefix and prefix not in domains:
+            domains.append(prefix)
+
+    logger.info("Discovered domains: %s", domains)
+    return domains
+
+
+def _get_db_url(domain: str) -> str:
+    """Auto-name database files per domain."""
+    if domain == "ecommerce":
+        return settings.db_url
+    return f"sqlite:///./{domain}.db"
+
+
+def _get_milvus_uri(domain: str) -> str:
+    """Auto-name Milvus files per domain."""
+    if domain == "ecommerce":
+        return settings.milvus_uri
+    return f"./{domain}_milvus_lite.db"
+
+
 class Engine:
     def __init__(self):
-        self._registry = Registry()
-        self._pipeline = Pipeline()
+        self._domains: dict[str, DomainContext] = {}
         self._plugins: list[Plugin] = []
         self._built = False
         self._checkpointer = InMemorySaver()
         self._load_defaults()
+
+    @property
+    def domains(self) -> list[str]:
+        return list(self._domains.keys())
+
+    def get_domain(self, domain: str) -> DomainContext:
+        """Get DomainContext for a domain. Falls back to ecommerce."""
+        if domain in self._domains:
+            return self._domains[domain]
+        logger.warning("Domain '%s' not found, falling back to ecommerce", domain)
+        return self._domains.get("ecommerce")
 
     def use(self, plugin: Plugin) -> "Engine":
         self._plugins.append(plugin)
         return self
 
     def register(self, name: str, component) -> "Engine":
-        self._registry.register(name, component)
+        # For backward compatibility: store in a default registry
+        if not hasattr(self, "_legacy_registry"):
+            self._legacy_registry = Registry()
+        self._legacy_registry.register(name, component)
         return self
-
-    @property
-    def registry(self) -> Registry:
-        return self._registry
-
-    @property
-    def pipeline(self) -> Pipeline:
-        return self._pipeline
 
     def build(self):
         if self._built:
@@ -46,24 +88,7 @@ class Engine:
         for plugin in sorted(self._plugins, key=lambda p: p.priority):
             logger.info("Loading plugin: %s (priority=%d)", plugin.name, plugin.priority)
             plugin.register(self)
-        graph = build_graph(
-            llm_client=self._registry.get("llm") if self._registry.has("llm") else None,
-            rag_retriever=self._registry.get("rag_retriever") if self._registry.has("rag_retriever") else None,
-            validator=self._registry.get("validator"),
-            row_security=self._registry.get("row_security"),
-            col_security=self._registry.get("col_security"),
-            resolver=self._registry.get("resolver"),
-            sql_builder=self._registry.get("sql_builder"),
-            scanner=self._registry.get("scanner"),
-            sandbox=self._registry.get("sandbox"),
-            executor=self._registry.get("executor"),
-            clarification_detector=self._registry.get("clarification_detector"),
-            registry_dict=self._registry.get("registry_dict"),
-            llm_system_prompt=self._registry.get("llm_system_prompt") if self._registry.has("llm_system_prompt") else "",
-            checkpointer=self._checkpointer,
-        )
         self._built = True
-        return graph
 
     def build_fastapi_app(self) -> FastAPI:
         self.build()
@@ -86,59 +111,134 @@ class Engine:
         from nl2dsl.rag.store import MilvusLiteStore
         from nl2dsl.rag.embedder import BGEEmbedder
         from nl2dsl.rag.retriever import RAGRetriever
+        from nl2dsl.rag.sync import auto_sync
 
-        # Semantic registry
-        registry = SemanticRegistry()
-        p = Path(__file__).parent.parent / "configs" / "metrics.yaml"
-        if p.exists():
-            registry.load(str(p))
-        rd = {"metrics": registry.metrics, "dimensions": registry.dimensions, "data_sources": registry.data_sources}
-        self._registry.register("registry_dict", rd)
+        config_dir = Path(__file__).parent.parent / "configs"
+        discovered = _discover_domains(config_dir)
 
-        # Permissions
-        perm = {}
-        sc = {}
-        mr = {}
-        pp = Path(__file__).parent.parent / "configs" / "permissions.yaml"
-        if pp.exists():
-            pd = yaml.safe_load(pp.read_text(encoding="utf-8"))
-            perm = pd.get("users", {})
-            sc = pd.get("sensitive_columns", {})
-            for f, t in pd.get("masking_rules", {}).items():
-                mr[f] = lambda x, tmpl=t: tmpl.format(x=x) if isinstance(x, (int, float, str)) else str(x)
+        if not discovered:
+            logger.warning("No domains discovered in %s", config_dir)
+            return
 
-        # DB + core components
-        db = create_engine(settings.db_url, echo=False)
-        self._registry.register("db_engine", db)
-        self._registry.register("validator", DSLValidator(rd))
-        self._registry.register("resolver", SemanticResolver(rd))
-        self._registry.register("scanner", SQLScanner())
-        self._registry.register("sandbox", QuerySandbox(db))
-        self._registry.register("executor", SQLExecutor(db))
-        self._registry.register("row_security", RowLevelSecurity(perm))
-        self._registry.register("col_security", ColumnLevelSecurity(sc, mr))
-        self._registry.register("clarification_detector", ClarificationDetector())
-        self._registry.register("llm_system_prompt", DSL_SYSTEM_PROMPT)
-        tm = {k: v.get("table", k) for k, v in registry.data_sources.items()}
-        self._registry.register("sql_builder", SQLBuilder(db, tm))
-
-        # LLM (optional)
+        # Shared components (initialized once)
+        llm = None
+        embedder = None
         if settings.llm_api_key:
-            llm = LLMClient(api_key=settings.llm_api_key, base_url=settings.llm_base_url, model=settings.llm_model)
-            self._registry.register("llm", llm)
+            llm = LLMClient(
+                api_key=settings.llm_api_key,
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+            )
             try:
-                store = MilvusLiteStore(uri=settings.milvus_uri)
-                emb = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
-                # 启动自检：对比 YAML mtime，按需同步到向量库
-                from nl2dsl.rag.sync import auto_sync
-                configs_dir = Path(__file__).parent.parent / "configs"
-                state_file = Path(__file__).parent.parent / ".rag_sync_state.json"
-                try:
-                    auto_sync(store=store, embedder=emb, configs_dir=configs_dir, state_file=state_file)
-                except Exception as sync_err:
-                    logger.warning("RAG auto-sync failed: %s", sync_err)
-                # 同步完成后再创建 retriever（确保 _load_keywords 能读到数据）
-                ret = RAGRetriever(store=store, embedder=emb)
-                self._registry.register("rag_retriever", ret)
+                embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
             except Exception as e:
-                logger.warning("RAG init failed: %s", e)
+                logger.warning("BGE embedder init failed: %s", e)
+
+        # Build DomainContext for each discovered domain
+        for domain in discovered:
+            prefix = "" if domain == "ecommerce" else f"{domain}_"
+
+            # 1. Load semantic registry
+            registry = SemanticRegistry()
+            metrics_path = config_dir / f"{prefix}metrics.yaml"
+            if metrics_path.exists():
+                registry.load(str(metrics_path))
+            else:
+                logger.warning("Metrics config not found for domain '%s': %s", domain, metrics_path)
+                continue
+
+            rd = {
+                "metrics": registry.metrics,
+                "dimensions": registry.dimensions,
+                "data_sources": registry.data_sources,
+            }
+
+            # 2. Load permissions
+            perm = {}
+            sc = {}
+            mr = {}
+            perm_path = config_dir / f"{prefix}permissions.yaml"
+            if not perm_path.exists() and domain != "ecommerce":
+                perm_path = config_dir / "permissions.yaml"
+            if perm_path.exists():
+                pd = yaml.safe_load(perm_path.read_text(encoding="utf-8"))
+                perm = pd.get("users", {})
+                sc = pd.get("sensitive_columns", {})
+                for f, t in pd.get("masking_rules", {}).items():
+                    mr[f] = lambda x, tmpl=t: tmpl.format(x=x) if isinstance(x, (int, float, str)) else str(x)
+
+            # 3. Database
+            db_url = _get_db_url(domain)
+            db = create_engine(db_url, echo=False)
+
+            # 4. Core components
+            validator = DSLValidator(rd)
+            resolver = SemanticResolver(rd)
+            scanner = SQLScanner()
+            sandbox = QuerySandbox(db)
+            executor = SQLExecutor(db)
+            row_security = RowLevelSecurity(perm)
+            col_security = ColumnLevelSecurity(sc, mr)
+            clarification_detector = ClarificationDetector()
+
+            # 5. SQLBuilder
+            tm = {k: v.get("table", k) for k, v in registry.data_sources.items()}
+            sql_builder = SQLBuilder(db, tm)
+
+            # 6. RAG
+            rag_retriever = None
+            if embedder is not None:
+                try:
+                    milvus_uri = _get_milvus_uri(domain)
+                    store = MilvusLiteStore(uri=milvus_uri)
+                    state_file = Path(__file__).parent.parent / f".{domain}_rag_sync_state.json"
+                    try:
+                        # TODO: yaml_prefix support will be added in Task 6
+                        # For now, call auto_sync without yaml_prefix
+                        auto_sync(
+                            store=store,
+                            embedder=embedder,
+                            configs_dir=config_dir,
+                            state_file=state_file,
+                        )
+                    except Exception as sync_err:
+                        logger.warning("RAG auto-sync failed for domain '%s': %s", domain, sync_err)
+                    rag_retriever = RAGRetriever(store=store, embedder=embedder)
+                except Exception as e:
+                    logger.warning("RAG init failed for domain '%s': %s", domain, e)
+
+            # 7. Build graph
+            graph = build_graph(
+                llm_client=llm,
+                rag_retriever=rag_retriever,
+                validator=validator,
+                row_security=row_security,
+                col_security=col_security,
+                resolver=resolver,
+                sql_builder=sql_builder,
+                scanner=scanner,
+                sandbox=sandbox,
+                executor=executor,
+                clarification_detector=clarification_detector,
+                registry_dict=rd,
+                llm_system_prompt=DSL_SYSTEM_PROMPT,
+                checkpointer=self._checkpointer,
+            )
+
+            # 8. Assemble DomainContext
+            ctx = DomainContext(
+                domain=domain,
+                registry_dict=rd,
+                validator=validator,
+                resolver=resolver,
+                sql_builder=sql_builder,
+                sandbox=sandbox,
+                executor=executor,
+                row_security=row_security,
+                col_security=col_security,
+                rag_retriever=rag_retriever,
+                graph=graph,
+            )
+            self._domains[domain] = ctx
+            logger.info("Domain '%s' initialized: %d metrics, %d dimensions, %d data_sources",
+                        domain, len(rd["metrics"]), len(rd["dimensions"]), len(rd["data_sources"]))
