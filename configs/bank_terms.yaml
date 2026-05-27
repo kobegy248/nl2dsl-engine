@@ -1,0 +1,293 @@
+terms:
+  # ── 账户类术语 ──────────────────────────────────────────
+  total_balance:
+    aliases: [总余额, 账户总余额, 余额合计, 存款总额, 资金总额, 账户资金, 总资产]
+    metric: total_balance
+    description: "所有账户余额之和 SUM(acct_bal)，含冻结部分"
+
+  available_balance:
+    aliases: [可用余额, 可用资金, 可支取金额, 可取金额, 能用的钱, 活期可用]
+    metric: available_balance
+    description: "账户可用余额之和 SUM(avl_bal)，扣除冻结部分"
+
+  frozen_amount:
+    aliases: [冻结金额, 冻结资金, 被冻结的钱, 止付金额, 不可用金额, 锁定资金]
+    metric: frozen_amount
+    description: "账户冻结金额合计 SUM(frz_amt)"
+
+  account_count:
+    aliases: [账户数, 账户数量, 开户数, 有多少账户, 账户个数, 账户总量]
+    metric: account_count
+    description: "账户数量 COUNT(DISTINCT acct_no)"
+
+  avg_balance:
+    aliases: [平均余额, 户均余额, 账户均值, 平均存款, 户均资产]
+    metric: avg_balance
+    description: "账户平均余额 AVG(acct_bal)"
+
+  max_balance:
+    aliases: [最大余额, 最高余额, 最多存款, 余额最高, 最大资产]
+    metric: max_balance
+    description: "单个账户最大余额 MAX(acct_bal)"
+
+  # ── 客户类术语 ──────────────────────────────────────────
+  customer_count:
+    aliases: [客户数, 客户数量, 用户数, 人数, 多少客户, 多少人, 客户总量, 客群规模]
+    metric: customer_count
+    description: "去重客户数 COUNT(DISTINCT cif_no)"
+
+  # ── 交易类术语 ──────────────────────────────────────────
+  txn_count:
+    aliases: [交易笔数, 交易次数, 交易数量, 流水笔数, 发生笔数, 多少笔, 笔数]
+    metric: txn_count
+    description: "交易流水笔数 COUNT(txn_seq_no)"
+
+  txn_amount:
+    aliases: [交易金额, 交易总额, 流水金额, 发生额, 交易规模, 资金往来额]
+    metric: txn_amount
+    description: "交易金额合计 SUM(txn_amt)"
+
+  inflow_amount:
+    aliases: [流入金额, 资金流入, 收入金额, 进账金额, 存入金额, 来款金额, 贷方金额]
+    metric: inflow_amount
+    description: "资金流入金额 SUM(CASE WHEN dr_cr_flg='2' THEN txn_amt ELSE 0 END)"
+
+  outflow_amount:
+    aliases: [流出金额, 资金流出, 支出金额, 出账金额, 取出金额, 付款金额, 借方金额]
+    metric: outflow_amount
+    description: "资金流出金额 SUM(CASE WHEN dr_cr_flg='1' THEN txn_amt ELSE 0 END)"
+
+  net_inflow:
+    aliases: [净流入, 净流入金额, 净流入额, 收支差额, 净收入, 净流入量, 净流入资金]
+    metric: net_inflow
+    description: "净流入金额（流入-流出）"
+
+  avg_txn_amount:
+    aliases: [平均交易金额, 单笔均价, 笔均金额, 平均流水, 单笔平均]
+    metric: avg_txn_amount
+    description: "单笔交易平均金额 AVG(txn_amt)"
+
+  max_txn_amount:
+    aliases: [最大交易金额, 单笔最大, 最高交易金额, 最大流水]
+    metric: max_txn_amount
+    description: "单笔最大交易金额 MAX(txn_amt)"
+
+  # ── 产品类术语 ──────────────────────────────────────────
+  product_hold_amount:
+    aliases: [持有金额, 产品持有, 持仓金额, 在投金额, 持有总额, 产品余额]
+    metric: product_hold_amount
+    description: "产品持有金额合计 SUM(hold_amt)"
+
+  product_sign_amount:
+    aliases: [签约金额, 产品签约, 认购金额, 申购金额, 签约总额]
+    metric: product_sign_amount
+    description: "产品签约金额合计 SUM(sign_amt)"
+
+  agreement_count:
+    aliases: [合约数, 合约数量, 签约笔数, 持有笔数, 产品合约数]
+    metric: agreement_count
+    description: "合约数量 COUNT(agt_no)"
+
+  expected_yield:
+    aliases: [预期收益, 预计收益, 预期利息, 预期收入, 预计盈利]
+    metric: expected_yield
+    description: "预期收益金额 SUM(hold_amt * exp_yld_rate)"
+
+  avg_yield_rate:
+    aliases: [平均收益率, 收益率均值, 平均预期收益, 收益水平]
+    metric: avg_yield_rate
+    description: "平均预期收益率 AVG(exp_yld_rate)"
+
+  # ── 维度术语 ──────────────────────────────────────────
+  customer_status:
+    aliases: [客户状态, 客户情况, 客户是否正常, 客户有效性]
+    dimension: customer_status
+    description: "客户状态维度（01=正常，02=冻结，03=睡眠，09=销户）"
+
+  customer_type:
+    aliases: [客户类型, 客户种类, 客户分群, 客群类型, 个人还是企业]
+    dimension: customer_type
+    description: "客户类型维度（01=个人，02=企业）"
+
+  cert_type:
+    aliases: [证件类型, 证件种类, 什么证件, 身份证明类型]
+    dimension: cert_type
+    description: "证件类型维度（01=身份证，02=护照，03=军官证，04=港澳通行证）"
+
+  risk_level:
+    aliases: [风险等级, 风险级别, 风险偏好, 客户风险, 风险承受能力, R1R2R3R4R5]
+    dimension: risk_level
+    description: "风险等级维度（01=保守型，02=稳健型，03=平衡型，04=进取型，05=激进型）"
+
+  account_type:
+    aliases: [账户类型, 什么账户, 账户种类, 存款类型, 账户性质, 活期还是定期]
+    dimension: account_type
+    description: "账户类型维度（01=活期存款，02=定期存款，03=理财产品，04=信用卡）"
+
+  currency:
+    aliases: [币种, 货币, 什么币种, 人民币美元, 货币类型]
+    dimension: currency
+    description: "币种维度（CNY=人民币，USD=美元，EUR=欧元，HKD=港币）"
+
+  account_status:
+    aliases: [账户状态, 账户是否正常, 账户有效性, 账户情况]
+    dimension: account_status
+    description: "账户状态维度（01=正常，02=冻结，03=止付，09=销户）"
+
+  txn_type:
+    aliases: [交易类型, 交易种类, 什么交易, 业务类型, 交易品种]
+    dimension: txn_type
+    description: "交易类型维度"
+
+  dr_cr_flag:
+    aliases: [借贷方向, 收支方向, 进出方向, 借方贷方, 收入支出, 资金流向]
+    dimension: dr_cr_flag
+    description: "借贷标志维度（1=借/资金流出，2=贷/资金流入）"
+
+  channel:
+    aliases: [渠道, 交易渠道, 办理渠道, 操作渠道, 通过什么渠道, 柜面手机银行]
+    dimension: channel
+    description: "渠道维度"
+
+  channel_name:
+    aliases: [渠道名称, 渠道类型, 交易渠道名]
+    dimension: channel_name
+    description: "渠道名称维度"
+
+  reversal_flag:
+    aliases: [冲正标志, 是否冲正, 冲正状态, 是否撤销, 交易状态]
+    dimension: reversal_flag
+    description: "冲正标志维度（0=正常，1=已冲正）"
+
+  product_name:
+    aliases: [产品, 产品名称, 什么产品, 理财名称, 产品名]
+    dimension: product_name
+    description: "产品名称维度"
+
+  product_level1:
+    aliases: [产品大类, 产品一级分类, 产品一级类目, 产品品类, 一级产品]
+    dimension: product_level1
+    description: "产品一级类目维度（存款类/理财类/基金类/保险类）"
+
+  product_level2:
+    aliases: [产品小类, 产品二级分类, 产品二级类目, 二级产品, 细分类目]
+    dimension: product_level2
+    description: "产品二级类目维度"
+
+  product_status:
+    aliases: [产品状态, 产品在售情况, 产品是否可买]
+    dimension: product_status
+    description: "产品状态维度（01=在售，02=停售，03=售罄）"
+
+  org_name:
+    aliases: [机构, 机构名称, 支行, 分行, 开户机构, 所属机构, 网点]
+    dimension: org_name
+    description: "机构名称维度"
+
+  org_level:
+    aliases: [机构层级, 机构级别, 层级, 总行分行支行]
+    dimension: org_level
+    description: "机构层级维度（1=总行，2=分行，3=支行）"
+
+  agreement_status:
+    aliases: [合约状态, 合约有效性, 产品合约状态, 持有状态]
+    dimension: agreement_status
+    description: "合约状态维度（01=有效，02=到期，03=提前终止）"
+
+  reg_date:
+    aliases: [注册日期, 开户日期, 加入日期, 成为客户日期, 建档日期]
+    dimension: reg_date
+    description: "客户注册日期维度"
+
+  open_date:
+    aliases: [开户日期, 开户时间, 账户开立日期, 开户日]
+    dimension: open_date
+    description: "账户开户日期维度"
+
+  txn_date:
+    aliases: [交易日期, 交易时间, 发生日期, 流水日期, 哪天]
+    dimension: txn_date
+    description: "交易日期维度"
+
+  sign_date:
+    aliases: [签约日期, 购买日期, 申购日期, 签约时间]
+    dimension: sign_date
+    description: "产品签约日期维度"
+
+  due_date:
+    aliases: [到期日期, 到期时间, 合约到期, 产品到期, 到期日]
+    dimension: due_date
+    description: "合约/产品到期日期维度"
+
+  # ── 晦涩字段的通俗说法（测试语义映射能力）─────────────
+  acct_bal:
+    aliases: [acct_bal, 账户余额, 余额]
+    description: "t_acct_main.acct_bal 账户余额"
+
+  avl_bal:
+    aliases: [avl_bal, 可用余额, 可用]
+    description: "t_acct_main.avl_bal 可用余额"
+
+  frz_amt:
+    aliases: [frz_amt, 冻结金额, 冻结]
+    description: "t_acct_main.frz_amt 冻结金额"
+
+  cif_no:
+    aliases: [cif_no, 客户号, 客户编号]
+    description: "t_cif_base.cif_no 客户编号"
+
+  cust_nm:
+    aliases: [cust_nm, 客户名, 客户姓名]
+    description: "t_cif_base.cust_nm 客户姓名"
+
+  cust_sts_cd:
+    aliases: [cust_sts_cd, 客户状态码]
+    description: "t_cif_base.cust_sts_cd 客户状态代码"
+
+  acct_type_cd:
+    aliases: [acct_type_cd, 账户类型码]
+    description: "t_acct_main.acct_type_cd 账户类型代码"
+
+  ccyc_cd:
+    aliases: [ccyc_cd, 币种代码, 币种码]
+    description: "t_acct_main.ccyc_cd 币种代码"
+
+  txn_seq_no:
+    aliases: [txn_seq_no, 流水号, 交易流水号]
+    description: "t_txn_dtl.txn_seq_no 交易流水号"
+
+  txn_amt:
+    aliases: [txn_amt, 交易金额, 交易金额]
+    description: "t_txn_dtl.txn_amt 交易金额"
+
+  dr_cr_flg:
+    aliases: [dr_cr_flg, 借贷标志, 借贷标识]
+    description: "t_txn_dtl.dr_cr_flg 借贷标志（1借2贷）"
+
+  rvsl_flg:
+    aliases: [rvsl_flg, 冲正标志, 冲正标识]
+    description: "t_txn_dtl.rvsl_flg 冲正标志（0正常1已冲正）"
+
+  chl_cd:
+    aliases: [chl_cd, 渠道码, 渠道代码]
+    description: "t_txn_dtl.chl_cd 渠道代码"
+
+  prod_cd:
+    aliases: [prod_cd, 产品代码, 产品码]
+    description: "t_prod_info.prod_cd 产品代码"
+
+  prod_nm:
+    aliases: [prod_nm, 产品名, 产品名称]
+    description: "t_prod_info.prod_nm 产品名称"
+
+  agt_no:
+    aliases: [agt_no, 合约号, 合约编号]
+    description: "t_cust_prod_agt.agt_no 合约编号"
+
+  hold_amt:
+    aliases: [hold_amt, 持有金额, 持仓金额]
+    description: "t_cust_prod_agt.hold_amt 持有金额"
+
+  exp_yld_rate:
+    aliases: [exp_yld_rate, 预期收益率, 收益率]
+    description: "t_prod_info.exp_yld_rate 预期收益率"

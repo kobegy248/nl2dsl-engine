@@ -1,0 +1,324 @@
+examples:
+  # ── 基础查询 ──────────────────────────────────────────
+  - question: "查询所有正常状态客户的总数"
+    dsl:
+      metrics: [customer_count]
+      dimensions: []
+      filters:
+        - field: customer_status
+          operator: "="
+          value: "01"
+      data_source: customers
+
+  - question: "各风险等级的客户分别有多少"
+    dsl:
+      metrics: [customer_count]
+      dimensions: [risk_level]
+      filters: []
+      data_source: customers
+
+  - question: "北京分行的客户资产总额是多少"
+    dsl:
+      metrics: [total_balance]
+      dimensions: []
+      filters:
+        - field: org_name
+          operator: "="
+          value: "北京分行"
+      data_source: customer_accounts
+
+  # ── 账户类查询 ──────────────────────────────────────────
+  - question: "活期存款账户的平均余额"
+    dsl:
+      metrics: [avg_balance]
+      dimensions: []
+      filters:
+        - field: account_type
+          operator: "="
+          value: "01"
+      data_source: customer_accounts
+
+  - question: "各币种的账户数量和总余额"
+    dsl:
+      metrics: [account_count, total_balance]
+      dimensions: [currency]
+      filters: []
+      data_source: customer_accounts
+
+  - question: "冻结金额大于10000的账户"
+    dsl:
+      metrics: [account_count, frozen_amount]
+      dimensions: [account_type, account_status]
+      filters:
+        - field: frozen_amount
+          operator: ">"
+          value: 10000
+      data_source: customer_accounts
+
+  - question: "最近一年新开立的定期存款账户"
+    dsl:
+      metrics: [account_count, total_balance]
+      dimensions: [open_date]
+      filters:
+        - field: account_type
+          operator: "="
+          value: "02"
+        - field: open_date
+          operator: ">="
+          value: "2023-01-01"
+      data_source: customer_accounts
+
+  # ── 交易类查询 ──────────────────────────────────────────
+  - question: "最近30天各渠道的交易笔数和金额"
+    dsl:
+      metrics: [txn_count, txn_amount]
+      dimensions: [channel_name]
+      filters:
+        - field: txn_date
+          operator: ">="
+          value: "2024-06-01"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      data_source: transactions
+
+  - question: "手机银行的交易净流入"
+    dsl:
+      metrics: [net_inflow]
+      dimensions: []
+      filters:
+        - field: channel_name
+          operator: "="
+          value: "手机银行"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      data_source: transactions
+
+  - question: "各交易类型的平均交易金额"
+    dsl:
+      metrics: [avg_txn_amount, txn_count]
+      dimensions: [txn_type_name]
+      filters:
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      data_source: transactions
+
+  - question: "本月单笔超过5万的转账交易"
+    dsl:
+      metrics: [txn_count, txn_amount]
+      dimensions: [txn_date, channel_name]
+      filters:
+        - field: txn_type
+          operator: "="
+          value: "1003"
+        - field: txn_amt
+          operator: ">"
+          value: 50000
+        - field: txn_date
+          operator: ">="
+          value: "2024-06-01"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      data_source: transactions
+
+  - question: "近90天被冲正的交易有多少笔"
+    dsl:
+      metrics: [txn_count, txn_amount]
+      dimensions: [txn_type_name, channel_name]
+      filters:
+        - field: reversal_flag
+          operator: "="
+          value: "1"
+        - field: txn_date
+          operator: ">="
+          value: "2024-04-01"
+      data_source: transactions
+
+  # ── 产品类查询 ──────────────────────────────────────────
+  - question: "各产品二级类目的持有金额和合约数"
+    dsl:
+      metrics: [product_hold_amount, agreement_count]
+      dimensions: [product_level2]
+      filters:
+        - field: agreement_status
+          operator: "="
+          value: "01"
+      data_source: agreements
+
+  - question: "理财类产品的总持有金额和平均收益率"
+    dsl:
+      metrics: [product_hold_amount, avg_yield_rate]
+      dimensions: [product_name]
+      filters:
+        - field: product_level1
+          operator: "="
+          value: "理财类"
+        - field: agreement_status
+          operator: "="
+          value: "01"
+      order_by:
+        - field: product_hold_amount
+          direction: desc
+      limit: 10
+      data_source: agreements
+
+  - question: "即将到期的产品合约（30天内）"
+    dsl:
+      metrics: [agreement_count, product_hold_amount]
+      dimensions: [product_name, due_date]
+      filters:
+        - field: due_date
+          operator: "<="
+          value: "2024-07-31"
+        - field: agreement_status
+          operator: "="
+          value: "01"
+      order_by:
+        - field: due_date
+          direction: asc
+      data_source: agreements
+
+  - question: "保守型客户持有的理财产品"
+    dsl:
+      metrics: [product_hold_amount, agreement_count]
+      dimensions: [product_level2]
+      filters:
+        - field: risk_level
+          operator: "="
+          value: "01"
+        - field: product_level1
+          operator: "="
+          value: "理财类"
+        - field: agreement_status
+          operator: "="
+          value: "01"
+      data_source: agreements
+
+  # ── 复杂组合查询 ────────────────────────────────────────
+  - question: "近半年交易活跃的客户（交易笔数大于10）"
+    dsl:
+      metrics: [txn_count, txn_amount, customer_count]
+      dimensions: [customer_name, risk_level]
+      filters:
+        - field: txn_date
+          operator: ">="
+          value: "2024-01-01"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      order_by:
+        - field: txn_count
+          direction: desc
+      limit: 20
+      data_source: transactions
+
+  - question: "各分行的客户资产排名"
+    dsl:
+      metrics: [customer_count, total_balance, avg_balance]
+      dimensions: [org_name]
+      filters:
+        - field: org_level
+          operator: "="
+          value: 2
+        - field: account_status
+          operator: "="
+          value: "01"
+      order_by:
+        - field: total_balance
+          direction: desc
+      data_source: customer_accounts
+
+  - question: "手机银行渠道的交易流入流出对比"
+    dsl:
+      metrics: [inflow_amount, outflow_amount, net_inflow]
+      dimensions: [txn_type_name]
+      filters:
+        - field: channel_name
+          operator: "="
+          value: "手机银行"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      data_source: transactions
+
+  - question: "持有理财产品超过50万的客户"
+    dsl:
+      metrics: [product_hold_amount, agreement_count]
+      dimensions: [customer_name, risk_level]
+      filters:
+        - field: product_level1
+          operator: "="
+          value: "理财类"
+        - field: agreement_status
+          operator: "="
+          value: "01"
+      order_by:
+        - field: product_hold_amount
+          direction: desc
+      limit: 20
+      data_source: agreements
+
+  - question: "近30天有过大额转账（超过10万）的客户"
+    dsl:
+      metrics: [txn_count, txn_amount, customer_count]
+      dimensions: [customer_name, channel_name]
+      filters:
+        - field: txn_type
+          operator: "="
+          value: "1003"
+        - field: txn_amt
+          operator: ">"
+          value: 100000
+        - field: txn_date
+          operator: ">="
+          value: "2024-06-01"
+        - field: reversal_flag
+          operator: "="
+          value: "0"
+      order_by:
+        - field: txn_amount
+          direction: desc
+      limit: 20
+      data_source: transactions
+
+  - question: "睡眠客户中仍有余额的账户"
+    dsl:
+      metrics: [account_count, total_balance, avg_balance]
+      dimensions: [account_type, org_name]
+      filters:
+        - field: customer_status
+          operator: "="
+          value: "03"
+        - field: account_status
+          operator: "="
+          value: "01"
+        - field: acct_bal
+          operator: ">"
+          value: 0
+      data_source: customer_accounts
+
+  - question: "今年新签约理财产品的客户数和金额"
+    dsl:
+      metrics: [agreement_count, product_sign_amount]
+      dimensions: [product_level2, sign_date]
+      filters:
+        - field: sign_date
+          operator: ">="
+          value: "2024-01-01"
+        - field: product_level1
+          operator: "="
+          value: "理财类"
+      data_source: agreements
+
+  - question: "各风险等级客户的户均资产和户均交易笔数"
+    dsl:
+      metrics: [avg_balance, customer_count]
+      dimensions: [risk_level]
+      filters:
+        - field: account_status
+          operator: "="
+          value: "01"
+      data_source: customer_accounts
