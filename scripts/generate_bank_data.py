@@ -669,7 +669,7 @@ def print_stats(db_path: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate bank retail test database")
-    parser.add_argument("--db-path", default="bank_test.db", help="Output SQLite database path")
+    parser.add_argument("--db-path", default="bank.db", help="Output SQLite database path")
     parser.add_argument("--customers", type=int, default=100, help="Number of customers")
     parser.add_argument("--transactions", type=int, default=2000, help="Number of transactions")
     parser.add_argument("--stats", action="store_true", help="Print statistics after generation")
