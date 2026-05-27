@@ -183,7 +183,17 @@ class RAGRetriever:
         results = self.retrieve_hybrid(query, top_k=top_k)
         parts = []
         if results.get("schema"):
-            parts.append("【可用 Schema】\n" + "\n".join(f"- {r['text']}" for r in results["schema"]))
+            # 分离普通 schema 和 join 关系
+            schema_texts = [r["text"] for r in results["schema"] if r.get("type") != "join"]
+            join_texts = [r["text"] for r in results["schema"] if r.get("type") == "join"]
+            if schema_texts:
+                parts.append("【可用 Schema】\n" + "\n".join(f"- {t}" for t in schema_texts))
+            if join_texts:
+                parts.append(
+                    "【表关联关系】\n"
+                    + "\n".join(f"- {t}" for t in join_texts)
+                    + "\n\n当用户问题涉及非主表字段（如客户名、品牌、单价）时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义。"
+                )
         if results.get("metrics"):
             parts.append("【可用指标】\n" + "\n".join(f"- {r['text']}" for r in results["metrics"]))
         if results.get("terms"):

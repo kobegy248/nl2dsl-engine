@@ -82,6 +82,29 @@ def _build_metrics_records(metrics_yaml: dict, embedder) -> tuple[list[dict], li
             "name": name,
         })
 
+    # 同步 data_sources 中的 joins 关系到 schema collection
+    for ds_name, ds_info in metrics_yaml.get("data_sources", {}).items():
+        joins = ds_info.get("joins", {})
+        if joins:
+            table = ds_info.get("table", ds_name)
+            join_parts = []
+            for join_table, join_cfg in joins.items():
+                on_field = join_cfg.get("on", "")
+                join_type = join_cfg.get("type", "inner")
+                alias = join_cfg.get("alias", "")
+                alias_str = f", alias={alias}" if alias else ""
+                join_parts.append(
+                    f"{join_type.upper()} JOIN {join_table} ON {on_field}{alias_str}"
+                )
+            text = f"表关联: {ds_name} ({table}) 可以 " + "; ".join(join_parts)
+            schema_records.append({
+                "id": _hash_id(f"join_{ds_name}"),
+                "vector": embedder.embed(text),
+                "text": text,
+                "type": "join",
+                "name": ds_name,
+            })
+
     return schema_records, metric_records
 
 

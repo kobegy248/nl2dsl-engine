@@ -88,6 +88,11 @@ def _build_fallback_prompt(question: str) -> str:
 - 数据源: products (对应表 product_dim), 字段: product_id, product_name, brand, category, price
 - 数据源: customers (对应表 customer_dim), 字段: customer_id, customer_name, customer_type, register_date, region
 
+【表关联关系】
+- orders (order_fact) 可以 INNER JOIN product_dim ON product_id, alias=p
+- orders (order_fact) 可以 LEFT JOIN customer_dim ON customer_id, alias=c
+- 当用户问题涉及非主表字段（如客户名、品牌、单价）时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义
+
 【可用指标】
 - sales_amount: SUM(pay_amount), 销售额（实付金额合计）
 - gmv: SUM(order_amount), 成交总额
@@ -101,7 +106,8 @@ def _build_fallback_prompt(question: str) -> str:
 【重要规则】
 1. data_source 必须是 "orders"，不要写表名
 2. metrics 的 alias 必须是已注册的指标名（如 sales_amount, gmv 等）
-3. 不要输出任何解释文字，只输出 JSON
+3. 涉及客户维度（customer_name, customer_type 等）时 joins 中必须包含 customer_dim; 涉及产品维度（brand, category, price 等）时 joins 中必须包含 product_dim
+4. 不要输出任何解释文字，只输出 JSON
 
 【用户问题】
 {question}
