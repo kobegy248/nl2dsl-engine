@@ -96,37 +96,48 @@ class TestRouteLLMAvailability:
 
 
 class TestRouteAfterValidate:
-    def test_returns_error_when_status_is_error(self):
-        state = make_state(status="error", dsl_attempts=None)
-        assert route_after_validate(state) == "error"
-
     def test_returns_ok_when_no_attempts_yet(self):
         state = make_state(status="pending", dsl_attempts=None)
         assert route_after_validate(state) == "ok"
 
-    def test_returns_ok_when_attempts_within_limit(self):
+    def test_returns_ok_when_last_generation_attempt_succeeded(self):
+        # After a successful generation (source=llm/mock) validate_dsl also
+        # succeeded, so the last record is a generation attempt.
         state = make_state(
             status="pending",
-            dsl_attempts=[{"source": "llm"}],
+            dsl_attempts=[{"source": "llm", "valid": True}],
         )
         assert route_after_validate(state) == "ok"
 
-    def test_returns_retry_when_last_attempt_invalid(self):
+    def test_returns_retry_when_last_validation_failed(self):
+        # One generation attempt + one validation failure → retry allowed.
         state = make_state(
-            status="pending",
-            dsl_attempts=[{"dsl": {}, "valid": False}],
+            status="error",
+            dsl_attempts=[
+                {"source": "llm", "valid": True},
+                {"source": "validation", "valid": False},
+            ],
         )
         assert route_after_validate(state) == "retry"
 
-    def test_returns_error_when_exceeded_max_retries(self):
+    def test_returns_error_when_retries_exhausted(self):
+        # 3 generation attempts + 3 validation failures → exhausted.
         state = make_state(
-            status="pending",
+            status="error",
             dsl_attempts=[
-                {"dsl": {}, "valid": False},
-                {"dsl": {}, "valid": False},
-                {"dsl": {}, "valid": False},
+                {"source": "llm", "valid": True},
+                {"source": "validation", "valid": False},
+                {"source": "llm_corrected_agentic", "valid": True},
+                {"source": "validation", "valid": False},
+                {"source": "llm_corrected_agentic", "valid": True},
+                {"source": "validation", "valid": False},
             ],
         )
+        assert route_after_validate(state) == "error"
+
+    def test_returns_error_on_fatal_error_no_attempts(self):
+        # Fatal error without any dsl_attempts still returns error via legacy path.
+        state = make_state(status="error", dsl_attempts=[{"source": "other"}])
         assert route_after_validate(state) == "error"
 
 

@@ -151,8 +151,8 @@ class TestWithErrorHandler:
         assert result["status"] == "error"
         assert result["error"] == "Invalid input"
         assert result["error_code"] == "VALIDATION_ERROR"
-        assert result["trace"]["step"] == "test_node"
-        assert result["trace"]["status"] == "error"
+        assert result["trace"][0]["step"] == "test_node"
+        assert result["trace"][0]["status"] == "error"
 
     def test_catches_generic_exception(self):
         """Decorator should catch generic Exception and convert to error state."""
@@ -168,7 +168,7 @@ class TestWithErrorHandler:
         assert result["status"] == "error"
         assert "Something went wrong" in result["error"]
         assert result["error_code"] == "INTERNAL_ERROR"
-        assert result["trace"]["step"] == "test_node"
+        assert result["trace"][0]["step"] == "test_node"
 
     def test_catches_subclass_of_nl2dslexception(self):
         """Decorator should catch any NL2DSLException subclass."""
@@ -339,14 +339,16 @@ class TestValidateDSLNode:
             limit=10,
         )
         result = nodes["validate_dsl_node"](base_state)
-        assert result["trace"]["step"] == "validate_dsl"
-        assert result["trace"]["status"] == "success"
+        assert result["trace"][0]["step"] == "validate_dsl"
+        assert result["trace"][0]["status"] == "success"
 
-    def test_none_dsl_raises(self, nodes, base_state):
+    def test_none_dsl_returns_error(self, nodes, base_state):
         base_state["dsl"] = None
         result = nodes["validate_dsl_node"](base_state)
         assert result["status"] == "error"
         assert result["error_code"] == "VALIDATION_ERROR"
+        assert result["dsl_attempts"]["source"] == "validation"
+        assert result["dsl_attempts"]["valid"] is False
 
 
 # ---------------------------------------------------------------------------

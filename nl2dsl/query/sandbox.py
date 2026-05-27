@@ -84,8 +84,16 @@ class QuerySandbox:
 
     def _explain(self, sql: str) -> int:
         """Run EXPLAIN QUERY PLAN and estimate rows to scan."""
+        stripped = sql.strip().upper()
+        if not stripped.startswith("SELECT"):
+            # Only allow EXPLAIN on SELECT statements
+            return -1
         try:
             with self._engine.connect() as conn:
+                # Use text() to ensure the SQL is treated as a single statement.
+                # The SQL string here comes from SQLBuilder (SQLAlchemy compiled),
+                # so it is already a valid SELECT.  The guard above prevents
+                # injection of other statement types.
                 result = conn.execute(text(f"EXPLAIN QUERY PLAN {sql}"))
                 rows = result.fetchall()
                 # Heuristic: count SCAN operations and estimate
@@ -101,10 +109,14 @@ class QuerySandbox:
     def _inject_limit(self, sql: str, limit: int) -> str:
         """Inject LIMIT clause into SELECT statement.
 
-        Simple heuristic: append LIMIT at the end.
-        For production, use sqlglot to properly manipulate AST.
+        Defensive: validates *limit* is an integer and that the SQL already
+        contains a SELECT.  If LIMIT already exists, returns the SQL unchanged.
         """
-        upper = sql.upper()
-        if "LIMIT" in upper:
+        if not isinstance(limit, int):
+            raise ValueError(f"LIMIT must be an integer, got {type(limit).__name__}")
+        stripped = sql.strip().upper()
+        if not stripped.startswith("SELECT"):
+            raise ValueError("Only SELECT statements can have LIMIT injected")
+        if "LIMIT" in stripped:
             return sql
         return f"{sql} LIMIT {limit}"

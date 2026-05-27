@@ -50,12 +50,14 @@ def with_error_handler(node_name: str):
                     "status": "error",
                     "error": exc.message,
                     "error_code": exc.error_code,
-                    "trace": {
-                        "step": node_name,
-                        "status": "error",
-                        "error_code": exc.error_code,
-                        "error_message": exc.message,
-                    },
+                    "trace": [
+                        {
+                            "step": node_name,
+                            "status": "error",
+                            "error_code": exc.error_code,
+                            "error_message": exc.message,
+                        }
+                    ],
                 }
             except Exception as exc:
                 logger.error("[%s] Unexpected exception: %s", node_name, exc, exc_info=True)
@@ -63,12 +65,14 @@ def with_error_handler(node_name: str):
                     "status": "error",
                     "error": str(exc),
                     "error_code": "INTERNAL_ERROR",
-                    "trace": {
-                        "step": node_name,
-                        "status": "error",
-                        "error_code": "INTERNAL_ERROR",
-                        "error_message": str(exc),
-                    },
+                    "trace": [
+                        {
+                            "step": node_name,
+                            "status": "error",
+                            "error_code": "INTERNAL_ERROR",
+                            "error_message": str(exc),
+                        }
+                    ],
                 }
 
         return wrapper
@@ -547,14 +551,81 @@ def _make_check_col_permission_node(col_security: ColumnLevelSecurity):
 
 
 def _make_validate_dsl_node(validator: DSLValidator):
-    """Create a validate_dsl node with injected validator."""
-    @with_error_handler("validate_dsl")
+    """Create a validate_dsl node with injected validator.
+
+    On validation failure the node appends a dsl_attempt record with
+    source="validation" and valid=False so that route_after_validate can
+    decide whether to retry (correct_dsl) or give up (error).
+    """
+
     def validate_dsl_node(state: QueryState) -> dict:
         dsl = state.get("dsl")
         if dsl is None:
-            raise ValidationError("DSL is None, cannot validate")
-        validator.validate(dsl)
-        return {"trace": {"step": "validate_dsl", "status": "success"}}
+            return {
+                "status": "error",
+                "error": "DSL is None, cannot validate",
+                "error_code": "VALIDATION_ERROR",
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": "DSL is None",
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": "VALIDATION_ERROR",
+                        "error_message": "DSL is None, cannot validate",
+                    }
+                ],
+            }
+        try:
+            validator.validate(dsl)
+            return {"trace": [{"step": "validate_dsl", "status": "success"}]}
+        except ValidationError as exc:
+            logger.warning("[validate_dsl] Validation failed: %s - %s", exc.error_code, exc.message)
+            return {
+                "status": "error",
+                "error": exc.message,
+                "error_code": exc.error_code,
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": exc.message,
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": exc.error_code,
+                        "error_message": exc.message,
+                    }
+                ],
+            }
+        except Exception as exc:
+            logger.error("[validate_dsl] Unexpected exception: %s", exc, exc_info=True)
+            return {
+                "status": "error",
+                "error": str(exc),
+                "error_code": "INTERNAL_ERROR",
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": str(exc),
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": "INTERNAL_ERROR",
+                        "error_message": str(exc),
+                    }
+                ],
+            }
+
     return validate_dsl_node
 
 
@@ -589,6 +660,7 @@ def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = 
             "dsl_attempts": {
                 "source": "llm",
                 "dsl": dsl.model_dump(),
+                "valid": True,
                 "timestamp": time.time(),
             },
             "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
@@ -610,6 +682,7 @@ def _make_mock_dsl_node(registry_dict: dict):
             "dsl_attempts": {
                 "source": "mock",
                 "dsl": dsl.model_dump(),
+                "valid": True,
                 "timestamp": time.time(),
             },
             "trace": {"step": "mock_dsl", "status": "success", "source": "mock"},
@@ -713,6 +786,7 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
                     "dsl_attempts": {
                         "source": "llm_corrected_agentic",
                         "dsl": dsl.model_dump(),
+                        "valid": True,
                         "timestamp": time.time(),
                         "error_feedback": error,
                         "retrieval_query": retrieval_query,
@@ -735,6 +809,7 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
             "dsl_attempts": {
                 "source": "mock_corrected",
                 "dsl": dsl.model_dump(),
+                "valid": True,
                 "timestamp": time.time(),
                 "error_feedback": error,
             },
@@ -1031,6 +1106,7 @@ def create_node_functions(
             "dsl_attempts": {
                 "source": "llm",
                 "dsl": dsl.model_dump(),
+                "valid": True,
                 "timestamp": time.time(),
             },
             "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
@@ -1048,21 +1124,84 @@ def create_node_functions(
             "dsl_attempts": {
                 "source": "mock",
                 "dsl": dsl.model_dump(),
+                "valid": True,
                 "timestamp": time.time(),
             },
             "trace": {"step": "mock_dsl", "status": "success", "source": "mock"},
         }
 
     # -----------------------------------------------------------------------
-    # validate_dsl_node
+    # validate_dsl_node — returns explicit validation record on failure
+    # so route_after_validate can decide retry vs error based on the
+    # "source" / "valid" flags rather than the generic status field.
     # -----------------------------------------------------------------------
-    @with_error_handler("validate_dsl")
     def validate_dsl_node(state: QueryState) -> dict:
         dsl = state.get("dsl")
         if dsl is None:
-            raise ValidationError("DSL is None, cannot validate")
-        validator.validate(dsl)
-        return {"trace": {"step": "validate_dsl", "status": "success"}}
+            return {
+                "status": "error",
+                "error": "DSL is None, cannot validate",
+                "error_code": "VALIDATION_ERROR",
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": "DSL is None",
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": "VALIDATION_ERROR",
+                        "error_message": "DSL is None, cannot validate",
+                    }
+                ],
+            }
+        try:
+            validator.validate(dsl)
+            return {"trace": [{"step": "validate_dsl", "status": "success"}]}
+        except ValidationError as exc:
+            logger.warning("[validate_dsl] Validation failed: %s - %s", exc.error_code, exc.message)
+            return {
+                "status": "error",
+                "error": exc.message,
+                "error_code": exc.error_code,
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": exc.message,
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": exc.error_code,
+                        "error_message": exc.message,
+                    }
+                ],
+            }
+        except Exception as exc:
+            logger.error("[validate_dsl] Unexpected exception: %s", exc, exc_info=True)
+            return {
+                "status": "error",
+                "error": str(exc),
+                "error_code": "INTERNAL_ERROR",
+                "dsl_attempts": {
+                    "source": "validation",
+                    "valid": False,
+                    "error": str(exc),
+                    "timestamp": time.time(),
+                },
+                "trace": [
+                    {
+                        "step": "validate_dsl",
+                        "status": "error",
+                        "error_code": "INTERNAL_ERROR",
+                        "error_message": str(exc),
+                    }
+                ],
+            }
 
     # -----------------------------------------------------------------------
     # correct_dsl_node — see _make_correct_dsl_node (agentic version) above.

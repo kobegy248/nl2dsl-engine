@@ -53,33 +53,45 @@ def route_llm_availability(state: QueryState, llm_client) -> str:
 def route_after_validate(state: QueryState) -> str:
     """Route after validate_dsl_node.
 
-    Returns:
-        - "error"  if the current status is "error" (validation failed fatally)
-        - "retry"  if the last validation attempt failed but we have retry attempts left
-        - "ok"     if validation passed
+    Logic:
+      - If the last dsl_attempt is a validation failure (source="validation",
+        valid=False), check how many *generation* attempts have been made.
+        If under the limit, route to "retry" (correct_dsl), else "error".
+      - If the last dsl_attempt is a successful generation/correction without
+        a validation failure following it, validation passed → "ok".
+      - Otherwise fallback to legacy status-based logic.
     """
-    status = state.get("status")
-    if status == "error":
-        return "error"
-
     dsl_attempts = state.get("dsl_attempts")
     if not dsl_attempts:
         return "ok"
 
-    # Debug: ensure dsl_attempts is a list
     if isinstance(dsl_attempts, dict):
-        # Single attempt stored as dict (shouldn't happen with proper reducer)
         dsl_attempts = [dsl_attempts]
 
     last_attempt = dsl_attempts[-1]
-    if last_attempt.get("valid") is False:
-        # Validation failed, check retry limit
-        attempt_count = len(dsl_attempts)
+
+    # --- New agentic-aware path: check explicit valid flag ---
+    if last_attempt.get("source") == "validation" and last_attempt.get("valid") is False:
+        # Count only generation attempts (exclude validation records)
+        generation_attempts = [
+            a for a in dsl_attempts if a.get("source") != "validation"
+        ]
         max_retries = 3
-        if attempt_count >= max_retries:
+        if len(generation_attempts) >= max_retries:
             return "error"
         return "retry"
 
+    # Last record is a generation attempt (llm / llm_corrected / mock) →
+    # it means validate_dsl succeeded (otherwise a validation record would
+    # have been appended).  Treat as "ok".
+    last_source = last_attempt.get("source", "")
+    if last_source.startswith(("llm", "mock")):
+        return "ok"
+
+    # --- Legacy fallback (should rarely hit) ---
+    status = state.get("status")
+    if status == "error":
+        return "error"
     return "ok"
 
 
