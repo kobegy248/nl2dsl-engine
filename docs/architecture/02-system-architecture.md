@@ -68,15 +68,21 @@ nl2dsl/
 │   │   └── builder.py       # DSL 构建辅助工具
 │   ├── llm/
 │   │   ├── __init__.py
-│   │   ├── agent.py         # LangGraph 工作流
 │   │   ├── prompts.py       # Prompt 模板
 │   │   └── client.py        # LLM API 客户端封装
+│   ├── graph/               # LangGraph StateGraph 查询管道
+│   │   ├── state.py         # QueryState TypedDict（含 Annotated reducer）
+│   │   ├── nodes.py         # 所有节点函数
+│   │   ├── edges.py         # 条件路由函数
+│   │   ├── subgraphs.py     # 权限检查子图 + 验证子图
+│   │   └── builder.py       # StateGraph 组装
 │   ├── rag/
 │   │   ├── __init__.py
 │   │   ├── base.py          # 向量存储抽象基类
 │   │   ├── store.py         # Milvus Lite / Milvus Server 实现
 │   │   ├── embedder.py      # 文本嵌入
-│   │   └── retriever.py     # 检索逻辑
+│   │   ├── retriever.py     # 检索逻辑
+│   │   └── sync.py          # 配置驱动的启动自检同步
 │   ├── permission/
 │   │   ├── __init__.py
 │   │   ├── models.py        # 权限模型
@@ -102,7 +108,8 @@ nl2dsl/
 │   ├── feedback/
 │   │   ├── __init__.py
 │   │   └── collector.py     # 反馈收集与学习
-│   ├── engine.py            # 引擎入口（插件加载 + 默认组件注册）
+│   ├── engine.py            # 引擎入口（多域发现 + 插件加载 + 默认组件注册）
+│   ├── domain_context.py    # 每域组件容器（DomainContext）
 │   ├── plugin.py            # 插件框架（Registry + Pipeline + Plugin ABC）
 │   └── protocols.py         # 组件 Protocol 定义
 │

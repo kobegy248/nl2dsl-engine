@@ -27,6 +27,6 @@
 | Query Planner | 自定义实现 |
 | SQL 表达式构建 | SQLAlchemy Core |
 | SQL 方言转换 | sqlglot |
-| 向量库 | Milvus Lite（本地文件），预留 Milvus Server 切换 |
-| 文本嵌入 | SentenceTransformers |
-| 数据库 | SQLite（业务库 + 审计/元数据共用，单文件） |
+| 向量库 | Milvus Lite（本地文件，每域独立），预留 Milvus Server 切换 |
+| 文本嵌入 | SentenceTransformers（BGE-base-zh-v1.5，跨域共享） |
+| 数据库 | SQLite（每域独立文件，存储于 `data/` 目录） |

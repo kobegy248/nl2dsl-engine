@@ -12,10 +12,13 @@
 ```json
 {
   "question": "查询华东地区 2024Q1 销售额最高的 10 个产品",
+  "domain": "ecommerce",
   "user_id": "u123",
   "tenant_id": "t001"
 }
 ```
+
+`domain` 字段可选，默认为 `"ecommerce"`。Engine 自动发现 configs/ 目录下的所有域（如 `bank_metrics.yaml` → `"bank"`），每个域有独立的 DB + Milvus + RAG。
 
 **Response 示例：**
 ```json
@@ -33,8 +36,8 @@
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/v1/schema` | GET | 获取所有表结构 |
-| `/api/v1/metrics` | GET/POST | 指标查询/注册 |
+| `/api/v1/schema` | GET | 获取语义层 Schema（`?domain=` 可选，默认 ecommerce） |
+| `/api/v1/metrics` | GET | 获取指标列表（`?domain=` 可选） |
 | `/api/v1/feedback` | POST | 提交 DSL 纠错反馈 |
 
 ## 21.3 枚举管理接口

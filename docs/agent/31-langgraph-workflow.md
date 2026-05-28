@@ -5,30 +5,46 @@
 ```
 START
   ↓
-意图识别 — 理解用户意图、识别计算类型（查询/对比/趋势）
+clarification — 歧义检测，有歧义直接返回
   ↓
-查询拆分 — 将多意图问题拆分为独立子查询
+decompose — 复杂查询改写（对比/同比/趋势 → 单 DSL）
   ↓
-RAG 检索 — 为每个子查询召回相关表结构、指标、示例
+RAG 检索 — 召回 schema/metrics/terms/history（含 join 关系）
   ↓
-LLM 生成 DSL — 根据上下文生成初始 DSL
+generate_dsl — LLM 生成初始 DSL
   ↓
-DSL 自检 — LLM 检查 DSL 合理性（字段是否存在、逻辑是否通顺）
+validate_dsl — 结构校验
   ↓
 校验通过？
-  ├─ 通过 → 权限注入
-  ├─ 不通过 → 修正重试（最多 3 次）
+  ├─ 通过 → permission_check
+  ├─ 不通过 → correct_dsl（Agentic：LLM 决策检索词 → 定向 RAG → 重生成）
+  │              ↓
+  │           validate_dsl（重试，最多 3 次）
   └─ 修正失败 → 返回错误
   ↓
-权限注入 — 自动注入行级/列级权限
+permission_check — 行级注入 + 列级检查
   ↓
-Query Planner — 优化、Join 推导
+resolve_semantic — 指标展开
   ↓
-SQL 生成与执行
+build_sql — SQLAlchemy Core 构建
   ↓
-结果合并 — 多子查询结果合并/对比计算
+scan_sql — 安全扫描
   ↓
-审计日志 — 记录查询全过程
+sandbox_check — EXPLAIN 预检
+  ↓
+通过？
+  ├─ 风险 → human_review（中断等待人工确认）
+  └─ 通过 → execute_sql
+  ↓
+execute_sql — 数据库执行
+  ↓
+成功？
+  ├─ 失败 → simplify_dsl → build_sql（重试）
+  └─ 成功 → verify_dsl
+  ↓
+verify_dsl — LLM 自检（PASS/WARN/FAIL，warning-only）
+  ↓
+审计日志 — 记录完整 trace 链路
   ↓
 返回结果
 ```
@@ -39,24 +55,22 @@ SQL 生成与执行
 
 **链路节点定义：**
 
-| 节点 | 输入 | 输出 | 失败时阻断后续 |
-|------|------|------|--------------|
-| `intent_parse` | 用户问题 | 意图类型（查询/对比/趋势/多子查询） | 否（可降级为简单查询） |
-| `query_split` | 用户问题 + 意图 | 子查询列表 | 否（无法拆分则作为单查询） |
-| `rag_retrieve` | 子查询 | 检索到的上下文片段 | 否（可降级为空上下文） |
-| `llm_generate` | 子查询 + 上下文 | 原始 DSL (JSON) | 是 |
-| `dsl_parse` | 原始 DSL | 解析后的 DSL 对象 | 是 |
-| `dsl_validate` | DSL 对象 | 校验结果 | 是 |
-| `permission_inject` | DSL + 用户信息 | 注入权限后的 DSL | 是 |
-| `semantic_resolve` | DSL | 展开指标后的 DSL | 是 |
-| `query_plan` | DSL | 优化后的执行计划 | 是 |
-| `sql_build` | 执行计划 | 标准 SQL | 是 |
-| `dialect_convert` | 标准 SQL | 方言 SQL | 是 |
-| `sql_scan` | 方言 SQL | 扫描结果 | 是 |
-| `sql_execute` | 方言 SQL | 查询结果 | 是 |
-| `result_merge` | 多子查询结果 | 合并后的最终结果 | 否 |
-| `result_mask` | 查询结果 | 脱敏后的结果 | 否 |
-| `audit_log` | 完整链路 | 日志记录 | 否 |
+| 节点 | 输入 | 输出 | 失败时阻断后续 | Agentic |
+|------|------|------|--------------|---------|
+| `clarification` | 用户问题 | 歧义列表 / None | 是（有歧义直接返回） | 否 |
+| `decompose` | 用户问题 | 改写后的问题 / 原问题 | 否 | **是** |
+| `rag_retrieve` | 子查询 | 检索到的上下文片段 | 否（可降级为空上下文） | 否 |
+| `generate_dsl` | 问题 + RAG context | 原始 DSL (JSON) | 是 | RAG |
+| `validate_dsl` | DSL 对象 | 校验结果 | 是 | 否 |
+| `correct_dsl` | 错误 + 上次 DSL | 修正后的 DSL | 否（失败进入 mock） | **是** |
+| `permission_inject` | DSL + 用户信息 | 注入权限后的 DSL | 是 | 否 |
+| `semantic_resolve` | DSL | 展开指标后的 DSL | 是 | 否 |
+| `build_sql` | DSL | 标准 SQL | 是 | 否 |
+| `scan_sql` | 标准 SQL | 扫描结果 | 是 | 否 |
+| `sandbox_check` | SQL + DB | 沙箱结果 | 是 | 否 |
+| `execute_sql` | SQL | 查询结果 | 是 | 否 |
+| `verify_dsl` | DSL + 结果 + 原问题 | PASS/WARN/FAIL | 否（warning-only） | **是** |
+| `audit_log` | 完整链路 | 日志记录 | 否 | 否 |
 
 **链路记录格式：**
 

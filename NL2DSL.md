@@ -59,8 +59,13 @@
            │
            ▼
 ┌─────────────────────────┐
+│ Decompose (查询改写)     │ (对比/同比/趋势 → 单 DSL)
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
 │ RAG Retrieval           │
-│  ├─ schema   (jieba)    │
+│  ├─ schema   (jieba)    │ 含 join 关系
 │  ├─ metrics  (jieba)    │
 │  ├─ terms    (jieba)    │
 │  └─ history  (整句语义) │
@@ -82,6 +87,8 @@
            ▼
 ┌─────────────────────────┐
 │ Schema Validator        │
+│  └─ fail → Agentic      │  LLM 决策检索词 → 定向 RAG → 重生成
+│     Correct DSL (retry) │
 └──────────┬──────────────┘
            │
            ▼
@@ -101,7 +108,7 @@
            │
            ▼
 ┌─────────────────────────┐
-│ SQL Scanner + Sandbox   │ (静态扫描 + EXPLAIN 预检)
+│ SQL Scanner + Sandbox   │ (静态扫描 + EXPLAIN 预检 + SQL 注入防护)
 └──────────┬──────────────┘
            │
            ▼
@@ -111,9 +118,36 @@
            │
            ▼
 ┌─────────────────────────┐
+│ Verify DSL              │ (LLM 自检: PASS/WARN/FAIL)
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
 │ Audit Logger            │
 └─────────────────────────┘
 ```
+
+### 2.2 多域支持 (Multi-Domain)
+
+Engine 自动发现 `configs/` 目录下的所有业务域：
+
+- `metrics.yaml`（无前缀）→ domain="ecommerce"
+- `bank_metrics.yaml` → domain="bank"
+
+每个域获得完全独立的运行环境：
+
+| 资源 | 每域独立 | 跨域共享 |
+|------|---------|---------|
+| SQLite DB | ✅ `data/{domain}.db` | ❌ |
+| Milvus 向量库 | ✅ `data/{domain}_milvus_lite.db` | ❌ |
+| 语义注册表 | ✅ 独立 YAML | ❌ |
+| Validator / Builder | ✅ 独立实例 | ❌ |
+| RAG Retriever | ✅ 独立集合 | ❌ |
+| StateGraph | ✅ 独立编译 | ❌ |
+| LLM Client | ❌ | ✅ |
+| BGE Embedder | ❌ | ✅ |
+
+API 通过 `domain` 参数路由到对应域的 DomainContext：`ctx = engine.get_domain(domain)`。
 
 ---
 
@@ -358,7 +392,28 @@ sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
 * ClickHouse
 * Hive / SparkSQL
 
-### 8.3 未来演进：Calcite 集成
+### 8.3 Join 关系管理
+
+多表查询的 Join 关系通过 `metrics.yaml` 中的 `data_sources.*.joins` 配置定义：
+
+```yaml
+data_sources:
+  orders:
+    table: order_fact
+    joins:
+      product_dim:
+        on: product_id
+        type: inner
+        alias: p
+      customer_dim:
+        on: customer_id
+        type: left
+        alias: c
+```
+
+启动时 `rag/sync.py` 将 joins 同步到 schema 集合（`type="join"`）。RAG prompt 中单独展示【表关联关系】区块，LLM 据此在 DSL 中填充正确的 `joins` 字段。
+
+### 8.4 未来演进：Calcite 集成
 
 后续可引入 Apache Calcite 实现更复杂的优化：
 
@@ -411,13 +466,22 @@ User Prompt（`rag/retriever.py:build_prompt`）：
 2. 退而抓第一个 `{` 到最后一个 `}` 之间内容
 3. 最后尝试原始字符串
 
-### 9.4 LLM 不稳定性的三层兜底
+### 9.4 LLM 不稳定性的四层兜底
 
 | 层 | 函数 | 作用 |
 |----|------|------|
 | 解析层 | `_parse_llm_output` | 从 markdown 中抽 JSON |
 | 后处理 | `_post_process_dsl` | 字段补全（缺 func/field 时反查） |
 | 语义兜底 | `_semantic_fix_dsl` | filter（地区/渠道/客户类型）和 limit（top-N）硬性兜底 |
+| 执行后自检 | `verify_dsl` | LLM 检查 DSL/结果是否真正回答了用户问题 |
+
+### 9.5 Agentic 节点
+
+**decompose**：输入含"对比/同比/环比/趋势/今年"等复杂标记时，LLM 将问题改写为单 DSL 可表达形式。简单问题直接透传，延迟有界。
+
+**correct_dsl（Agentic RAG）**：校验失败后，LLM 先决定需要补充什么知识（提取检索关键词），然后定向 RAG 检索，再基于补充 context 重生成 DSL。三步：决策 → 检索 → 再生。
+
+**verify_dsl**：执行成功后，LLM 自检 DSL/结果是否真正回答用户原始问题，输出 PASS/WARN/FAIL。目前 warning-only，未来可路由 FAIL 回 correct_dsl。
 
 **注意**：metrics/dimensions 的语义识别**完全交给 LLM + RAG**，代码层不再写关键词列表。
 
@@ -428,9 +492,9 @@ User Prompt（`rag/retriever.py:build_prompt`）：
 ### 10.1 主图节点
 
 ```
-START → clarification → validation(子图) → permission_check(子图)
+START → clarification → decompose → validation(子图) → permission_check(子图)
       → resolve_semantic → build_sql → scan_sql → sandbox_check
-      → [pass]   execute_sql → [success] END
+      → [pass]   execute_sql → [success] verify_dsl → END
       → [risk]   human_review → [approved] execute_sql
       → [fail]   simplify_dsl → build_sql (重试)
 ```
@@ -444,8 +508,10 @@ generate_dsl (RAG + LLM) → validate_dsl
             ↓ fail            ↓ ok → END
         mock_dsl (fallback)
             ↓
-        validate_dsl → [retry < 3] → correct_dsl → validate_dsl
+        validate_dsl → [retry < 3] → correct_dsl(agentic) → validate_dsl
 ```
+
+`correct_dsl` 是 agentic 节点：LLM 先决定检索关键词 → 定向 RAG 检索 → 基于补充 context 重生成 DSL。
 
 **permission_check 子图**：
 
@@ -456,6 +522,18 @@ inject_row_permission → check_col_permission → END
 ### 10.3 Checkpointer + 中断
 
 `InMemorySaver` 让流程可中断、可恢复。`sandbox_check` 发现风险时通过 `interrupt_before=["human_review"]` 中断，等待人工调用 `/api/v1/query/resume` 继续。
+
+### 10.4 Trace 累加机制
+
+QueryState 使用 `Annotated[list[dict], add_to_list]` reducer：
+
+```python
+class QueryState(TypedDict):
+    trace: Annotated[list[dict] | None, add_to_list]
+    dsl_attempts: Annotated[list[dict] | None, add_to_attempts]
+```
+
+每个节点返回的 `trace` 条目自动追加到列表中，形成完整的调用链路。`dsl_attempts` 同样累加，记录每次生成尝试（含 LLM / mock / corrected 来源和 valid 标志）。
 
 ---
 
@@ -518,6 +596,11 @@ inject_row_permission → check_col_permission → END
 * 实际执行延迟（超阈值标记风险）
 * 触发风险时中断进入 `human_review`
 
+**SQL 注入防护**：
+- `_explain()`: 强制验证输入以 `SELECT` 开头（前缀白名单）
+- `_inject_limit()`: 强制验证输入以 `SELECT` 开头，limit 参数经过 `int()` 校验
+- `literal_binds=True` 确保参数值被正确转义，不直接拼接 SQL 字符串
+
 ---
 
 ## 13. 反馈闭环
@@ -560,21 +643,34 @@ inject_row_permission → check_col_permission → END
 
 ```
 User
- → API
+ → API (提取 domain, user_id, tenant_id)
  → LangGraph StateGraph:
      clarification
-     → validation 子图 (RAG → LLM → 校验 → 修正循环)
+     → decompose (复杂查询改写)
+     → validation 子图 (RAG → LLM → 校验 → Agentic 修正循环)
      → permission_check 子图 (行级注入 + 列级检查)
      → resolve_semantic
      → build_sql
      → scan_sql
-     → sandbox_check
+     → sandbox_check (含 SQL 注入防护)
      → [risk] human_review (中断)
      → execute_sql
      → [fail] simplify_dsl (重试)
- → Audit Logger
+     → verify_dsl (执行后自检)
+ → Audit Logger (含完整 trace list)
  → Response
 ```
+
+### 15.1 多域路由
+
+API 层根据请求中的 `domain` 字段路由到对应域的 DomainContext：
+
+```python
+ctx = engine.get_domain(req.domain)  # "ecommerce" | "bank" | ...
+result = await ctx.graph.ainvoke(state, config)
+```
+
+每个域拥有独立的：SQLite DB、Milvus 向量库、语义注册表、Validator、SQLBuilder、Sandbox、RAG Retriever、编译后的 StateGraph。LLM Client 和 BGE Embedder 跨域共享。
 
 ---
 

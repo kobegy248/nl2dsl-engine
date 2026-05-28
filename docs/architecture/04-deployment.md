@@ -19,11 +19,11 @@ services: {}
 | `NL2DSL_LLM_BASE_URL` | LLM API 基础 URL | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `NL2DSL_LLM_MODEL` | 模型名称 | `qwen-plus` |
 | `NL2DSL_VECTOR_STORE_TYPE` | 向量存储类型 | `milvus_lite`（默认） |
-| `NL2DSL_MILVUS_URI` | Milvus Lite 本地文件路径 | `./milvus_lite.db` |
-| `NL2DSL_DB_URL` | SQLite 数据库路径 | `sqlite:///./nl2dsl.db` |
+| `NL2DSL_MILVUS_URI` | Milvus Lite 本地文件路径 | 项目根目录 `data/milvus_lite.db` |
+| `NL2DSL_DB_URL` | SQLite 数据库路径 | 项目根目录 `data/nl2dsl.db` |
 | `NL2DSL_MAX_LIMIT` | 单次查询最大返回行数 | `10000` |
 
-> **数据库说明：** 使用 SQLite 单文件存储，业务数据和审计/元数据表存于同一文件，通过表前缀区分（如 `nl2dsl_audit_log`、`nl2dsl_enum_mappings`）。零配置、零部署，适合单机/内网环境。
+> **数据库说明：** 使用 SQLite 单文件存储，业务数据和审计/元数据表存于同一文件。默认存储在项目根目录 `data/` 下（自动创建），不受当前工作目录影响。多域场景下每个域有独立的 DB 文件（如 `data/bank.db`）。零配置、零部署，适合单机/内网环境。
 
 ## 4.2 性能考虑
 
