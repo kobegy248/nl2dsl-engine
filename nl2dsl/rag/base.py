@@ -16,3 +16,15 @@ class VectorStore(ABC):
 
     @abstractmethod
     def get_all(self, collection: str) -> list[dict]: ...
+
+
+class RerankerBase(ABC):
+    """Abstract base for reranker models (Cross-Encoder)."""
+
+    @abstractmethod
+    def rerank(self, query: str, candidates: list[str]) -> list[float]:
+        """Return relevance score for each candidate text.
+
+        Higher = more relevant. Typical range: 0 ~ 1.
+        """
+        ...

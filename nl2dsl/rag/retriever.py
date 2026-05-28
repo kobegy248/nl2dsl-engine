@@ -19,7 +19,7 @@ _STOPWORDS = {
 
 
 class RAGRetriever:
-    """RAG retriever with jieba-based keyword extraction.
+    """RAG retriever with jieba-based keyword extraction + optional Cross-Encoder rerank.
 
     Strategy:
     1. At init time, load all keywords (record names + Chinese phrases from text)
@@ -28,12 +28,19 @@ class RAGRetriever:
     3. At query time, segment user question with jieba, filter stopwords,
        match against keyword library
     4. Also retrieve by the full query for semantic matching
-    5. Merge and deduplicate results
+    5. Merge and deduplicate results (coarse retrieval)
+    6. Optional: rerank each collection's results with Cross-Encoder
+    7. Filter by score threshold, fallback if empty, truncate to budget
     """
 
     COLLECTIONS = ["schema", "metrics", "history", "terms"]
 
-    def __init__(self, store: VectorStore, embedder: BGEEmbedder | MockEmbedder | None = None):
+    def __init__(
+        self,
+        store: VectorStore,
+        embedder: BGEEmbedder | MockEmbedder | None = None,
+        reranker=None,
+    ):
         self._store = store
         if embedder is None:
             raise ValueError(
@@ -41,6 +48,7 @@ class RAGRetriever:
                 "Pass BGEEmbedder() for production or MockEmbedder() in tests."
             )
         self._embedder = embedder
+        self._reranker = reranker
         # Load keywords dynamically from vector store
         self._keywords = self._load_keywords()
         # Register keywords into jieba for accurate segmentation
@@ -143,10 +151,11 @@ class RAGRetriever:
 
         return results
 
-    def retrieve_hybrid(self, query: str, top_k: int = 5, keyword_top_k: int = 3) -> dict[str, list[dict]]:
-        """Hybrid retrieval:
-        - schema/metrics/terms: jieba keyword-split (短命名实体精准匹配)
-        - history: full-query semantic search (找语义最相似的历史问题)
+    def _coarse_retrieve(self, query: str, top_k: int = 5, keyword_top_k: int = 3) -> dict[str, list[dict]]:
+        """Coarse retrieval (existing hybrid logic) — cast wide net.
+
+        - schema/metrics/terms: jieba keyword-split (short entity precise match)
+        - history: full-query semantic search
         """
         # 1. history: 整句语义检索
         history_results = []
@@ -179,31 +188,138 @@ class RAGRetriever:
 
         return merged
 
-    def build_context(self, query: str, top_k: int = 5) -> str:
+    def retrieve_hybrid(
+        self,
+        query: str,
+        top_k: int = 5,
+        keyword_top_k: int = 3,
+        coarse_k: int = 10,
+        threshold: float = 0.5,
+    ) -> dict[str, list[dict]]:
+        """Hybrid retrieval with optional Cross-Encoder rerank.
+
+        Flow:
+            1. Coarse retrieval (cast wide net, coarse_k per collection)
+            2. Rerank each collection independently (if reranker available)
+            3. Filter by score threshold (drop low-relevance)
+            4. Fallback to top-3 if all filtered out
+            5. Truncate to top_k per collection
+        """
+        # Step 1: coarse retrieval
+        raw = self._coarse_retrieve(query, top_k=coarse_k, keyword_top_k=keyword_top_k)
+
+        # Step 2-4: rerank + filter + fallback
+        if self._reranker is not None:
+            for col in self.COLLECTIONS:
+                candidates = raw.get(col, [])
+                if not candidates:
+                    continue
+
+                texts = [c["text"] for c in candidates]
+                try:
+                    scores = self._reranker.rerank(query, texts)
+                except Exception:
+                    # Reranker failure: keep original order, mark neutral scores
+                    scores = [0.5] * len(candidates)
+
+                for c, score in zip(candidates, scores):
+                    c["rerank_score"] = score
+
+                # Sort by rerank score (descending)
+                candidates.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+
+                # Filter by threshold
+                filtered = [c for c in candidates if c.get("rerank_score", 0) >= threshold]
+
+                # Fallback: if all filtered out, keep top 3 from original ranking
+                if not filtered and candidates:
+                    filtered = candidates[:3]
+
+                raw[col] = filtered
+
+        # Step 5: truncate to final top_k per collection
+        for col in self.COLLECTIONS:
+            raw[col] = raw[col][:top_k]
+
+        return raw
+
+    @staticmethod
+    def _format_section(col: str, texts: list[str]) -> str:
+        """Format a collection's texts into a prompt section."""
+        if col == "schema":
+            return "【可用 Schema】\n" + "\n".join(f"- {t}" for t in texts)
+        if col == "metrics":
+            return "【可用指标】\n" + "\n".join(f"- {t}" for t in texts)
+        if col == "terms":
+            return (
+                "【业务术语映射（用户问题中出现这些词时，metric 的 alias 必须用箭头右边的值）】\n"
+                + "\n".join(f"- {t}" for t in texts)
+            )
+        if col == "history":
+            return "【相似历史示例（参考它们的结构生成 DSL）】\n" + "\n\n".join(f"{t}" for t in texts)
+        return ""
+
+    def build_context(self, query: str, top_k: int = 5, max_chars: int = 4000) -> str:
+        """Build prompt context with rerank support and token budget control.
+
+        Priority order: terms > schema > metrics > history.
+        Terms are strongest constraints and must be preserved first.
+        """
         results = self.retrieve_hybrid(query, top_k=top_k)
         parts = []
-        if results.get("schema"):
-            # 分离普通 schema 和 join 关系
-            schema_texts = [r["text"] for r in results["schema"] if r.get("type") != "join"]
-            join_texts = [r["text"] for r in results["schema"] if r.get("type") == "join"]
-            if schema_texts:
-                parts.append("【可用 Schema】\n" + "\n".join(f"- {t}" for t in schema_texts))
-            if join_texts:
-                parts.append(
-                    "【表关联关系】\n"
-                    + "\n".join(f"- {t}" for t in join_texts)
-                    + "\n\n当用户问题涉及非主表字段（如客户名、品牌、单价）时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义。"
-                )
-        if results.get("metrics"):
-            parts.append("【可用指标】\n" + "\n".join(f"- {r['text']}" for r in results["metrics"]))
-        if results.get("terms"):
-            # terms 是强约束：用户用的词必须映射到 alias
-            parts.append(
-                "【业务术语映射（用户问题中出现这些词时，metric 的 alias 必须用箭头右边的值）】\n"
-                + "\n".join(f"- {r['text']}" for r in results["terms"])
+        total_chars = 0
+
+        # Handle schema: separate regular schema from join relations
+        schema_records = results.get("schema", [])
+        schema_texts = [r["text"] for r in schema_records if r.get("type") != "join"]
+        join_texts = [r["text"] for r in schema_records if r.get("type") == "join"]
+
+        if join_texts:
+            join_section = (
+                "【表关联关系】\n"
+                + "\n".join(f"- {t}" for t in join_texts)
+                + "\n\n当用户问题涉及非主表字段（如客户名、品牌、单价）时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义。"
             )
-        if results.get("history"):
-            parts.append("【相似历史示例（参考它们的结构生成 DSL）】\n" + "\n\n".join(f"{r['text']}" for r in results["history"]))
+            parts.append(join_section)
+            total_chars += len(join_section)
+
+        # Priority: terms > schema > metrics > history
+        priority_order = [
+            ("terms", results.get("terms", [])),
+            ("schema", [{"text": t} for t in schema_texts]),
+            ("metrics", results.get("metrics", [])),
+            ("history", results.get("history", [])),
+        ]
+
+        for col, records in priority_order:
+            section_texts = []
+            for r in records:
+                text = r["text"]
+                section_texts.append(text)
+
+            if not section_texts:
+                continue
+
+            section = self._format_section(col, section_texts)
+            if not section:
+                continue
+
+            # Check if adding this section would exceed budget
+            separator_len = 2 if parts else 0  # "\n\n" between parts
+            if total_chars + separator_len + len(section) > max_chars:
+                # Try with fewer records, dropping from the end
+                for n in range(len(section_texts) - 1, 0, -1):
+                    reduced = self._format_section(col, section_texts[:n])
+                    if reduced and total_chars + separator_len + len(reduced) <= max_chars:
+                        parts.append(reduced)
+                        total_chars += separator_len + len(reduced)
+                        break
+                # If even 1 record doesn't fit, stop adding sections
+                break
+            else:
+                parts.append(section)
+                total_chars += separator_len + len(section)
+
         return "\n\n".join(parts)
 
     def build_prompt(self, query: str, top_k: int = 5) -> str:

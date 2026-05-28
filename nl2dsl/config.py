@@ -21,5 +21,14 @@ class Settings(BaseSettings):
     milvus_host: str = "localhost"
     milvus_port: int = 19530
 
+    # Reranker settings
+    reranker_enabled: bool = True
+    reranker_model: str = "D:/claude_work/model/bge-reranker-base"
+    reranker_device: str = "cpu"
+    reranker_coarse_k: int = 10
+    reranker_fine_n: int = 5
+    reranker_threshold: float = 0.5
+    reranker_max_context_chars: int = 4000
+
 
 settings = Settings()

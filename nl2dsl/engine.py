@@ -69,6 +69,8 @@ class Engine:
         self._plugins: list[Plugin] = []
         self._built = False
         self._checkpointer = InMemorySaver()
+        self.registry = Registry()
+        self.pipeline = Pipeline()
         self._load_defaults()
 
     @property
@@ -87,10 +89,7 @@ class Engine:
         return self
 
     def register(self, name: str, component) -> "Engine":
-        # For backward compatibility: store in a default registry
-        if not hasattr(self, "_legacy_registry"):
-            self._legacy_registry = Registry()
-        self._legacy_registry.register(name, component)
+        self.registry.register(name, component)
         return self
 
     def build(self):
@@ -122,6 +121,7 @@ class Engine:
         from nl2dsl.rag.store import MilvusLiteStore
         from nl2dsl.rag.embedder import BGEEmbedder
         from nl2dsl.rag.retriever import RAGRetriever
+        from nl2dsl.rag.reranker import BGEReranker
         from nl2dsl.rag.sync import auto_sync
 
         config_dir = Path(__file__).parent.parent / "configs"
@@ -134,6 +134,7 @@ class Engine:
         # Shared components (initialized once)
         llm = None
         embedder = None
+        reranker = None
         if settings.llm_api_key:
             llm = LLMClient(
                 api_key=settings.llm_api_key,
@@ -144,6 +145,17 @@ class Engine:
                 embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
             except Exception as e:
                 logger.warning("BGE embedder init failed: %s", e)
+
+        # Reranker (optional, shared across domains)
+        if settings.reranker_enabled and settings.reranker_model:
+            try:
+                reranker = BGEReranker(
+                    model_path=settings.reranker_model,
+                    device=settings.reranker_device,
+                )
+                logger.info("Reranker loaded: %s", settings.reranker_model)
+            except Exception as e:
+                logger.warning("Reranker load failed, continuing without: %s", e)
 
         # Build DomainContext for each discovered domain
         for domain in discovered:
@@ -214,7 +226,7 @@ class Engine:
                         )
                     except Exception as sync_err:
                         logger.warning("RAG auto-sync failed for domain '%s': %s", domain, sync_err)
-                    rag_retriever = RAGRetriever(store=store, embedder=embedder)
+                    rag_retriever = RAGRetriever(store=store, embedder=embedder, reranker=reranker)
                 except Exception as e:
                     logger.warning("RAG init failed for domain '%s': %s", domain, e)
 
@@ -251,5 +263,43 @@ class Engine:
                 graph=graph,
             )
             self._domains[domain] = ctx
+
+            # Register components into registry (domain-prefixed for multi-domain)
+            reg_prefix = f"{domain}." if domain != "ecommerce" else ""
+            self.registry.register(f"{reg_prefix}registry_dict", rd)
+            self.registry.register(f"{reg_prefix}db_engine", db)
+            self.registry.register(f"{reg_prefix}validator", validator)
+            self.registry.register(f"{reg_prefix}resolver", resolver)
+            self.registry.register(f"{reg_prefix}scanner", scanner)
+            self.registry.register(f"{reg_prefix}sandbox", sandbox)
+            self.registry.register(f"{reg_prefix}executor", executor)
+            self.registry.register(f"{reg_prefix}row_security", row_security)
+            self.registry.register(f"{reg_prefix}col_security", col_security)
+            self.registry.register(f"{reg_prefix}clarification_detector", clarification_detector)
+            self.registry.register(f"{reg_prefix}sql_builder", sql_builder)
+            if rag_retriever is not None:
+                self.registry.register(f"{reg_prefix}rag_retriever", rag_retriever)
+
+            # Backward compat: register without prefix for default domain
+            if domain == "ecommerce":
+                self.registry.register("registry_dict", rd)
+                self.registry.register("db_engine", db)
+                self.registry.register("validator", validator)
+                self.registry.register("resolver", resolver)
+                self.registry.register("scanner", scanner)
+                self.registry.register("sandbox", sandbox)
+                self.registry.register("executor", executor)
+                self.registry.register("row_security", row_security)
+                self.registry.register("col_security", col_security)
+                self.registry.register("clarification_detector", clarification_detector)
+                self.registry.register("sql_builder", sql_builder)
+                if rag_retriever is not None:
+                    self.registry.register("rag_retriever", rag_retriever)
+
             logger.info("Domain '%s' initialized: %d metrics, %d dimensions, %d data_sources",
                         domain, len(rd["metrics"]), len(rd["dimensions"]), len(rd["data_sources"]))
+
+        # Register shared components
+        self.registry.register("llm_system_prompt", DSL_SYSTEM_PROMPT)
+        if llm is not None:
+            self.registry.register("llm_client", llm)

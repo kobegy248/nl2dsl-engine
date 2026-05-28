@@ -44,8 +44,8 @@ def test_retrieve_metrics(retriever):
 
 def test_build_context(retriever):
     context = retriever.build_context("查询销售额")
-    assert "【表结构】" in context
-    assert "【指标定义】" in context
+    assert "【可用 Schema】" in context
+    assert "【可用指标】" in context
     assert "sales_amount" in context
 
 
