@@ -17,6 +17,9 @@ from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("engine")
 
+# Project root (two levels up from this file: nl2dsl/engine.py -> nl2dsl/ -> project/)
+PROJECT_ROOT = Path(__file__).parent.parent
+
 
 def _discover_domains(config_dir: Path) -> list[str]:
     """Scan configs/ directory to discover all domains.
@@ -39,17 +42,25 @@ def _discover_domains(config_dir: Path) -> list[str]:
 
 
 def _get_db_url(domain: str) -> str:
-    """Auto-name database files per domain."""
+    """Auto-name database files per domain under PROJECT_ROOT/data/."""
+    data_dir = PROJECT_ROOT / "data"
+    data_dir.mkdir(exist_ok=True)
     if domain == "ecommerce":
-        return settings.db_url
-    return f"sqlite:///./{domain}.db"
+        db_path = data_dir / "nl2dsl.db"
+    else:
+        db_path = data_dir / f"{domain}.db"
+    return f"sqlite:///{db_path.as_posix()}"
 
 
 def _get_milvus_uri(domain: str) -> str:
-    """Auto-name Milvus files per domain."""
+    """Auto-name Milvus files per domain under PROJECT_ROOT/data/."""
+    data_dir = PROJECT_ROOT / "data"
+    data_dir.mkdir(exist_ok=True)
     if domain == "ecommerce":
-        return settings.milvus_uri
-    return f"./{domain}_milvus_lite.db"
+        db_path = data_dir / "milvus_lite.db"
+    else:
+        db_path = data_dir / f"{domain}_milvus_lite.db"
+    return str(db_path)
 
 
 class Engine:
@@ -191,7 +202,7 @@ class Engine:
                 try:
                     milvus_uri = _get_milvus_uri(domain)
                     store = MilvusLiteStore(uri=milvus_uri)
-                    state_file = Path(__file__).parent.parent / f".{domain}_rag_sync_state.json"
+                    state_file = PROJECT_ROOT / "data" / f".{domain}_rag_sync_state.json"
                     try:
                         # TODO: yaml_prefix support will be added in Task 6
                         # For now, call auto_sync without yaml_prefix
