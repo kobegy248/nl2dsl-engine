@@ -99,18 +99,22 @@ def _evaluate_history(_dsl, _question: str, _user_id: str) -> float:
     return 1.0
 
 
-def _compute_routing(confidence: float) -> str:
+def _compute_routing(confidence: float, semantic_source: str = "") -> str:
     """Determine routing decision based on confidence score.
 
     Returns:
         "continue" if confidence >= 80
         "warning" if 60 <= confidence < 80
-        "clarify" if confidence < 60
+        "clarify" if confidence < 60 (but not when semantic_source is neutral)
     """
     if confidence >= 80.0:
         return "continue"
     if confidence >= 60.0:
         return "warning"
+    # When no LLM is available or LLM call failed, semantic score is neutral;
+    # don't block execution since we can't meaningfully evaluate semantics
+    if semantic_source in ("neutral_no_llm", "neutral_fallback"):
+        return "continue"
     return "clarify"
 
 
@@ -174,7 +178,7 @@ def _make_confidence_node(
         confidence = min(syntax_score, semantic_score) * history_score
 
         # Routing decision
-        routing = _compute_routing(confidence)
+        routing = _compute_routing(confidence, semantic_source)
 
         # Build explanation
         explanation = _build_explanation(

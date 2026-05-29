@@ -32,6 +32,9 @@ from nl2dsl.query.sandbox import QuerySandbox
 from nl2dsl.sql_engine.builder import SQLBuilder
 from nl2dsl.sql_engine.scanner import SQLScanner
 from nl2dsl.sql_engine.executor import SQLExecutor
+from nl2dsl.agent.orchestrator import AgentOrchestrator
+from nl2dsl.agent.planner import classify_intent, _decompose_fallback
+from nl2dsl.domain_context import DomainContext
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.graph.state import QueryState
 from langgraph.checkpoint.memory import InMemorySaver
@@ -56,6 +59,8 @@ class QueryResponse(BaseModel):
     sql: str | None = None
     execution_time_ms: int = 0
     clarification: dict | None = None
+    explanation: str | None = None
+    confidence: float | None = None
 
 
 class DSLExecuteRequest(BaseModel):
@@ -266,6 +271,38 @@ def create_app(
         checkpointer=None,
     )
 
+    # Build DomainContext for AgentOrchestrator
+    def _get_or_build_domain_context(domain: str = "ecommerce") -> DomainContext:
+        """Build a DomainContext for the given domain.
+
+        Uses the same components as the query_graph for consistency.
+        """
+        return DomainContext(
+            domain=domain,
+            registry_dict=registry_dict or {},
+            validator=_validator,
+            resolver=_resolver,
+            sql_builder=_sql_builder,
+            sandbox=_sandbox,
+            executor=_executor,
+            row_security=_row_security,
+            col_security=_col_security,
+            rag_retriever=None,
+            graph=query_graph,
+        )
+
+    def _build_domains_dict() -> dict[str, DomainContext]:
+        """Build domains dict from registry or engine domains."""
+        domains: dict[str, DomainContext] = {}
+        # Try to get domains from the engine's _domains if available
+        if hasattr(_nl2dsl_engine, '_domains') and _nl2dsl_engine._domains:
+            for domain_name, ctx in _nl2dsl_engine._domains.items():
+                domains[domain_name] = ctx
+        else:
+            # Fallback: build a single ecommerce domain context
+            domains["ecommerce"] = _get_or_build_domain_context("ecommerce")
+        return domains
+
     # -----------------------------------------------------------------------
     # Helpers
     # -----------------------------------------------------------------------
@@ -305,6 +342,8 @@ def create_app(
             dsl=dsl.model_dump() if dsl else None,
             sql=result.get("sql"),
             execution_time_ms=elapsed,
+            explanation=result.get("explanation"),
+            confidence=result.get("confidence"),
         )
 
     def _build_trace(result: dict) -> list[dict]:
@@ -366,29 +405,6 @@ def create_app(
         start = time.time()
         query_id = str(uuid.uuid4())
 
-        state = QueryState(
-            question=req.question,
-            user_id=req.user_id,
-            tenant_id=req.tenant_id,
-            data_source=req.data_source,
-            ambiguities=None,
-            dsl=None,
-            dsl_attempts=None,
-            sql=None,
-            sandbox_result=None,
-            complexity=None,
-            data=None,
-            status="pending",
-            error=None,
-            error_code=None,
-            trace=None,
-            query_id=query_id,
-            started_at=start,
-            llm_used=False,
-        )
-
-        config = {"configurable": {"thread_id": query_id}}
-
         try:
             # Step 0: Clarification check (only when enabled)
             if enable_clarification:
@@ -414,6 +430,76 @@ def create_app(
                         execution_time_ms=int((time.time() - start) * 1000),
                     )
 
+            # Step 1: Plan / intent classification
+            intent = classify_intent(req.question)
+            plan = _decompose_fallback(req.question, intent)
+
+            # Step 2: Route based on intent
+            if plan.intent != "single_query":
+                # Complex query: use AgentOrchestrator
+                domains = _build_domains_dict()
+                orchestrator = AgentOrchestrator(domains=domains)
+
+                agent_result = await orchestrator.run(
+                    question=req.question,
+                    user_id=req.user_id,
+                    tenant_id=req.tenant_id,
+                    domain="ecommerce",
+                    sse_callback=None,
+                )
+
+                elapsed = int((time.time() - start) * 1000)
+
+                # Audit log with agent status
+                audit_logger.log(
+                    query_id=query_id,
+                    user_id=req.user_id,
+                    tenant_id=req.tenant_id,
+                    question=req.question,
+                    status=agent_result.status,
+                    execution_time_ms=elapsed,
+                    rows_returned=len(agent_result.data) if agent_result.data else 0,
+                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": plan.intent}],
+                    error_code=None,
+                    error_message=agent_result.error,
+                )
+
+                if agent_result.status == "error":
+                    raise ValidationError(agent_result.error or "Agent execution failed")
+
+                return QueryResponse(
+                    status="success",
+                    data=agent_result.data,
+                    dsl=None,
+                    sql=None,
+                    execution_time_ms=elapsed,
+                    explanation=agent_result.explanation,
+                    confidence=agent_result.confidence,
+                )
+
+            # Simple query: continue with existing graph flow
+            state = QueryState(
+                question=req.question,
+                user_id=req.user_id,
+                tenant_id=req.tenant_id,
+                data_source=req.data_source,
+                ambiguities=None,
+                dsl=None,
+                dsl_attempts=None,
+                sql=None,
+                sandbox_result=None,
+                complexity=None,
+                data=None,
+                status="pending",
+                error=None,
+                error_code=None,
+                trace=None,
+                query_id=query_id,
+                started_at=start,
+                llm_used=False,
+            )
+
+            config = {"configurable": {"thread_id": query_id}}
             result = await query_graph.ainvoke(state, config)
             elapsed = int((time.time() - start) * 1000)
 
@@ -502,9 +588,53 @@ def create_app(
 
     @app.post("/api/v1/query/stream")
     async def query_stream(req: StreamRequest):
-        """Stream query execution updates via SSE."""
-        query_id = str(uuid.uuid4())
+        """Stream query execution updates via SSE.
 
+        For simple queries (single_query intent), emits standard graph updates.
+        For complex queries (compare/trend/correlation), uses AgentOrchestrator
+        with SSE callback to emit structured agent events.
+        """
+        query_id = str(uuid.uuid4())
+        import json
+
+        # Step 1: Plan / intent classification
+        intent = classify_intent(req.question)
+        plan = _decompose_fallback(req.question, intent)
+
+        if plan.intent != "single_query":
+            # Complex query: use AgentOrchestrator with SSE callback
+            domains = _build_domains_dict()
+            orchestrator = AgentOrchestrator(domains=domains)
+
+            async def agent_event_generator():
+                sse_events: list[dict] = []
+
+                def sse_callback(event_type: str, payload: dict):
+                    sse_events.append({"event": event_type, **payload})
+
+                agent_result = await orchestrator.run(
+                    question=req.question,
+                    user_id=req.user_id,
+                    tenant_id=req.tenant_id,
+                    domain="ecommerce",
+                    sse_callback=sse_callback,
+                )
+
+                # Emit collected events with proper SSE format
+                for event in sse_events:
+                    event_type = event.pop("event", "data")
+                    yield f"event: {event_type}\ndata: {json.dumps(event, default=str)}\n\n"
+
+                # Emit final result
+                yield f"event: result\ndata: {json.dumps({'status': agent_result.status, 'data': agent_result.data, 'explanation': agent_result.explanation, 'confidence': agent_result.confidence}, default=str)}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                agent_event_generator(),
+                media_type="text/event-stream",
+            )
+
+        # Simple query: emit standard graph updates
         state = QueryState(
             question=req.question,
             user_id=req.user_id,
@@ -529,7 +659,6 @@ def create_app(
         config = {"configurable": {"thread_id": query_id}}
 
         async def event_generator():
-            import json
             async for chunk in query_graph.astream(state, config, stream_mode="updates"):
                 yield f"data: {json.dumps(chunk, default=str)}\n\n"
             yield "data: [DONE]\n\n"
