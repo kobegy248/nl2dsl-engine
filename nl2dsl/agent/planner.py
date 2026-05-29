@@ -1,0 +1,318 @@
+"""Plan node: intent classification + task decomposition for NL2DSL agent.
+
+The planner analyzes a user's natural language question and produces a Plan
+containing:
+1. Intent classification (compare, trend, correlation, single_query)
+2. Task decomposition into SubQuery objects
+3. Reasoning explaining the plan
+
+When an LLM client is available, the planner uses it for richer planning.
+Otherwise it falls back to keyword-based classification and rule-based
+decomposition.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Callable
+
+from nl2dsl.agent.models import Plan, SubQuery
+from nl2dsl.graph.state import QueryState
+from nl2dsl.utils.logger import get_logger
+
+logger = get_logger("agent.planner")
+
+# ---------------------------------------------------------------------------
+# Intent classification keywords
+# ---------------------------------------------------------------------------
+
+_INTENT_KEYWORDS = {
+    "compare": [
+        "对比", "比较", "同比", "环比", "和...比", "vs", "VS", "相比",
+    ],
+    "trend": [
+        "趋势", "走势", "变化", "增长", "下降",
+    ],
+    "correlation": [
+        "关联", "影响", "相关", "关系", "取决于",
+    ],
+}
+
+# Order matters: earlier intents take priority
+_INTENT_PRIORITY = ("compare", "trend", "correlation")
+
+# Splitters used for decomposing compare / correlation questions
+_SPLIT_CHARS = ("和", "与", "vs", "VS")
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def classify_intent(question: str) -> str:
+    """Classify user intent based on keyword matching.
+
+    Args:
+        question: The user's natural language question.
+
+    Returns:
+        One of: "compare", "trend", "correlation", "single_query".
+    """
+    for intent in _INTENT_PRIORITY:
+        if any(kw in question for kw in _INTENT_KEYWORDS[intent]):
+            return intent
+    return "single_query"
+
+
+def _split_question(question: str) -> list[str]:
+    """Split a question by comparison/correlation splitters.
+
+    Returns a list of non-empty parts. Falls back to [question] if no
+    splitter is found.
+    """
+    # Build a regex that matches any of the split characters
+    pattern = "|".join(re.escape(ch) for ch in _SPLIT_CHARS)
+    parts = [p.strip() for p in re.split(pattern, question) if p.strip()]
+    return parts if parts else [question]
+
+
+def _decompose_fallback(question: str, intent: str) -> Plan:
+    """Create a Plan using rule-based decomposition (no LLM).
+
+    Args:
+        question: The user's question.
+        intent: The classified intent.
+
+    Returns:
+        A Plan with sub-queries derived from the intent.
+    """
+    sub_queries: list[SubQuery] = []
+
+    if intent == "compare":
+        parts = _split_question(question)
+        if len(parts) >= 2:
+            sub_queries = [
+                SubQuery(id="sq-1", description=parts[0], depends_on=[]),
+                SubQuery(id="sq-2", description=parts[1], depends_on=[]),
+            ]
+        else:
+            sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
+
+    elif intent == "trend":
+        sub_queries = [
+            SubQuery(
+                id="sq-1",
+                description=f"{question}（按时间分组）",
+                depends_on=[],
+            ),
+        ]
+
+    elif intent == "correlation":
+        parts = _split_question(question)
+        if len(parts) >= 2:
+            sub_queries = [
+                SubQuery(id="sq-1", description=parts[0], depends_on=[]),
+                SubQuery(id="sq-2", description=parts[1], depends_on=[]),
+            ]
+        else:
+            sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
+
+    else:  # single_query or unknown
+        sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
+
+    reasoning = (
+        f"基于关键词识别为 '{intent}' 意图，"
+        f"将问题分解为 {len(sub_queries)} 个子查询。"
+    )
+
+    return Plan(
+        intent=intent,
+        sub_queries=sub_queries,
+        reasoning=reasoning,
+    )
+
+
+def _build_plan_prompt(question: str, registry_dict: dict) -> str:
+    """Build the LLM prompt for plan generation.
+
+    Args:
+        question: The user's question.
+        registry_dict: Registry containing available metrics and dimensions.
+
+    Returns:
+        A prompt string for the LLM.
+    """
+    metrics = registry_dict.get("metrics", {})
+    dimensions = registry_dict.get("dimensions", {})
+
+    metrics_lines = []
+    for alias, info in metrics.items():
+        desc = info.get("description", "") if isinstance(info, dict) else ""
+        metrics_lines.append(f"- {alias}: {desc}")
+
+    dimensions_lines = []
+    for alias, info in dimensions.items():
+        desc = info.get("description", "") if isinstance(info, dict) else ""
+        dimensions_lines.append(f"- {alias}: {desc}")
+
+    metrics_text = "\n".join(metrics_lines) if metrics_lines else "（无）"
+    dimensions_text = "\n".join(dimensions_lines) if dimensions_lines else "（无）"
+
+    return f"""你是一个智能数据分析助手。请分析用户的自然语言查询，识别其意图并将查询分解为可执行的子任务。
+
+【用户问题】
+{question}
+
+【可用指标】
+{metrics_text}
+
+【可用维度】
+{dimensions_text}
+
+【任务】
+1. 识别用户意图（compare/trend/correlation/single_query 之一）
+2. 将查询分解为子查询列表
+3. 解释你的推理过程
+
+【输出格式】
+只输出 JSON，不要解释文字：
+{{
+  "intent": "compare",
+  "sub_queries": [
+    {{"id": "sq-1", "description": "...", "depends_on": []}},
+    {{"id": "sq-2", "description": "...", "depends_on": []}}
+  ],
+  "reasoning": "...",
+  "requires_approval": false
+}}
+
+规则：
+- compare: 对比/比较类问题，拆分为 2+ 子查询
+- trend: 趋势/走势类问题，1 个子查询（按时间维度分组）
+- correlation: 关联/影响类问题，拆分为 2+ 子查询
+- single_query: 简单查询，1 个子查询
+- depends_on: 如果子查询依赖其他子查询的结果，填写依赖的 id 列表
+- requires_approval: 如果涉及敏感操作（如删除数据），设为 true"""
+
+
+def _parse_llm_plan(raw: str) -> Plan:
+    """Parse LLM response into a Plan object.
+
+    Supports JSON wrapped in markdown code blocks.
+
+    Args:
+        raw: The raw LLM response string.
+
+    Returns:
+        A Plan object.
+
+    Raises:
+        json.JSONDecodeError: If the response cannot be parsed as JSON.
+        KeyError: If required fields are missing.
+    """
+    text = raw.strip()
+
+    # Try markdown code block first
+    fence_match = re.search(r"```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```", text)
+    if fence_match:
+        data = json.loads(fence_match.group(1))
+    else:
+        # Fallback: find first { to last }
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            data = json.loads(text[start:end + 1])
+        else:
+            data = json.loads(text)
+
+    sub_queries = [
+        SubQuery(
+            id=sq.get("id", f"sq-{i + 1}"),
+            description=sq.get("description", ""),
+            depends_on=sq.get("depends_on", []),
+            dsl=sq.get("dsl"),
+        )
+        for i, sq in enumerate(data.get("sub_queries", []))
+    ]
+
+    return Plan(
+        intent=data.get("intent", "single_query"),
+        sub_queries=sub_queries,
+        reasoning=data.get("reasoning", ""),
+        requires_approval=data.get("requires_approval", False),
+    )
+
+
+def _make_plan_node(
+    llm_client,
+    registry_dict: dict,
+) -> Callable[[QueryState], dict]:
+    """Factory that creates the plan graph node.
+
+    Args:
+        llm_client: LLM client with a ``generate(prompt, system_prompt)`` method,
+            or None to use fallback classification.
+        registry_dict: Dictionary of available metrics/dimensions for the LLM prompt.
+
+    Returns:
+        A node function suitable for use in a LangGraph pipeline.
+    """
+    # Import here to avoid circular dependency at module load time
+    from nl2dsl.graph.nodes import with_error_handler
+
+    @with_error_handler("plan")
+    def plan_node(state: QueryState) -> dict:
+        question = state["question"]
+
+        # Try LLM path first
+        if llm_client is not None:
+            try:
+                prompt = _build_plan_prompt(question, registry_dict)
+                raw = llm_client.generate(
+                    prompt,
+                    "你是一个数据分析意图识别助手。只输出 JSON，不要 markdown 代码块标记。",
+                )
+                if raw:
+                    plan = _parse_llm_plan(raw)
+                    logger.info(
+                        "[plan] LLM plan: intent=%s, sub_queries=%d",
+                        plan.intent,
+                        len(plan.sub_queries),
+                    )
+                    return {
+                        "plan": plan,
+                        "trace": {
+                            "step": "plan",
+                            "status": "success",
+                            "source": "llm",
+                            "intent": plan.intent,
+                            "sub_queries_count": len(plan.sub_queries),
+                        },
+                    }
+            except json.JSONDecodeError as exc:
+                logger.warning("[plan] LLM returned invalid JSON, falling back: %s", exc)
+            except Exception as exc:
+                logger.warning("[plan] LLM call failed, falling back: %s", exc)
+
+        # Fallback: keyword-based classification + rule-based decomposition
+        intent = classify_intent(question)
+        plan = _decompose_fallback(question, intent)
+        logger.info(
+            "[plan] Fallback plan: intent=%s, sub_queries=%d",
+            plan.intent,
+            len(plan.sub_queries),
+        )
+        return {
+            "plan": plan,
+            "trace": {
+                "step": "plan",
+                "status": "success",
+                "source": "fallback",
+                "intent": plan.intent,
+                "sub_queries_count": len(plan.sub_queries),
+            },
+        }
+
+    return plan_node

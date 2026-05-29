@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from typing_extensions import TypedDict
 
+from nl2dsl.agent.models import Plan
 from nl2dsl.dsl.models import DSL, ClarificationItem
 from nl2dsl.query.sandbox import SandboxResult
 
@@ -69,6 +70,7 @@ class QueryState(TypedDict):
 
     # Intermediate outputs
     ambiguities: list[ClarificationItem] | None
+    plan: Plan | None
     dsl: DSL | None
     dsl_attempts: Annotated[list[dict] | None, add_to_attempts]
     sql: str | None
