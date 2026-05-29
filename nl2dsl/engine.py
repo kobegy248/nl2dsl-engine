@@ -71,6 +71,7 @@ class Engine:
         self._checkpointer = InMemorySaver()
         self.registry = Registry()
         self.pipeline = Pipeline()
+        self._feedback_processor = None
         self._load_defaults()
 
     @property
@@ -109,6 +110,12 @@ class Engine:
     def build_fastapi_app(self) -> FastAPI:
         self.build()
         app = FastAPI(title="NL2DSL", version="0.1.0")
+        # Register feedback processor for external access
+        if self._feedback_processor is not None:
+            self.registry.register("feedback_processor", self._feedback_processor)
+        # TODO: Start run_periodically as a background task on app startup
+        # e.g., @app.on_event("startup") -> asyncio.create_task(
+        #           self._feedback_processor.run_periodically(300.0))
         return app
 
     def _load_defaults(self):
@@ -311,3 +318,12 @@ class Engine:
         self.registry.register("llm_system_prompt", DSL_SYSTEM_PROMPT)
         if llm is not None:
             self.registry.register("llm_client", llm)
+
+        # Register feedback processor
+        from nl2dsl.feedback.collector import FeedbackCollector
+        from nl2dsl.agent.feedback_processor import FeedbackProcessor
+
+        feedback_collector = FeedbackCollector()
+        self._feedback_processor = FeedbackProcessor(feedback_collector, registry_dict=None)
+        self.registry.register("feedback_collector", feedback_collector)
+        self.registry.register("feedback_processor", self._feedback_processor)
