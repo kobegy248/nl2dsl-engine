@@ -12,6 +12,7 @@ import re
 import time
 from typing import Callable
 
+from nl2dsl.agent.confidence import _make_confidence_node
 from nl2dsl.agent.planner import _make_plan_node
 from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy
 from nl2dsl.dsl.validator import DSLValidator
@@ -1401,6 +1402,11 @@ def create_node_functions(
     plan_node = _make_plan_node(llm_client, {})
 
     # -----------------------------------------------------------------------
+    # confidence_node (DSL quality scoring)
+    # -----------------------------------------------------------------------
+    confidence_node = _make_confidence_node(validator, llm_client)
+
+    # -----------------------------------------------------------------------
     # decompose_node + verify_dsl_node (agentic helpers, see factories above)
     # -----------------------------------------------------------------------
     decompose_node = _make_decompose_node(llm_client, llm_system_prompt)
@@ -1409,6 +1415,7 @@ def create_node_functions(
     return {
         "clarification_node": clarification_node,
         "plan_node": plan_node,
+        "confidence_node": confidence_node,
         "decompose_node": decompose_node,
         "generate_dsl_node": generate_dsl_node,
         "mock_dsl_node": mock_dsl_node,

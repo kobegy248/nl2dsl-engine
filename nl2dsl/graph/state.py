@@ -71,6 +71,8 @@ class QueryState(TypedDict):
     # Intermediate outputs
     ambiguities: list[ClarificationItem] | None
     plan: Plan | None
+    confidence: float | None  # DSL confidence score (0-100)
+    explanation: str | None   # Natural language explanation
     dsl: DSL | None
     dsl_attempts: Annotated[list[dict] | None, add_to_attempts]
     sql: str | None
