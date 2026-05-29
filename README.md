@@ -84,8 +84,8 @@ flowchart TB
 
         subgraph Domains["多域自治 — 每个域独立隔离"]
             direction LR
-            EC["电商域<br/>DomainContext"]
-            BK["银行域<br/>DomainContext"]
+            EC["业务域 A<br/>DomainContext"]
+            BK["业务域 B<br/>DomainContext"]
         end
 
         Shared[共享组件<br/>LLM / Embedder / Reranker / Audit]
@@ -118,7 +118,7 @@ flowchart TB
 - **实线箭头** = 数据流向（用户请求 → 引擎处理 → 数据库执行）
 - **虚线箭头** = 依赖关系（引擎消费治理配置、共享组件被各域复用）
 - **DomainContext** = 每个域的完整运行时（独立的 RAG、DSL 校验器、SQL 构建器、权限组件）
-- 电商域和银行域的 `metrics.yaml` 彼此隔离，不会互相污染
+- 不同业务域的 `metrics.yaml` 彼此隔离，不会互相污染
 
 **核心原则**：NL2DSL 不定义"什么是销售额"，只消费治理层已经定义好的 `sales_amount: SUM(pay_amount)`。就像 Tableau 消费数据仓库的度量定义一样。
 
@@ -141,15 +141,15 @@ flowchart TB
 
 不是所有查询都需要 JOIN 所有表。NL2DSL 分析 DSL 中引用的列，只 JOIN 实际需要的表。
 
-**效果**：电商 `orders` 数据源配置了 5 个 JOIN，平均查询从 3.8 个 JOIN 降到 0.5 个，71% 的查询不需要任何 JOIN。
+**效果**：某业务域 `orders` 数据源配置了 5 个 JOIN，平均查询从 3.8 个 JOIN 降到 0.5 个，71% 的查询不需要任何 JOIN。
 
 ### 2. 多域自治
 
 ```
 configs/
-  metrics.yaml              # 默认域：电商
-  bank_metrics.yaml         # 银行域
-  bank_permissions.yaml     # 银行域权限
+  metrics.yaml              # 默认域
+  biz_a_metrics.yaml        # 业务域 A
+  biz_a_permissions.yaml    # 业务域 A 权限
 ```
 
 启动时自动发现所有 `_metrics.yaml`，每个域独立的数据库、向量库、RAG 检索器。
