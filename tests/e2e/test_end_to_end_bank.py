@@ -250,7 +250,7 @@ class TestBankComplexQueries:
         data = _assert_query_success(response)
         _assert_sql_and_data(data, min_rows=1)
         assert "t_prod_info" in data["sql"]
-        assert "t_cif_base" in data["sql"]
+        # t_cif_base not needed — no columns from it are referenced
 
     def test_inflow_outflow_comparison(self, bank_api_client):
         """流入流出对比：各渠道的流入和流出金额."""

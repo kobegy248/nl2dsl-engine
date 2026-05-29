@@ -72,6 +72,136 @@ class SQLBuilder:
                 return tbl
         raise ValidationError(f"Table for column '{field}' not found")
 
+    def _collect_referenced_columns(self, dsl: DSL) -> set[str]:
+        """Collect all physical column names referenced in the DSL."""
+        columns: set[str] = set()
+
+        # Dimensions (semantic -> physical)
+        if dsl.dimensions:
+            for dim in dsl.dimensions:
+                physical = self._dimension_mapping.get(dim, dim)
+                columns.add(physical)
+
+        # Metrics — only simple column references need table resolution
+        if dsl.metrics:
+            for metric in dsl.metrics:
+                if "(" in metric.field:
+                    func_name, inner = self._parse_expr(metric.field)
+                    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
+                        columns.add(inner)
+                else:
+                    columns.add(metric.field)
+
+        # Filters
+        if dsl.filters:
+            for f in dsl.filters:
+                columns.add(f.field)
+
+        # Order by
+        if dsl.order_by:
+            for ob in dsl.order_by:
+                columns.add(ob.field)
+
+        return columns
+
+    def _determine_required_joins(self, dsl: DSL, referenced_columns: set[str]) -> list[Join]:
+        """Determine the minimal set of joins needed for referenced columns."""
+        ds_joins = self._data_sources.get(dsl.data_source, {}).get("joins", {})
+        if not ds_joins:
+            return []
+
+        primary_table_name = self._table_mapping.get(dsl.data_source, dsl.data_source)
+        primary_table = self._metadata.tables.get(primary_table_name)
+        if primary_table is None:
+            return []
+
+        primary_cols = set(primary_table.c.keys())
+
+        # Build alias -> table_name mapping
+        alias_to_table: dict[str, str] = {}
+        for table_name, cfg in ds_joins.items():
+            alias = cfg.get("alias")
+            if alias:
+                alias_to_table[alias] = table_name
+
+        def find_join_table(col_name: str) -> str | None:
+            """Find which configured join table contains a column; None if in primary."""
+            if col_name in primary_cols:
+                return None
+            for table_name, cfg in ds_joins.items():
+                join_table = self._metadata.tables.get(table_name)
+                if join_table is not None and col_name in join_table.c:
+                    return table_name
+            return None
+
+        required_tables: set[str] = set()
+
+        for col_ref in referenced_columns:
+            if "." in col_ref:
+                # Qualified reference like "p.supplier_id"
+                alias, _ = col_ref.split(".", 1)
+                dep_table = alias_to_table.get(alias)
+                if dep_table and dep_table in ds_joins:
+                    required_tables.add(dep_table)
+                continue
+
+            table_name = find_join_table(col_ref)
+            if table_name:
+                required_tables.add(table_name)
+
+        # Resolve dependency chains (e.g. supplier_dim on p.supplier_id requires product_dim)
+        def resolve_deps(table_name: str, visited: set[str] | None = None) -> None:
+            if visited is None:
+                visited = set()
+            if table_name in visited:
+                return
+            visited.add(table_name)
+
+            cfg = ds_joins.get(table_name)
+            if not cfg:
+                return
+
+            on_field = cfg.get("on", "") or cfg.get(True, "")
+            if "." in on_field:
+                alias, _ = on_field.split(".", 1)
+                dep_table = alias_to_table.get(alias)
+                if dep_table and dep_table in ds_joins:
+                    required_tables.add(dep_table)
+                    resolve_deps(dep_table, visited)
+
+        for table_name in list(required_tables):
+            resolve_deps(table_name)
+
+        # Build Join objects in dependency order
+        joins: list[Join] = []
+        added: set[str] = set()
+
+        def add_join(table_name: str) -> None:
+            if table_name in added or table_name not in required_tables:
+                return
+            cfg = ds_joins[table_name]
+            on_field = cfg.get("on", "") or cfg.get(True, "")
+
+            # Add dependencies first
+            if "." in on_field:
+                alias, _ = on_field.split(".", 1)
+                dep_table = alias_to_table.get(alias)
+                if dep_table and dep_table in required_tables:
+                    add_join(dep_table)
+
+            joins.append(Join(
+                table=table_name,
+                on_field=on_field,
+                join_type=cfg.get("type", "left"),
+                alias=cfg.get("alias"),
+            ))
+            added.add(table_name)
+
+        for table_name in required_tables:
+            add_join(table_name)
+
+        return joins
+
     def build(self, dsl: DSL) -> str:
         primary_table_name = self._table_mapping.get(dsl.data_source, dsl.data_source)
         primary_table = self._metadata.tables.get(primary_table_name)
@@ -85,16 +215,8 @@ class SQLBuilder:
         # Auto-infer joins from data_source config if dsl.joins is empty
         joins = list(dsl.joins) if dsl.joins else []
         if not joins and dsl.data_source in self._data_sources:
-            ds_joins = self._data_sources[dsl.data_source].get("joins", {})
-            for table_name, cfg in ds_joins.items():
-                # YAML 1.1 parses 'on:' as boolean True; handle both keys
-                on_field = cfg.get("on", "") or cfg.get(True, "")
-                joins.append(Join(
-                    table=table_name,
-                    on_field=on_field,
-                    join_type=cfg.get("type", "left"),
-                    alias=cfg.get("alias"),
-                ))
+            referenced = self._collect_referenced_columns(dsl)
+            joins = self._determine_required_joins(dsl, referenced)
 
         if joins:
             for j in joins:
