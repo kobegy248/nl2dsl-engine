@@ -198,6 +198,43 @@ def route_after_execute(state: QueryState) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Plan routing
+# ---------------------------------------------------------------------------
+
+
+def route_after_plan(state: QueryState) -> str:
+    """Route after plan_node.
+
+    Returns "continue" for single_query (proceed with existing pipeline),
+    "agent" for complex queries (handled by AgentOrchestrator outside graph).
+    """
+    plan = state.get("plan")
+    if plan is None:
+        return "continue"
+    if plan.intent == "single_query":
+        return "continue"
+    return "agent"
+
+
+# ---------------------------------------------------------------------------
+# Confidence routing
+# ---------------------------------------------------------------------------
+
+
+def route_after_confidence(state: QueryState) -> str:
+    """Route after confidence_node.
+
+    Returns "continue" if confidence >= 60, "clarify" if < 60, "end" if error.
+    """
+    if state.get("status") == "error":
+        return "end"
+    confidence = state.get("confidence") or 0
+    if state.get("status") == "clarification":
+        return "clarify"
+    return "continue"
+
+
+# ---------------------------------------------------------------------------
 # Error routing
 # ---------------------------------------------------------------------------
 

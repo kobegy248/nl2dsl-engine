@@ -14,6 +14,8 @@ from nl2dsl.graph.state import QueryState
 from nl2dsl.graph.nodes import create_node_functions
 from nl2dsl.graph.edges import (
     route_after_clarification,
+    route_after_plan,
+    route_after_confidence,
     route_after_sandbox,
     route_after_execute,
     detect_complexity,
@@ -54,17 +56,26 @@ def build_graph(
     Graph structure::
 
         START -> clarification -> [clarification] END
-                             |--[continue] -> decompose -> validation
-                             -> permission_check -> resolve_semantic
-                             -> build_sql -> scan_sql -> sandbox_check
-                                                       |--[review] -> human_review
-                                                       |              |--[rebuild] -> build_sql
-                                                       |              |--[execute] -> execute_sql
-                                                       |--[execute] -> execute_sql
-                                                                       |--[retry] -> simplify_dsl -> build_sql
-                                                                       |--[end] -> verify_dsl -> END
+                             |--[continue] -> plan -> [agent] END
+                                                |--[continue] -> decompose -> validation
+                                                -> permission_check -> resolve_semantic
+                                                -> confidence -> [clarify] END
+                                                               |--[continue] -> build_sql -> scan_sql -> sandbox_check
+                                                                                                    |--[review] -> human_review
+                                                                                                    |              |--[rebuild] -> build_sql
+                                                                                                    |              |--[execute] -> execute_sql
+                                                                                                    |--[execute] -> execute_sql
+                                                                                                                    |--[retry] -> simplify_dsl -> build_sql
+                                                                                                                    |--[end] -> verify_dsl -> explain -> END
 
     Agentic enhancements:
+    - ``plan`` (NEW): intent classification + task decomposition. Routes
+      "single_query" through the existing pipeline; other intents go to END
+      (handled by AgentOrchestrator outside the graph).
+    - ``confidence`` (NEW): DSL quality scoring after semantic resolution.
+      Routes "continue" if confidence >= 60, "clarify" to END if < 60.
+    - ``explain`` (NEW): natural language explanation generation after
+      verify_dsl, before END.
     - ``decompose`` (NEW): for questions with complexity markers (对比/同比/趋势/今年...),
       asks LLM to rewrite into a single-DSL-expressible form. No-op for simple
       questions so latency cost is bounded.
@@ -127,10 +138,12 @@ def build_graph(
 
     # Add nodes
     builder.add_node("clarification", nodes["clarification_node"])
+    builder.add_node("plan", nodes["plan_node"])
     builder.add_node("decompose", nodes["decompose_node"])
     builder.add_node("validation", validation_subgraph)
     builder.add_node("permission_check", permission_subgraph)
     builder.add_node("resolve_semantic", nodes["resolve_semantic_node"])
+    builder.add_node("confidence", nodes["confidence_node"])
     builder.add_node("build_sql", nodes["build_sql_node"])
     builder.add_node("scan_sql", nodes["scan_sql_node"])
     builder.add_node("sandbox_check", nodes["sandbox_check_node"])
@@ -138,21 +151,32 @@ def build_graph(
     builder.add_node("execute_sql", nodes["execute_sql_node"])
     builder.add_node("simplify_dsl", nodes["simplify_dsl_node"])
     builder.add_node("verify_dsl", nodes["verify_dsl_node"])
+    builder.add_node("explain", nodes["explain_node"])
 
     # Entry point
     builder.set_entry_point("clarification")
 
-    # 1. clarification -> END (needs clarification) or decompose (continue)
+    # 1. clarification -> END (needs clarification) or plan (continue)
     builder.add_conditional_edges(
         "clarification",
         route_after_clarification,
         {
             "clarification": END,
-            "continue": "decompose",
+            "continue": "plan",
         },
     )
 
-    # 1b. decompose -> validation (always; decompose only rewrites or no-ops)
+    # 1b. plan -> decompose (single_query) or END (agent handles complex intents)
+    builder.add_conditional_edges(
+        "plan",
+        route_after_plan,
+        {
+            "continue": "decompose",
+            "agent": END,
+        },
+    )
+
+    # 1c. decompose -> validation (always; decompose only rewrites or no-ops)
     builder.add_edge("decompose", "validation")
 
     # 2. validation -> permission_check
@@ -161,8 +185,19 @@ def build_graph(
     # 3. permission_check -> resolve_semantic
     builder.add_edge("permission_check", "resolve_semantic")
 
-    # 4. resolve_semantic -> build_sql
-    builder.add_edge("resolve_semantic", "build_sql")
+    # 4. resolve_semantic -> confidence
+    builder.add_edge("resolve_semantic", "confidence")
+
+    # 4b. confidence -> build_sql (continue), END (clarify or error)
+    builder.add_conditional_edges(
+        "confidence",
+        route_after_confidence,
+        {
+            "continue": "build_sql",
+            "clarify": END,
+            "end": END,
+        },
+    )
 
     # 5. build_sql -> scan_sql (with complexity routing, or end on error)
     def _route_after_build_sql(state: QueryState) -> str:
@@ -225,8 +260,9 @@ def build_graph(
     # 10. simplify_dsl -> build_sql (loop back)
     builder.add_edge("simplify_dsl", "build_sql")
 
-    # 11. verify_dsl -> END (currently warning-only; future: route FAIL back to correct_dsl)
-    builder.add_edge("verify_dsl", END)
+    # 11. verify_dsl -> explain -> END
+    builder.add_edge("verify_dsl", "explain")
+    builder.add_edge("explain", END)
 
     # -----------------------------------------------------------------------
     # Compile

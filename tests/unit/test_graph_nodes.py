@@ -199,6 +199,9 @@ class TestCreateNodeFunctions:
     def test_returns_all_expected_nodes(self, nodes):
         expected = {
             "clarification_node",
+            "plan_node",
+            "confidence_node",
+            "explain_node",
             "decompose_node",
             "generate_dsl_node",
             "mock_dsl_node",
