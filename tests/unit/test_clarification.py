@@ -7,9 +7,15 @@ class TestClarificationDetector:
     def detector(self):
         return ClarificationDetector()
 
-    def test_time_missing(self, detector):
-        items = detector.detect("查询销售额")
+    def test_time_missing_for_trend_question(self, detector):
+        # time_missing only triggers for time-sensitive queries (trends, changes)
+        items = detector.detect("销售额增长了多少")
         assert any(i.type == "time_missing" for i in items)
+
+    def test_time_not_missing_for_simple_query(self, detector):
+        # Simple queries without time keywords should not trigger time_missing
+        items = detector.detect("查询销售额")
+        assert not any(i.type == "time_missing" for i in items)
 
     def test_time_present_month(self, detector):
         items = detector.detect("查询本月销售额")
@@ -31,9 +37,10 @@ class TestClarificationDetector:
         items = detector.detect("销量怎么样")
         assert any(i.type == "metric_ambiguous" and "销量" in i.question for i in items)
 
-    def test_metric_ambiguous_sales_amount(self, detector):
+    def test_metric_not_ambiguous_sales_amount(self, detector):
+        # "销售额" maps clearly to sales_amount — no longer flagged as ambiguous
         items = detector.detect("销售额是多少")
-        assert any(i.type == "metric_ambiguous" and "销售额" in i.question for i in items)
+        assert not any(i.type == "metric_ambiguous" and "销售额" in i.question for i in items)
 
     def test_metric_ambiguous_customer(self, detector):
         items = detector.detect("客户数有多少")
@@ -79,7 +86,7 @@ class TestClarificationDetector:
         assert any(i.type == "comparison_ambiguous" for i in items)
 
     def test_options_populated(self, detector):
-        items = detector.detect("查询销售额")
+        items = detector.detect("销售额增长了多少")
         time_item = next(i for i in items if i.type == "time_missing")
         assert len(time_item.options) > 0
         assert "本月" in time_item.options

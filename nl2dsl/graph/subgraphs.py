@@ -122,8 +122,11 @@ def build_validation_subgraph(
     builder.add_node("correct_dsl", correct_node)
     builder.add_node("mock_dsl", mock_node)
 
-    # Entry point: route to generate_dsl if LLM available, else mock_dsl
+    # Entry point: if DSL already present (e.g. /query/execute), go straight
+    # to validation. Otherwise route to generate_dsl (LLM) or mock_dsl (fallback).
     def _route_entry(state: QueryState) -> str:
+        if state.get("dsl") is not None:
+            return "validate"
         if llm_client is not None:
             return "llm"
         return "mock"
@@ -131,6 +134,7 @@ def build_validation_subgraph(
     builder.set_conditional_entry_point(
         _route_entry,
         {
+            "validate": "validate_dsl",
             "llm": "generate_dsl",
             "mock": "mock_dsl",
         },

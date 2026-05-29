@@ -76,6 +76,10 @@ def route_after_validate(state: QueryState) -> str:
         generation_attempts = [
             a for a in dsl_attempts if a.get("source") != "validation"
         ]
+        # If there are no generation attempts, the DSL was provided by the user
+        # (e.g. via /query/execute) — do not auto-correct, return error directly.
+        if not generation_attempts:
+            return "error"
         max_retries = 3
         if len(generation_attempts) >= max_retries:
             return "error"

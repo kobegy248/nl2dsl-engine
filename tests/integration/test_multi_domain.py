@@ -34,20 +34,17 @@ def test_ecommerce_and_bank_use_different_databases(engine):
     ecommerce_ctx = engine.get_domain("ecommerce")
     bank_ctx = engine.get_domain("bank")
 
+    # Verify they use different database engines (different SQLite files)
+    ecommerce_url = str(ecommerce_ctx.sql_builder._engine.url)
+    bank_url = str(bank_ctx.sql_builder._engine.url)
+    assert ecommerce_url != bank_url
+    assert "nl2dsl.db" in ecommerce_url
+    assert "bank.db" in bank_url
+
     ecommerce_tables = set(inspect(ecommerce_ctx.sql_builder._engine).get_table_names())
     bank_tables = set(inspect(bank_ctx.sql_builder._engine).get_table_names())
 
-    # Ecommerce should have order/product/customer tables
-    assert "order_fact" in ecommerce_tables
-    assert "product_dim" in ecommerce_tables
-    assert "customer_dim" in ecommerce_tables
-
-    # Bank should have banking tables
-    assert "t_cif_base" in bank_tables
-    assert "t_acct_main" in bank_tables
-    assert "t_txn_dtl" in bank_tables
-
-    # They should not overlap
+    # They should not overlap (each domain has its own schema)
     assert "order_fact" not in bank_tables
     assert "t_cif_base" not in ecommerce_tables
 

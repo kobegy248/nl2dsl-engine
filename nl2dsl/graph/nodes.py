@@ -427,6 +427,8 @@ def _mock_dsl_from_question(question: str, data_source: str | None = None) -> DS
         metrics.append(Aggregation(func="count", field="customer_id", alias="customer_count"))
     elif any(kw in q for kw in ["优惠", "折扣", "discount"]):
         metrics.append(Aggregation(func="sum", field="discount_amount", alias="total_discount"))
+    elif any(kw in question for kw in ["销量", "数量", "quantity"]):
+        metrics.append(Aggregation(func="sum", field="quantity", alias="total_quantity"))
     else:
         # Vague query: default to sales
         metrics.append(Aggregation(func="sum", field="order_amount", alias="sales_amount"))
@@ -505,6 +507,7 @@ def _mock_dsl_from_question(question: str, data_source: str | None = None) -> DS
 def _restore_metric_fields(dsl: DSL) -> DSL:
     """After SemanticResolver replaces metric.field with expr like SUM(col),
     restore the raw column name so SQLBuilder can look it up.
+    Preserves complex expressions like SUM(CASE WHEN ...) intact.
     """
     if not dsl.metrics:
         return dsl
@@ -513,7 +516,10 @@ def _restore_metric_fields(dsl: DSL) -> DSL:
         field = m.field
         match = re.match(r"^[A-Z]+\(\s*(?:DISTINCT\s+)?(.+?)\s*\)$", field, re.IGNORECASE)
         if match:
-            field = match.group(1)
+            inner = match.group(1)
+            # Only unwrap if inner is a simple column name; preserve complex exprs
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
+                field = inner
         restored.append(m.model_copy(update={"field": field}))
     return dsl.model_copy(update={"metrics": restored})
 
@@ -1062,6 +1068,18 @@ def create_node_functions(
     # -----------------------------------------------------------------------
     @with_error_handler("clarification")
     def clarification_node(state: QueryState) -> dict:
+        # Skip clarification when a DSL is already provided (e.g. /query/execute)
+        # or when no LLM is available (can't act on clarification responses).
+        if state.get("dsl") is not None:
+            return {
+                "ambiguities": None,
+                "trace": {"step": "clarification", "status": "skipped", "reason": "dsl_present"},
+            }
+        if llm_client is None:
+            return {
+                "ambiguities": None,
+                "trace": {"step": "clarification", "status": "skipped", "reason": "no_llm"},
+            }
         ambiguities = clarification_detector.detect(state["question"])
         if ambiguities:
             return {

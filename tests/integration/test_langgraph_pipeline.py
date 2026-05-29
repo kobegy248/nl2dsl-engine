@@ -59,6 +59,9 @@ class TestFullPipeline:
         mock_services["clarification_detector"].detect.return_value = [
             MagicMock(model_dump=lambda: {"type": "metric", "question": "Which metric?", "options": ["a", "b"]})
         ]
+        # Provide a mock LLM so clarification is not skipped
+        mock_llm = MagicMock()
+        mock_services["llm_client"] = mock_llm
 
         graph = build_graph(**mock_services)
 

@@ -100,6 +100,12 @@ class Engine:
             plugin.register(self)
         self._built = True
 
+        # Return graph for backward compatibility (e2e tests depend on this)
+        ctx = self._domains.get("ecommerce")
+        if ctx:
+            return ctx.graph
+        return None
+
     def build_fastapi_app(self) -> FastAPI:
         self.build()
         app = FastAPI(title="NL2DSL", version="0.1.0")
@@ -206,7 +212,9 @@ class Engine:
 
             # 5. SQLBuilder
             tm = {k: v.get("table", k) for k, v in registry.data_sources.items()}
-            sql_builder = SQLBuilder(db, tm)
+            ds = {k: v for k, v in registry.data_sources.items()}
+            dm = {k: v.get("column", k) for k, v in registry.dimensions.items()}
+            sql_builder = SQLBuilder(db, tm, ds, dm)
 
             # 6. RAG
             rag_retriever = None

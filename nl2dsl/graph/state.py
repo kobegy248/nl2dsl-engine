@@ -18,6 +18,9 @@ def add_to_list(existing: list[dict] | dict | None, new_item: dict | list[dict] 
 
     Also handles the case where existing is a single dict (first assignment
     before reducer takes over).
+
+    Deduplicates by exact dict equality to avoid duplicate entries when
+    subgraphs inherit parent trace state and return it back.
     """
     if new_item is None:
         return existing
@@ -33,9 +36,16 @@ def add_to_list(existing: list[dict] | dict | None, new_item: dict | list[dict] 
 
     # Handle case where existing is a single dict (first assignment)
     if isinstance(existing, dict):
-        return [existing] + list(items_to_add)
+        result = [existing]
+    else:
+        result = list(existing)
 
-    return existing + list(items_to_add)
+    # Only append items not already present (handles subgraph state merging)
+    for item in items_to_add:
+        if item not in result:
+            result.append(item)
+
+    return result
 
 
 def add_to_attempts(existing: list[dict] | None, new_attempt: dict | None) -> list[dict] | None:

@@ -603,14 +603,14 @@ class TestManagementEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert len(data["data_sources"]) > 0
-        assert len(data["metrics"]) == 13  # 13 metrics in test config (8 orders + 5 inventory)
+        assert len(data["metrics"]) == 14  # 14 metrics in test config (8 orders + 5 inventory + 1 avg_days_supply)
         assert len(data["dimensions"]) >= 5  # At least 5 dimensions
 
     def test_metrics_endpoint(self, mock_api_client):
         response = mock_api_client.get("/api/v1/metrics")
         assert response.status_code == 200
         data = response.json()
-        assert len(data["metrics"]) == 13
+        assert len(data["metrics"]) == 14
         metric_names = {m["name"] for m in data["metrics"]}
         assert "sales_amount" in metric_names
         assert "gmv" in metric_names
@@ -1065,3 +1065,225 @@ class TestFullPipelineQueries:
         data = _assert_query_success(response)
         _assert_dsl_has_metric(data, "sales_amount")
         _assert_sql_and_data(data, min_rows=1)
+
+
+# =============================================================================
+# Phase 10: Complex ecommerce queries (multi-join, multi-dim, advanced filters)
+# =============================================================================
+
+class TestComplexEcommerceQueries:
+    """Test complex ecommerce queries using precise DSL.
+
+    Covers: multi-table joins, multi-dimension grouping, complex filters,
+    sorting + pagination, and cross-domain analytics.
+    """
+
+    def test_multi_join_orders_products_suppliers(self, mock_api_client):
+        """三表 JOIN：订单 + 产品 + 供应商."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "count", "field": "id", "alias": "order_count"},
+            ],
+            "dimensions": ["supplier_name", "category"],
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "supplier_dim" in data["sql"]
+
+    def test_multi_dimension_category_channel(self, mock_api_client):
+        """多维度分组：品类 + 渠道."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "sum", "field": "quantity", "alias": "total_quantity"},
+            ],
+            "dimensions": ["category", "channel"],
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+
+    def test_complex_filter_range_and_multiple(self, mock_api_client):
+        """复杂过滤：金额范围 + 地区 + 渠道."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "avg", "field": "pay_amount", "alias": "avg_order_value"},
+            ],
+            "dimensions": ["product_name"],
+            "filters": [
+                {"field": "pay_amount", "operator": ">", "value": 1000},
+                {"field": "region", "operator": "=", "value": "华东"},
+                {"field": "channel", "operator": "=", "value": "线上"},
+            ],
+            "order_by": [{"field": "sales_amount", "direction": "desc"}],
+            "limit": 10,
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "HD" in data["sql"] or "华东" in data["sql"]
+        assert "online" in data["sql"] or "线上" in data["sql"]
+
+    def test_top_products_by_profit_margin(self, mock_api_client):
+        """TOP N + 排序：销售额最高的产品（带折扣分析）."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "sum", "field": "discount_amount", "alias": "total_discount"},
+            ],
+            "dimensions": ["product_name", "brand"],
+            "order_by": [{"field": "sales_amount", "direction": "desc"}],
+            "limit": 5,
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert len(data["data"]) <= 5
+
+    def test_inventory_with_warehouse_join(self, mock_api_client):
+        """库存 + 仓库 JOIN：各仓库类型的库存总量."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "stock_quantity", "alias": "total_stock"},
+                {"func": "sum", "field": "available_quantity", "alias": "total_available"},
+            ],
+            "dimensions": ["warehouse_type", "region"],
+            "data_source": "inventory",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "inventory_fact" in data["sql"]
+
+    def test_customer_segment_analysis(self, mock_api_client):
+        """客户细分：各客户类型的订单量和客单价."""
+        dsl = {
+            "metrics": [
+                {"func": "count", "field": "id", "alias": "order_count"},
+                {"func": "avg", "field": "pay_amount", "alias": "avg_order_value"},
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+            ],
+            "dimensions": ["customer_type"],
+            "order_by": [{"field": "sales_amount", "direction": "desc"}],
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+
+    def test_region_tier_sales_analysis(self, mock_api_client):
+        """地区维度 JOIN：按城市等级统计销售额."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "count", "field": "id", "alias": "order_count"},
+            ],
+            "dimensions": ["tier_level"],
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "region_dim" in data["sql"]
+
+    def test_weekend_vs_weekday_sales(self, mock_api_client):
+        """日期维度 JOIN：周末 vs 工作日销售额对比."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "count", "field": "id", "alias": "order_count"},
+            ],
+            "dimensions": ["is_weekend"],
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "date_dim" in data["sql"]
+
+    def test_supplier_performance_ranking(self, mock_api_client):
+        """供应商绩效：按信用等级和合作年限分析销售额."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "pay_amount", "alias": "sales_amount"},
+                {"func": "count", "field": "DISTINCT product_id", "alias": "stock_product_count"},
+            ],
+            "dimensions": ["credit_rating", "supplier_name"],
+            "order_by": [
+                {"field": "credit_rating", "direction": "asc"},
+                {"field": "sales_amount", "direction": "desc"},
+            ],
+            "limit": 8,
+            "data_source": "orders",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert "supplier_dim" in data["sql"]
+
+    def test_multi_metric_cross_analysis(self, mock_api_client):
+        """跨数据源分析：销售额 + 库存量（通过 product_name 关联）."""
+        dsl = {
+            "metrics": [
+                {"func": "sum", "field": "stock_quantity", "alias": "total_stock"},
+                {"func": "avg", "field": "days_of_supply", "alias": "avg_days_supply"},
+            ],
+            "dimensions": ["brand", "category"],
+            "filters": [
+                {"field": "days_of_supply", "operator": "<", "value": 30},
+            ],
+            "order_by": [{"field": "avg_days_supply", "direction": "asc"}],
+            "limit": 10,
+            "data_source": "inventory",
+        }
+        response = mock_api_client.post("/api/v1/query/execute", json={
+            "dsl": dsl,
+            "user_id": "u001",
+            "tenant_id": "t001",
+        })
+        data = _assert_query_success(response)
+        _assert_sql_and_data(data, min_rows=1)
+        assert len(data["data"]) <= 10

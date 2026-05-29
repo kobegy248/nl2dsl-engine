@@ -247,8 +247,8 @@ class TestClarificationNode:
         assert result["trace"]["items_count"] > 0
 
     def test_time_missing(self, nodes, base_state):
-        """Question without time context should trigger time_missing clarification."""
-        base_state["question"] = "查询销售额"
+        """Question about trend without time context should trigger time_missing clarification."""
+        base_state["question"] = "销售额增长了多少"
         result = nodes["clarification_node"](base_state)
         assert result["status"] == "clarification"
         assert any(a.type == "time_missing" for a in result["ambiguities"])

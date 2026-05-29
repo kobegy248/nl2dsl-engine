@@ -1,10 +1,31 @@
+import os
+
 import pytest
+import yaml
 from fastapi.testclient import TestClient
-from nl2dsl.api import app
+
+from nl2dsl.api_factory import create_app
+from tests.e2e.mock_data import create_mock_database
 
 
 @pytest.fixture
 def client():
+    engine, *_ = create_mock_database("sqlite:///:memory:")
+
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+    with open(os.path.join(fixtures_dir, "metrics_test.yaml"), "r", encoding="utf-8") as f:
+        metrics_data = yaml.safe_load(f)
+    registry_dict = {
+        "metrics": metrics_data.get("metrics", {}),
+        "dimensions": metrics_data.get("dimensions", {}),
+        "data_sources": metrics_data.get("data_sources", {}),
+    }
+
+    app = create_app(
+        engine=engine,
+        registry_dict=registry_dict,
+        enable_clarification=False,
+    )
     return TestClient(app)
 
 
@@ -52,7 +73,8 @@ def test_query_dsl_with_region_filter(client):
     assert data["status"] == "success"
     dsl = data["dsl"]
     filters = dsl.get("filters", [])
-    assert any(f.get("field") == "region" and f.get("value") == "华东" for f in filters)
+    # Semantic resolver maps region -> region_code and 华东 -> HD
+    assert any(f.get("field") == "region_code" and f.get("value") == "HD" for f in filters)
 
 
 def test_query_endpoint(client):
@@ -90,7 +112,8 @@ def test_query_execute_endpoint(client):
     assert "sql" in data
     assert data["sql"] is not None
     assert "SELECT" in data["sql"]
-    assert "华东" in data["sql"]
+    # Semantic resolver maps 华东 -> HD in the SQL
+    assert "region_code" in data["sql"]
 
 
 def test_get_schema(client):

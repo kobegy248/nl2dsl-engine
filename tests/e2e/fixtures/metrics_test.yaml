@@ -38,6 +38,9 @@ metrics:
   stock_product_count:
     expr: COUNT(DISTINCT product_id)
     description: "有库存的商品种类数"
+  avg_days_supply:
+    expr: AVG(days_of_supply)
+    description: "平均库存天数"
 
 dimensions:
   product_name:
@@ -107,6 +110,27 @@ data_sources:
     metrics: [sales_amount, gmv, order_count, avg_order_value, total_discount, total_quantity, min_amount, max_amount]
     dimensions: [product_name, category, brand, region, channel, customer_type, order_date, supplier_name, customer_name, tier_level, credit_rating, is_weekend, is_holiday]
     time_field: order_date
+    joins:
+      product_dim:
+        on: product_id
+        type: left
+        alias: p
+      customer_dim:
+        on: customer_id
+        type: left
+        alias: c
+      region_dim:
+        on: region_code
+        type: left
+        alias: r
+      date_dim:
+        on: date_id
+        type: left
+        alias: d
+      supplier_dim:
+        on: p.supplier_id
+        type: left
+        alias: s
   inventory:
     table: inventory_fact
     metrics: [total_stock, avg_stock, total_available, total_reserved, stock_product_count]

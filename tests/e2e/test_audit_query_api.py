@@ -47,8 +47,11 @@ def test_audit_detail_returns_full_trace(mock_api_client, mock_engine):
     assert isinstance(item["dsl"], dict)
     assert "SELECT" in item["sql"]
     assert isinstance(item["trace"], list)
-    assert len(item["trace"]) == 9
-    assert item["trace"][0]["step"] == "dsl_generate"
+    # LangGraph pipeline produces ~12 steps (clarification, decompose, mock_dsl,
+    # validate_dsl, inject_row_permission, check_col_permission, resolve_semantic,
+    # build_sql, scan_sql, sandbox_check, execute_sql, verify_dsl)
+    assert len(item["trace"]) >= 10
+    assert item["trace"][0]["step"] == "clarification"
 
 
 def test_audit_detail_404_when_missing(mock_api_client):

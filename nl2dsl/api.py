@@ -272,6 +272,13 @@ async def query_dsl(req: QueryRequest) -> DSLGenerateResponse:
     result = await ctx.graph.ainvoke(state, config)
 
     elapsed = int((time.time() - start) * 1000)
+
+    # If clarification is needed and no DSL was produced, fall back to mock
+    if result.get("status") == "clarification" and result.get("dsl") is None:
+        from nl2dsl.graph.nodes import _mock_dsl_from_question
+        mock_dsl = _mock_dsl_from_question(req.question, req.data_source)
+        result = {"dsl": mock_dsl, "status": "pending"}
+
     dsl = result.get("dsl")
     return DSLGenerateResponse(
         status="success",

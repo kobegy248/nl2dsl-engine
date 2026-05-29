@@ -205,7 +205,20 @@ def create_app(
         _nl2dsl_engine.register("sql_builder", SQLBuilder(
             _db_engine,
             {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()},
+            registry_dict.get("data_sources", {}),
+            {k: v.get("column", k) for k, v in registry_dict.get("dimensions", {}).items()},
         ))
+    elif engine is not None:
+        # Engine was provided but registry_dict was not — rebuild sql_builder
+        # with the new engine so metadata reflects the test database.
+        _default_registry = _nl2dsl_engine.registry.get("registry_dict")
+        if _default_registry:
+            _nl2dsl_engine.register("sql_builder", SQLBuilder(
+                engine,
+                {k: v.get("table", k) for k, v in _default_registry.get("data_sources", {}).items()},
+                _default_registry.get("data_sources", {}),
+                {k: v.get("column", k) for k, v in _default_registry.get("dimensions", {}).items()},
+            ))
 
     # Override permission components
     _nl2dsl_engine.register("row_security", RowLevelSecurity(permissions or {}))
@@ -224,8 +237,34 @@ def create_app(
     _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
     audit_logger = AuditLogger(_db_engine)
 
-    # Build LangGraph StateGraph
-    query_graph = _nl2dsl_engine.build()
+    # Build a fresh LangGraph StateGraph with the overridden components.
+    # Do NOT use _nl2dsl_engine.build() which returns a pre-built graph
+    # using default components from _load_defaults().
+    _validator = _nl2dsl_engine.registry.get("validator")
+    _resolver = _nl2dsl_engine.registry.get("resolver")
+    _sql_builder = _nl2dsl_engine.registry.get("sql_builder")
+    _row_security = _nl2dsl_engine.registry.get("row_security")
+    _col_security = _nl2dsl_engine.registry.get("col_security")
+    _scanner = SQLScanner()
+    _sandbox = QuerySandbox(_db_engine)
+    _executor = SQLExecutor(_db_engine)
+
+    query_graph = build_graph(
+        llm_client=None,
+        rag_retriever=None,
+        validator=_validator,
+        row_security=_row_security,
+        col_security=_col_security,
+        resolver=_resolver,
+        sql_builder=_sql_builder,
+        scanner=_scanner,
+        sandbox=_sandbox,
+        executor=_executor,
+        clarification_detector=clarification_detector,
+        registry_dict=registry_dict or {},
+        llm_system_prompt="",
+        checkpointer=None,
+    )
 
     # -----------------------------------------------------------------------
     # Helpers

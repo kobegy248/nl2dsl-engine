@@ -16,7 +16,7 @@ from nl2dsl.api_factory import create_app
 from nl2dsl.rag.embedder import MockEmbedder
 from nl2dsl.rag.store import MilvusLiteStore
 
-from tests.e2e.mock_data import create_mock_database
+from tests.e2e.mock_data import create_mock_database, create_mock_bank_database
 
 
 @pytest.fixture(scope="session")
@@ -196,6 +196,57 @@ def mock_api_client(mock_engine, mock_registry_dict, mock_permissions):
     app = create_app(
         engine=mock_engine,
         registry_dict=mock_registry_dict,
+        permissions=permissions,
+        sensitive_columns=sensitive_columns,
+        masking_rules=masking_rules,
+    )
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------------
+# Bank domain fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def bank_engine():
+    """Create a SQLite engine with bank mock data."""
+    engine, *_ = create_mock_bank_database("sqlite:///:memory:")
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def bank_registry_dict():
+    """Load test-specific bank semantic registry."""
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+    metrics_path = os.path.join(fixtures_dir, "bank_metrics_test.yaml")
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return {
+        "metrics": data.get("metrics", {}),
+        "dimensions": data.get("dimensions", {}),
+        "data_sources": data.get("data_sources", {}),
+    }
+
+
+@pytest.fixture
+def bank_permissions():
+    """Load test-specific bank permissions."""
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+    perm_path = os.path.join(fixtures_dir, "bank_permissions_test.yaml")
+    with open(perm_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data.get("users", {}), data.get("sensitive_columns", {}), data.get("masking_rules", {})
+
+
+@pytest.fixture
+def bank_api_client(bank_engine, bank_registry_dict, bank_permissions):
+    """Create a TestClient with bank domain configuration."""
+    permissions, sensitive_columns, masking_rules = bank_permissions
+    app = create_app(
+        engine=bank_engine,
+        registry_dict=bank_registry_dict,
         permissions=permissions,
         sensitive_columns=sensitive_columns,
         masking_rules=masking_rules,

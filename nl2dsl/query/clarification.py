@@ -18,7 +18,7 @@ _TIME_KEYWORDS = {
 
 _METRIC_AMBIGUOUS: dict[str, list[str]] = {
     "销量": ["支付订单量", "发货数量", "完成数量"],
-    "销售额": ["实付金额", "订单金额", "GMV"],
+    # "销售额" removed — maps clearly to sales_amount in the registry
     "客户数": ["注册用户", "下单用户", "支付用户"],
 }
 
@@ -39,8 +39,10 @@ class ClarificationDetector:
         items: list[ClarificationItem] = []
         question = question.lower()
 
-        # 1. 时间缺失检测
-        if not self._has_time_context(question):
+        # 1. 时间缺失检测 — 只在问题明显涉及时序/变化时才要求时间范围
+        # 简单查询如"查询销售额"不需要强制指定时间
+        time_sensitive_keywords = {"趋势", "变化", "增长", "下降", "同比", "环比", "最近", "走势", "波动"}
+        if any(kw in question for kw in time_sensitive_keywords) and not self._has_time_context(question):
             items.append(
                 ClarificationItem(
                     type="time_missing",

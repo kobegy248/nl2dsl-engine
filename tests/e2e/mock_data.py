@@ -473,6 +473,353 @@ def get_summary_stats(engine, order_fact: Table):
     }
 
 
+# =============================================================================
+# Bank schema (for bank domain e2e tests)
+# =============================================================================
+
+BANK_ORGS = [
+    {"cd": "0100", "nm": "总行", "lvl": 1, "parent": None},
+    {"cd": "0101", "nm": "北京分行", "lvl": 2, "parent": "0100"},
+    {"cd": "0102", "nm": "上海分行", "lvl": 2, "parent": "0100"},
+    {"cd": "0103", "nm": "深圳分行", "lvl": 2, "parent": "0100"},
+    {"cd": "010101", "nm": "北京朝阳支行", "lvl": 3, "parent": "0101"},
+    {"cd": "010102", "nm": "北京海淀支行", "lvl": 3, "parent": "0101"},
+    {"cd": "010201", "nm": "上海浦东支行", "lvl": 3, "parent": "0102"},
+    {"cd": "010202", "nm": "上海徐汇支行", "lvl": 3, "parent": "0102"},
+]
+
+BANK_CHANNELS = [
+    {"cd": "01", "nm": "柜面"},
+    {"cd": "02", "nm": "手机银行"},
+    {"cd": "03", "nm": "网银"},
+    {"cd": "04", "nm": "ATM"},
+    {"cd": "05", "nm": "第三方"},
+]
+
+BANK_TXN_TYPES = [
+    {"cd": "1001", "nm": "存款"},
+    {"cd": "1002", "nm": "取款"},
+    {"cd": "1003", "nm": "转账"},
+    {"cd": "1004", "nm": "消费"},
+    {"cd": "1005", "nm": "理财购买"},
+]
+
+BANK_PRODUCTS = [
+    {"cd": "P001", "nm": "活期存款", "lvl1": "存款类", "lvl2": "活期", "sts": "01", "min": 0.0, "yld": 0.003},
+    {"cd": "P002", "nm": "一年定期", "lvl1": "存款类", "lvl2": "定期", "sts": "01", "min": 5000.0, "yld": 0.018},
+    {"cd": "P003", "nm": "三年定期", "lvl1": "存款类", "lvl2": "定期", "sts": "01", "min": 10000.0, "yld": 0.0275},
+    {"cd": "P004", "nm": "稳健理财", "lvl1": "理财类", "lvl2": "稳健型", "sts": "01", "min": 10000.0, "yld": 0.035},
+    {"cd": "P005", "nm": "进取理财", "lvl1": "理财类", "lvl2": "进取型", "sts": "01", "min": 50000.0, "yld": 0.055},
+    {"cd": "P006", "nm": "货币基金", "lvl1": "基金类", "lvl2": "货币型", "sts": "01", "min": 1.0, "yld": 0.022},
+]
+
+
+def create_bank_schema(engine) -> tuple[Table, ...]:
+    """Create bank domain schema."""
+    metadata = MetaData()
+
+    t_cif_base = Table(
+        "t_cif_base", metadata,
+        Column("cif_no", String(20), primary_key=True),
+        Column("cust_nm", String(50)),
+        Column("cust_sts_cd", String(2)),
+        Column("cust_type_cd", String(2)),
+        Column("cert_type_cd", String(2)),
+        Column("risk_lvl_cd", String(2)),
+        Column("reg_dt", String(10)),
+        Column("mgr_emp_no", String(10)),
+        Column("org_cd", String(10)),
+        Column("tenant_id", String(20)),
+    )
+
+    t_acct_main = Table(
+        "t_acct_main", metadata,
+        Column("acct_no", String(20), primary_key=True),
+        Column("cif_no", String(20)),
+        Column("acct_type_cd", String(2)),
+        Column("ccyc_cd", String(3)),
+        Column("acct_sts_cd", String(2)),
+        Column("acct_bal", Float),
+        Column("avl_bal", Float),
+        Column("frz_amt", Float),
+        Column("open_dt", String(10)),
+        Column("mat_dt", String(10)),
+        Column("org_cd", String(10)),
+        Column("tenant_id", String(20)),
+    )
+
+    t_txn_dtl = Table(
+        "t_txn_dtl", metadata,
+        Column("txn_seq_no", String(30), primary_key=True),
+        Column("acct_no", String(20)),
+        Column("cif_no", String(20)),
+        Column("txn_dt", String(10)),
+        Column("txn_type_cd", String(4)),
+        Column("txn_amt", Float),
+        Column("dr_cr_flg", String(1)),
+        Column("chl_cd", String(2)),
+        Column("rvsl_flg", String(1)),
+        Column("tenant_id", String(20)),
+    )
+
+    t_org_hier = Table(
+        "t_org_hier", metadata,
+        Column("org_cd", String(10), primary_key=True),
+        Column("org_nm", String(50)),
+        Column("org_lvl", Integer),
+        Column("parent_org_cd", String(10)),
+    )
+
+    t_prod_info = Table(
+        "t_prod_info", metadata,
+        Column("prod_cd", String(10), primary_key=True),
+        Column("prod_nm", String(50)),
+        Column("prod_lvl1_nm", String(20)),
+        Column("prod_lvl2_nm", String(20)),
+        Column("prod_sts_cd", String(2)),
+        Column("min_pur_amt", Float),
+        Column("exp_yld_rate", Float),
+    )
+
+    t_cust_prod_agt = Table(
+        "t_cust_prod_agt", metadata,
+        Column("agt_no", String(20), primary_key=True),
+        Column("cif_no", String(20)),
+        Column("acct_no", String(20)),
+        Column("prod_cd", String(10)),
+        Column("hold_amt", Float),
+        Column("sign_amt", Float),
+        Column("sign_dt", String(10)),
+        Column("due_dt", String(10)),
+        Column("agt_sts_cd", String(2)),
+        Column("tenant_id", String(20)),
+    )
+
+    t_chl_mapping = Table(
+        "t_chl_mapping", metadata,
+        Column("chl_cd", String(2), primary_key=True),
+        Column("chl_nm", String(20)),
+    )
+
+    t_txn_type_dict = Table(
+        "t_txn_type_dict", metadata,
+        Column("txn_type_cd", String(4), primary_key=True),
+        Column("txn_type_nm", String(20)),
+    )
+
+    metadata.create_all(engine)
+    return (
+        t_cif_base, t_acct_main, t_txn_dtl,
+        t_org_hier, t_prod_info, t_cust_prod_agt,
+        t_chl_mapping, t_txn_type_dict,
+    )
+
+
+def insert_bank_orgs(conn, t_org_hier: Table) -> None:
+    records = [
+        {"org_cd": o["cd"], "org_nm": o["nm"], "org_lvl": o["lvl"], "parent_org_cd": o["parent"]}
+        for o in BANK_ORGS
+    ]
+    conn.execute(insert(t_org_hier), records)
+    conn.commit()
+
+
+def insert_bank_channels(conn, t_chl_mapping: Table) -> None:
+    records = [
+        {"chl_cd": c["cd"], "chl_nm": c["nm"]}
+        for c in BANK_CHANNELS
+    ]
+    conn.execute(insert(t_chl_mapping), records)
+    conn.commit()
+
+
+def insert_bank_txn_types(conn, t_txn_type_dict: Table) -> None:
+    records = [
+        {"txn_type_cd": t["cd"], "txn_type_nm": t["nm"]}
+        for t in BANK_TXN_TYPES
+    ]
+    conn.execute(insert(t_txn_type_dict), records)
+    conn.commit()
+
+
+def insert_bank_products(conn, t_prod_info: Table) -> None:
+    records = [
+        {
+            "prod_cd": p["cd"], "prod_nm": p["nm"], "prod_lvl1_nm": p["lvl1"],
+            "prod_lvl2_nm": p["lvl2"], "prod_sts_cd": p["sts"],
+            "min_pur_amt": p["min"], "exp_yld_rate": p["yld"],
+        }
+        for p in BANK_PRODUCTS
+    ]
+    conn.execute(insert(t_prod_info), records)
+    conn.commit()
+
+
+def insert_bank_customers(conn, t_cif_base: Table) -> None:
+    """Insert 10 bank customers with varied attributes."""
+    names = ["王一", "李二", "张三", "赵四", "钱五", "孙六", "周七", "吴八", "郑九", "冯十"]
+    risk_levels = ["01", "02", "03", "04", "05"]
+    cust_types = ["01", "02"]  # 个人/企业
+    cust_statuses = ["01", "01", "01", "01", "01", "02", "03", "01", "01", "09"]  # 多数正常
+    cert_types = ["01", "01", "01", "02", "01", "01", "03", "01", "04", "01"]
+    orgs = ["010101", "010102", "010201", "010202", "010101", "0103", "010201", "010102", "010202", "0103"]
+    managers = ["M001", "M002", "M003", "M001", "M004", "M002", "M003", "M001", "M004", "M002"]
+
+    records = []
+    for i, name in enumerate(names):
+        reg_dt = (datetime(2023, 1, 1) + timedelta(days=i * 30)).strftime("%Y-%m-%d")
+        records.append({
+            "cif_no": f"C{1001 + i:05d}",
+            "cust_nm": name,
+            "cust_sts_cd": cust_statuses[i],
+            "cust_type_cd": cust_types[i % 2],
+            "cert_type_cd": cert_types[i],
+            "risk_lvl_cd": risk_levels[i % 5],
+            "reg_dt": reg_dt,
+            "mgr_emp_no": managers[i],
+            "org_cd": orgs[i],
+            "tenant_id": "t001",
+        })
+    conn.execute(insert(t_cif_base), records)
+    conn.commit()
+
+
+def insert_bank_accounts(conn, t_acct_main: Table) -> None:
+    """Insert ~15 accounts for 10 customers."""
+    acct_types = ["01", "02", "03"]  # 活期/定期/理财
+    cccys = ["CNY", "USD"]
+    acct_statuses = ["01", "01", "01", "01", "02", "03", "01", "01", "01", "09",
+                     "01", "01", "02", "01", "01"]
+
+    records = []
+    for i in range(15):
+        cif_idx = i % 10
+        cif_no = f"C{1001 + cif_idx:05d}"
+        acct_type = acct_types[i % 3]
+        bal = round(random.uniform(1000, 500000), 2)
+        frz = round(bal * random.uniform(0, 0.3), 2) if random.random() > 0.7 else 0.0
+        avl = round(bal - frz, 2)
+        open_dt = (datetime(2023, 3, 1) + timedelta(days=i * 20)).strftime("%Y-%m-%d")
+        mat_dt = (datetime(2025, 1, 1) + timedelta(days=i * 45)).strftime("%Y-%m-%d") if acct_type == "02" else None
+        records.append({
+            "acct_no": f"A{6001 + i:08d}",
+            "cif_no": cif_no,
+            "acct_type_cd": acct_type,
+            "ccyc_cd": cccys[i % 2],
+            "acct_sts_cd": acct_statuses[i],
+            "acct_bal": bal,
+            "avl_bal": avl,
+            "frz_amt": frz,
+            "open_dt": open_dt,
+            "mat_dt": mat_dt,
+            "org_cd": f"010{i % 3 + 1}01" if i < 12 else "0103",
+            "tenant_id": "t001",
+        })
+    conn.execute(insert(t_acct_main), records)
+    conn.commit()
+
+
+def insert_bank_transactions(conn, t_txn_dtl: Table) -> None:
+    """Insert ~50 transaction records."""
+    txn_types = ["1001", "1002", "1003", "1004", "1005"]
+    channels = ["01", "02", "03", "04", "05"]
+    base_dt = datetime(2024, 6, 1)
+
+    records = []
+    for i in range(50):
+        acct_idx = i % 15
+        cif_idx = acct_idx % 10
+        acct_no = f"A{6001 + acct_idx:08d}"
+        cif_no = f"C{1001 + cif_idx:05d}"
+        txn_type = txn_types[i % 5]
+        # dr_cr: 1=借/出, 2=贷/入
+        dr_cr = "2" if txn_type in ("1001", "1005") else "1"
+        amt = round(random.uniform(100, 50000), 2)
+        txn_dt = (base_dt + timedelta(days=i % 30)).strftime("%Y-%m-%d")
+        records.append({
+            "txn_seq_no": f"TXN{20240601 + i:010d}",
+            "acct_no": acct_no,
+            "cif_no": cif_no,
+            "txn_dt": txn_dt,
+            "txn_type_cd": txn_type,
+            "txn_amt": amt,
+            "dr_cr_flg": dr_cr,
+            "chl_cd": channels[i % 5],
+            "rvsl_flg": "1" if i % 20 == 0 else "0",
+            "tenant_id": "t001",
+        })
+    conn.execute(insert(t_txn_dtl), records)
+    conn.commit()
+
+
+def insert_bank_agreements(conn, t_cust_prod_agt: Table) -> None:
+    """Insert ~12 product agreements."""
+    prod_cds = ["P001", "P002", "P004", "P005", "P006"]
+    records = []
+    for i in range(12):
+        cif_idx = i % 8
+        acct_idx = i % 12
+        prod = BANK_PRODUCTS[i % len(BANK_PRODUCTS)]
+        hold = round(random.uniform(5000, 200000), 2)
+        sign = round(hold * random.uniform(0.8, 1.2), 2)
+        sign_dt = (datetime(2024, 1, 1) + timedelta(days=i * 15)).strftime("%Y-%m-%d")
+        due_dt = (datetime(2024, 12, 31) + timedelta(days=i * 10)).strftime("%Y-%m-%d")
+        records.append({
+            "agt_no": f"AGT{9001 + i:06d}",
+            "cif_no": f"C{1001 + cif_idx:05d}",
+            "acct_no": f"A{6001 + acct_idx:08d}",
+            "prod_cd": prod_cds[i % 5],
+            "hold_amt": hold,
+            "sign_amt": sign,
+            "sign_dt": sign_dt,
+            "due_dt": due_dt,
+            "agt_sts_cd": "01" if i < 10 else "02",
+            "tenant_id": "t001",
+        })
+    conn.execute(insert(t_cust_prod_agt), records)
+    conn.commit()
+
+
+def create_mock_bank_database(db_url: str = "sqlite:///:memory:"):
+    """Create a complete mock bank database with full schema and data.
+
+    Returns:
+        (engine, t_cif_base, t_acct_main, t_txn_dtl,
+         t_org_hier, t_prod_info, t_cust_prod_agt,
+         t_chl_mapping, t_txn_type_dict)
+    """
+    if db_url == "sqlite:///:memory:":
+        engine = create_engine(
+            db_url,
+            poolclass=StaticPool,
+            connect_args={"check_same_thread": False},
+        )
+    else:
+        engine = create_engine(db_url)
+
+    (
+        t_cif_base, t_acct_main, t_txn_dtl,
+        t_org_hier, t_prod_info, t_cust_prod_agt,
+        t_chl_mapping, t_txn_type_dict,
+    ) = create_bank_schema(engine)
+
+    with engine.connect() as conn:
+        insert_bank_orgs(conn, t_org_hier)
+        insert_bank_channels(conn, t_chl_mapping)
+        insert_bank_txn_types(conn, t_txn_type_dict)
+        insert_bank_products(conn, t_prod_info)
+        insert_bank_customers(conn, t_cif_base)
+        insert_bank_accounts(conn, t_acct_main)
+        insert_bank_transactions(conn, t_txn_dtl)
+        insert_bank_agreements(conn, t_cust_prod_agt)
+
+    return (
+        engine, t_cif_base, t_acct_main, t_txn_dtl,
+        t_org_hier, t_prod_info, t_cust_prod_agt,
+        t_chl_mapping, t_txn_type_dict,
+    )
+
+
 if __name__ == "__main__":
     (
         engine, order_fact, product_dim, customer_dim,
