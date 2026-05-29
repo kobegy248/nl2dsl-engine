@@ -13,6 +13,7 @@ import time
 from typing import Callable
 
 from nl2dsl.agent.confidence import _make_confidence_node
+from nl2dsl.agent.explainer import _make_explain_node
 from nl2dsl.agent.planner import _make_plan_node
 from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy
 from nl2dsl.dsl.validator import DSLValidator
@@ -1407,6 +1408,11 @@ def create_node_functions(
     confidence_node = _make_confidence_node(validator, llm_client)
 
     # -----------------------------------------------------------------------
+    # explain_node (natural language explanation generation)
+    # -----------------------------------------------------------------------
+    explain_node = _make_explain_node(llm_client)
+
+    # -----------------------------------------------------------------------
     # decompose_node + verify_dsl_node (agentic helpers, see factories above)
     # -----------------------------------------------------------------------
     decompose_node = _make_decompose_node(llm_client, llm_system_prompt)
@@ -1431,4 +1437,5 @@ def create_node_functions(
         "execute_sql_node": execute_sql_node,
         "simplify_dsl_node": simplify_dsl_node,
         "verify_dsl_node": verify_dsl_node_fn,
+        "explain_node": explain_node,
     }
