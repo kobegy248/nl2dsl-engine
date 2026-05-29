@@ -1,408 +1,328 @@
 # NL2DSL Engine
 
-> 企业级自然语言到 DSL 智能问数引擎
->
-> **AI 负责语义理解，系统负责执行治理**
+> 让业务人员用自然语言查数，让数据团队掌控一切。
 
-## 项目定位
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-469%20passed-brightgreen.svg)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**NL2DSL 本质上是一个数据治理的消费层。**
+**NL2DSL 是企业级自然语言到 DSL 的智能问数引擎。** 它不替代你的数据治理体系，而是消费已有的治理定义（指标、维度、权限），给业务人员一个自然语言的查询入口。
 
-它的可用性和准确性完全取决于底层数据治理的完善程度。没有完善的数据治理，NL2DSL 就像没有地基的房子——LLM 无法理解混乱的表结构、生成的 SQL 会频繁报错、权限控制存在漏洞、用户得到的结果不可信。
+---
 
-### 架构分层
+## 为谁而建
+
+你的数据团队已经做了这些工作：
+- 指标口径统一（"销售额" = `SUM(pay_amount)`）
+- 维度标准编码（"华东" = `HD`）
+- 数据权限分级（谁能看到哪些行/列）
+- 敏感数据脱敏（手机号显示为 `138****8888`）
+
+但业务人员 still 写 SQL 或找数据团队提需求？NL2DSL 把治理成果转化为自然语言查询能力。
+
+---
+
+## 一分钟看懂效果
+
+### 业务人员输入
 
 ```
-┌─────────────────────────────────────────────┐
-│  NL2DSL 消费层（本项目）                      │
-│  - 自然语言理解（LLM）                        │
-│  - DSL 生成与校验                             │
-│  - 查询执行与结果返回                          │
-│  - 审计追踪与反馈收集                          │
-└─────────────────────────────────────────────┘
-                      ↑ 消费
-┌─────────────────────────────────────────────┐
-│  数据治理服务层（前置依赖）                     │
-│  - 指标注册中心（metrics.yaml）               │
-│  - 维度注册中心（dimensions.yaml）            │
-│  - 数据源注册中心（data_sources.yaml）        │
-│  - 权限策略中心（permissions.yaml）           │
-│  - 敏感数据目录（sensitive_columns）          │
-│  - 数据血缘关系（joins / 表关联）             │
-└─────────────────────────────────────────────┘
-                      ↑ 消费
-┌─────────────────────────────────────────────┐
-│  数据存储层                                   │
-│  - 物理数据库（SQLite / MySQL / ...）         │
-│  - 向量数据库（Milvus）                       │
-│  - 审计日志库                                 │
-└─────────────────────────────────────────────┘
+查询华东地区销售额最高的 10 个产品
 ```
+
+### NL2DSL 处理过程
+
+```
+自然语言
+  → RAG 检索（找到 "华东"→region、"销售额"→sales_amount 等映射）
+  → LLM 生成 DSL（结构化 JSON，可校验）
+  → 系统校验（sales_amount 是否注册？region 维度是否存在？）
+  → 权限注入（用户 u001 只能看华东数据）
+  → 语义解析（sales_amount → SUM(pay_amount)，华东 → 'HD'）
+  → SQL 构建（按需 JOIN，只 JOIN 被引用的表）
+  → 安全扫描 + 沙箱预检
+  → 执行 → 返回结果
+```
+
+### 生成的 DSL（中间产物，可审计）
+
+```json
+{
+  "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+  "dimensions": ["product_name", "region"],
+  "filters": [
+    {"field": "region", "operator": "=", "value": "华东"}
+  ],
+  "order_by": [{"field": "sales_amount", "direction": "desc"}],
+  "limit": 10,
+  "data_source": "orders"
+}
+```
+
+### 执行的安全保障
+
+| 检查点 | 作用 | 结果 |
+|--------|------|------|
+| DSL 校验 | 指标/维度是否已注册 | 未注册直接拦截 |
+| 列级权限 | 是否访问敏感字段 | 越权拒绝 |
+| 行级权限 | 自动注入租户/组织过滤 | 看不到别人的数据 |
+| SQL 扫描 | 检测 DELETE/UNION/注释注入 | 危险操作拦截 |
+| 沙箱预检 | EXPLAIN + LIMIT 预览 | 全表扫描告警 |
+
+---
+
+## 架构定位：数据治理的消费层
+
+```
+  业务人员
+      |
+      v
++-------------------------------------------+
+|  NL2DSL 消费层（自然语言 → DSL → SQL）    |
+|  - RAG 语义检索                           |
+|  - LLM DSL 生成                           |
+|  - 校验 / 权限 / 安全扫描                 |
+|  - SQL 构建与执行                         |
++-------------------------------------------+
+                    ^ 消费
++-------------------------------------------+
+|  数据治理服务层（前置依赖，本项目不内置）   |
+|                                           |
+|  configs/metrics.yaml    指标注册中心      |
+|  configs/dimensions.yaml 维度注册中心      |
+|  configs/data_sources.yaml 数据源血缘      |
+|  configs/permissions.yaml  权限策略        |
++-------------------------------------------+
+                    ^ 消费
++-------------------------------------------+
+|  数据基础设施层                            |
+|  - 物理数据库（OLAP/OLTP）                 |
+|  - 向量数据库（RAG 知识库）                |
++-------------------------------------------+
+```
+
+**核心原则**：NL2DSL 不定义"什么是销售额"，只消费治理层已经定义好的 `sales_amount: SUM(pay_amount)`。就像 Tableau 消费数据仓库的度量定义一样。
 
 ### 与传统 NL2SQL 的区别
 
-传统 NL2SQL 让 LLM 直接生成 SQL，存在三大问题：
-1. **不可校验** — SQL 是自由文本，出错后难以定位修复
-2. **不可控** — 权限、安全、优化无法干预
-3. **不可信** — LLM 对物理表结构的理解容易出错
+| | 传统 NL2SQL | NL2DSL |
+|---|---|---|
+| LLM 输出 | 自由文本 SQL | 结构化 JSON（DSL） |
+| 可校验性 | 不可校验 | JSON Schema 校验 |
+| 权限控制 | 事后拦截或无法干预 | DSL 层级注入过滤条件 |
+| 安全可控 | SQL 注入风险高 | SQLAlchemy Core 参数化构建 |
+| 数据治理依赖 | 无要求（直接查物理表） | **必须**有治理定义 |
+| 多域支持 | 通常单域 | 自动发现多域配置 |
 
-NL2DSL 采用**分层架构**：LLM 只负责生成结构化 DSL（JSON），由系统基于数据治理定义负责校验、权限控制、语义解析和 SQL 构建。
+---
+
+## 核心能力
+
+### 1. 精确 JOIN 检测
+
+不是所有查询都需要 JOIN 所有表。NL2DSL 分析 DSL 中引用的列，只 JOIN 实际需要的表。
+
+**效果**：电商 `orders` 数据源配置了 5 个 JOIN，平均查询从 3.8 个 JOIN 降到 0.5 个，71% 的查询不需要任何 JOIN。
+
+### 2. 多域自治
 
 ```
-自然语言 → RAG 检索 → LLM → DSL → 校验 → 权限注入 → 语义解析 → SQLAlchemy → 标准 SQL → 执行
+configs/
+  metrics.yaml              # 默认域：电商
+  bank_metrics.yaml         # 银行域
+  bank_permissions.yaml     # 银行域权限
 ```
 
-这样做的好处：SQL 可校验、权限可控、查询可优化、多数据库方言可适配。**但前提是底层数据治理已经完备。**
+启动时自动发现所有 `_metrics.yaml`，每个域独立的数据库、向量库、RAG 检索器。
 
-## 核心特性
+### 3. Agentic 自修正
 
-### 作为数据治理消费层
+查询链路中的智能节点：
+- **decompose**：复杂问题改写（"对比今年和去年华东销售额" → 按年分组 + 限定两年范围）
+- **correct_dsl**：校验失败后，LLM 决策检索关键词 → 定向 RAG 补充知识 → 重新生成
+- **verify_dsl**：执行后自检，判断结果是否真正回答了用户问题
 
-- **治理定义消费**：指标、维度、数据源、权限全部从 YAML 治理配置读取，不内置任何业务定义
-- **语义层隔离**：用户和 LLM 只接触语义名称（`sales_amount`、`region`），物理字段（`SUM(pay_amount)`、`region_code`）由治理层映射
-- **权限自动生效**：行级过滤、列级控制、数据脱敏全部基于治理配置自动注入，无需代码改动
-- **血缘感知 JOIN**：表关联关系从 `data_sources.*.joins` 治理配置读取，支持精确 JOIN 检测（只 JOIN 被引用的表）
+### 4. 配置即治理
 
-### 系统能力
-
-- **分层架构**：LLM 生成 DSL，系统编译为 SQL，解耦语义理解与执行
-- **LangGraph 管道**：基于 StateGraph 的查询链路，支持条件分支、检查点、流式输出
-- **RAG 驱动**：基于 BGE 中文向量模型 + Milvus Lite，4 集合（schema/metrics/terms/history）混合检索
-- **启动自检同步**：YAML 配置改动后重启自动同步到向量库，无需手动跑脚本
-- **多域支持**：自动发现 `configs/` 下多个业务域（如 `bank_metrics.yaml`），每个域独立 DB + Milvus + RAG
-- **Agentic 节点**：decompose（复杂查询改写）、correct_dsl（定向 RAG 修正）、verify_dsl（执行后自检）
-- **配置驱动语义**：业务术语 / 历史示例通过 YAML 维护，业务人员可改
-- **插件框架**：组件可插拔（Registry）+ 节点可扩展（Pipeline 钩子）
-- **安全扫描**：SQL 执行前多阶段安全校验
-- **人工审核**：高风险查询自动中断，等待人工确认后继续
-- **审计追踪**：完整记录查询全链路，含 trace 信息
-- **前端工作台**：React + AntD + ECharts，含查询页和管理后台
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| Web 框架 | FastAPI |
-| 工作流引擎 | LangGraph (StateGraph) |
-| LLM 接入 | OpenAI SDK 兼容接口（默认智谱 GLM-4.5-Air，可切 Ollama / 通义千问） |
-| SQL 构建 | SQLAlchemy Core + sqlglot |
-| 向量存储 | Milvus Lite |
-| 向量模型 | BGE-base-zh-v1.5（本地） |
-| 配置管理 | Pydantic Settings + YAML |
-| 前端 | React + Vite + AntD + ECharts + Playwright |
-
-## 数据治理前置条件
-
-NL2DSL **不是数据治理的替代品，而是数据治理的放大器**。在部署 NL2DSL 之前，必须确保以下治理体系已经建立：
-
-### 1. 指标治理（必须）
-
-所有业务指标必须在 `metrics.yaml` 中注册：
+业务人员改 YAML，重启生效：
 
 ```yaml
-metrics:
-  sales_amount:
-    expr: SUM(pay_amount)          # 物理计算式
-    description: "销售额"           # LLM 理解的业务含义
+# configs/terms.yaml — 业务术语映射
+terms:
+  gmv:
+    aliases: ["流水", "成交额", "交易额"]
+    description: "成交总额"
 ```
 
-**没有治理的后果**：同一个概念多个定义（`sales_amount` vs `revenue` vs `营业额`）→ LLM 随机选择 → 结果不一致。
+LLM 看到用户说"查下流水"，就知道 alias 应该选 `gmv`。
 
-### 2. 维度治理（必须）
+---
 
-所有维度必须在 `dimensions.yaml` 中注册，含物理映射：
+## 前置条件（必读）
 
-```yaml
-dimensions:
-  region:
-    column: region_code            # 物理字段名
-    description: "地区"
-    value_map:                     # 语义值 → 物理值
-      "华东": "HD"
-      "华南": "HN"
-```
+NL2DSL **不是数据治理工具**，它消费治理成果。部署前必须确保：
 
-**没有治理的后果**：`value_map` 不完整 → 用户查"华中"返回空结果；`column` 映射错误 → SQL 引用不存在的列。
+| 治理项 | 必须程度 | 说明 |
+|--------|---------|------|
+| 指标注册 | 必须 | 所有业务指标有标准计算式 |
+| 维度注册 | 必须 | 所有维度有物理字段映射和值映射 |
+| 数据源注册 | 必须 | 主表、JOIN 关系、可用指标/维度 |
+| 权限策略 | 强烈建议 | 行过滤、列控制、脱敏规则 |
+| 术语词典 | 建议 | 业务别名映射，提升 LLM 准确率 |
 
-### 3. 数据源治理（必须）
+**成熟度评估**：
+- 治理完善 → NL2DSL 体验极佳
+- 治理部分 → 可用但 LLM 幻觉增加、权限有漏洞
+- 治理缺失 → **不可用**，请先做治理
 
-所有数据源及其 JOIN 关系必须在 `data_sources.yaml` 中注册：
-
-```yaml
-data_sources:
-  orders:
-    table: order_fact
-    metrics: [sales_amount, gmv, ...]
-    dimensions: [product_name, category, ...]
-    joins:
-      product_dim:
-        on: product_id
-        type: left
-        alias: p
-```
-
-**没有治理的后果**：JOIN 关系未注册 → 多表查询失败；ON 条件错误 → 笛卡尔积。
-
-### 4. 数据安全治理（必须）
-
-敏感字段、脱敏规则、用户权限必须在 `permissions.yaml` 中定义：
-
-```yaml
-sensitive_columns:
-  cust_nm:
-    level: "high"
-
-masking_rules:
-  cust_nm: "{x[0]}**"
-
-users:
-  u001:
-    tenant_id: "t001"
-    row_filters:
-      org_name:
-        operator: "in"
-        value: ["北京分行"]
-    allowed_dimensions: [customer_name, ...]
-```
-
-**没有治理的后果**：敏感数据裸奔；租户间数据隔离失效。
-
-### 5. 成熟度评估
-
-| 数据治理成熟度 | NL2DSL 效果 |
-|-------------|-----------|
-| **完善**（指标/维度/权限全部标准化） | 体验极佳：自然语言准确翻译、权限自动生效、结果可信 |
-| **部分**（有定义但不完整） | 可用但风险高：LLM 幻觉增加、查询偶尔失败、权限有漏洞 |
-| **缺失**（无治理，直接查物理表） | **不可用**：LLM 不理解表结构、SQL 错误率高、安全风险极大 |
+---
 
 ## 快速开始
 
-### 环境要求
+### 环境
 
 - Python 3.10+
-- Node.js 18+（前端）
-- torch >= 2.6（sentence-transformers 强制要求）
+- Node.js 18+（前端可选）
 
-### 安装依赖
+### 安装
 
 ```bash
-# 后端
 pip install -r requirements.txt
-
-# 前端
-cd web && npm install
 ```
 
-### 配置环境变量
-
-复制 `.env.example` 为 `.env` 并填入 LLM 配置：
+### 配置
 
 ```bash
-# 智谱 AI（默认）
-NL2DSL_LLM_API_KEY=your-zhipu-api-key
-NL2DSL_LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
-NL2DSL_LLM_MODEL=glm-4.5-air
-
-# 或 Ollama 本地
-# NL2DSL_LLM_API_KEY=ollama
-# NL2DSL_LLM_BASE_URL=http://localhost:11434/v1
-# NL2DSL_LLM_MODEL=qwen3:8b
+cp .env.example .env
+# 填入 LLM API Key（支持智谱 / Ollama / 任意 OpenAI 兼容接口）
 ```
 
-### 启动服务
+### 准备治理配置
 
 ```bash
-# 后端（首次启动自动检测 YAML mtime 并同步到向量库）
+mkdir -p configs
+cat > configs/metrics.yaml << 'EOF'
+metrics:
+  sales_amount:
+    expr: SUM(pay_amount)
+    description: "销售额"
+
+dimensions:
+  region:
+    column: region_code
+    value_map:
+      "华东": "HD"
+      "华南": "HN"
+
+data_sources:
+  orders:
+    table: order_fact
+    metrics: [sales_amount]
+    dimensions: [region]
+EOF
+```
+
+### 启动
+
+```bash
+# 后端（首次启动自动同步 YAML 到向量库）
 uvicorn nl2dsl.api:app --reload --host 0.0.0.0 --port 8000
 
-# 前端
+# 前端（可选）
 cd web && npm run dev
 ```
 
-访问：
-- 后端 API：http://localhost:8000
-- 前端工作台：http://localhost:5173
-
-### 验证服务
+### 查询
 
 ```bash
-# Health 检查
-curl http://localhost:8000/health
-
-# 自然语言查询
 curl -X POST http://localhost:8000/api/v1/query \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "查询华东地区销售额最高的 10 个产品",
-    "domain": "ecommerce",
+    "question": "查询华东地区的销售额",
     "user_id": "u001",
     "tenant_id": "t001"
   }'
-
-# 调试 RAG 检索内容
-curl "http://localhost:8000/api/v1/debug/rag?q=各品牌的流水&domain=ecommerce"
 ```
+
+---
 
 ## 项目结构
 
 ```
 nl2dsl/
-├── __init__.py             # 导出 Engine, Plugin
-├── api.py                  # FastAPI 应用入口
-├── api_factory.py          # App 工厂（用于测试注入）
-├── config.py               # 配置管理（Pydantic Settings）
-├── engine.py               # 引擎入口：插件加载 + 默认组件注册 + RAG 启动自检
-├── plugin.py               # 插件框架：Registry + Pipeline + Plugin ABC
-├── protocols.py            # 组件 Protocol 定义
-├── dsl/                    # DSL 模型、校验器、构建工具
-├── graph/                  # LangGraph StateGraph 查询管道（核心链路）
-├── llm/                    # LLM 客户端 + Prompt 模板
-├── rag/                    # 向量存储 + 检索器 + 启动自检同步
-│   ├── store.py            # Milvus Lite 封装
-│   ├── embedder.py         # BGE 中文向量模型
-│   ├── retriever.py        # 混合检索（schema/metrics/terms 走 jieba，history 走整句）
-│   └── sync.py             # 配置驱动的启动自检同步
-├── permission/             # 行级/列级权限控制
-├── semantic/               # 语义层注册中心（YAML 加载）
-├── sql_engine/             # SQLAlchemy Core 构建 + 安全扫描 + 沙箱
-├── audit/                  # 审计日志
-├── feedback/               # 用户纠错反馈
-└── utils/                  # 统一日志配置
+  engine.py          # 引擎入口：多域发现、组件组装
+  api.py / api_factory.py   # FastAPI 路由
+  config.py          # 环境配置
+  plugin.py          # 插件框架
+  dsl/               # DSL 模型与校验
+  graph/             # LangGraph 查询管道
+  llm/               # LLM 客户端
+  rag/               # 向量检索（BGE + Milvus Lite）
+  semantic/          # 语义注册中心
+  sql_engine/        # SQL 构建 + 安全扫描 + 沙箱
+  permission/        # 行级/列级权限
+  audit/             # 审计日志
+  feedback/          # 纠错反馈
 
 configs/
-├── metrics.yaml            # 指标/维度/数据源定义 → 同步到 schema + metrics 集合
-├── terms.yaml              # 业务术语 + 别名（"流水"→gmv 等）→ 同步到 terms 集合
-├── history.yaml            # 历史"问题→DSL"示例 → 同步到 history 集合
-└── permissions.yaml        # 权限规则配置
-
-web/                        # React 前端
-├── src/
-│   ├── pages/              # QueryPage（查询工作台）、AdminPage（管理后台）
-│   ├── components/         # 查询/管理后台组件
-│   ├── api/                # axios 客户端（超时 120s 兼容慢 LLM）
-│   └── hooks/              # React Query hooks
-└── tests/e2e/              # Playwright 端到端测试
-
-scripts/
-├── init_vector_store.py    # 手动初始化向量库（可选，启动自检通常已覆盖）
-└── test_rag_coverage.py    # RAG 4 集合覆盖度测试
-
-tests/
-├── unit/                   # 单元测试
-├── integration/            # 集成测试
-└── e2e/                    # 端到端测试
-
-data/                       # 数据文件目录（自动创建，不受 cwd 影响）
-├── nl2dsl.db               # SQLite 业务数据 + 审计日志
-├── milvus_lite.db/         # 向量库数据目录
-├── bank.db                 # 多域：bank 域业务数据
-├── bank_milvus_lite.db/    # 多域：bank 域向量库
-└── .ecommerce_rag_sync_state.json  # RAG 同步状态
+  metrics.yaml       # 指标/维度/数据源
+  terms.yaml         # 业务术语
+  history.yaml       # 历史示例
+  permissions.yaml   # 权限策略
 ```
 
-## 插件使用
+---
 
-```python
-from nl2dsl import Engine, Plugin
-
-# 方式1：零配置开箱即用
-engine = Engine()
-app = engine.build_fastapi_app()
-
-# 方式2：用插件扩展（如替换 LLM 后端）
-class OllamaPlugin(Plugin):
-    def register(self, engine):
-        engine.register("llm", OllamaLLM(model="qwen3:8b"))
-
-engine = Engine()
-engine.use(OllamaPlugin())
-app = engine.build_fastapi_app()
-```
-
-## 查询链路
+## 查询管道
 
 ```
 用户请求
-  → API 层（提取 user_id/tenant_id/domain，构建 QueryState）
-  → LangGraph StateGraph:
-    → clarification         歧义检测
-    → decompose             复杂查询改写（对比/同比/趋势 → 单 DSL）
-    → validation 子图       RAG 检索 → LLM 生成 DSL → 校验 → 修正循环
-    → permission_check      行级权限注入 + 列级权限检查
-    → resolve_semantic      指标名 → SQL 表达式
-    → build_sql             SQLAlchemy Core 构建
-    → scan_sql              安全扫描
-    → sandbox_check         沙箱预检
-      → 不通过 → human_review（人工审核）
-    → execute_sql           数据库执行
-      → 失败 → simplify_dsl → 重试
-    → verify_dsl            执行后 LLM 自检（warning-only）
-  → 审计日志记录
-  → 返回响应
+  → clarification      歧义检测（缺少时间范围？指标歧义？）
+  → decompose          复杂查询改写
+  → [validation 子图]  RAG → LLM 生成 DSL → 校验 → 修正循环
+  → [permission 子图] 行级过滤注入 + 列级权限检查
+  → resolve_semantic   指标名 → SQL 表达式
+  → build_sql          SQLAlchemy Core 构建（精确 JOIN）
+  → scan_sql           安全扫描
+  → sandbox_check      沙箱预检
+    → 风险 → human_review 人工审核
+  → execute_sql        数据库执行
+    → 失败 → simplify_dsl → 重试
+  → verify_dsl         执行后自检
+  → 审计日志 + 响应
 ```
 
-## RAG 设计
+---
 
-4 个 Milvus 集合，按用途采用不同检索策略：
-
-| 集合 | 来源 YAML | 内容 | 检索方式 |
-|------|---------|------|----------|
-| `schema` | metrics.yaml | 维度 + 指标定义 + join 关系 | jieba 切词关键词检索 |
-| `metrics` | metrics.yaml | 指标计算式 | jieba 切词关键词检索 |
-| `terms` | terms.yaml | 业务术语 + 别名（"流水→gmv"）| jieba 切词关键词检索 |
-| `history` | history.yaml | "问题→DSL"示例 | **整句语义检索**（找最像的） |
-
-**Join 关系同步**：`metrics.yaml` 中 `data_sources.*.joins` 的配置会自动同步到 schema 集合，RAG prompt 中显式展示表关联关系，LLM 据此在 DSL 中正确填充 `joins` 字段。
-
-**自检同步机制**：后端启动时对比每个 YAML 的 mtime 和 `.rag_sync_state.json` 中的记录，过期则增量重灌；都最新则跳过 BGE 模型加载，启动毫秒级返回。多域场景下每个域有独立的 sync state 文件。
-
-修改 YAML 后只需重启后端，无需手动跑脚本。
-
-## API 接口
+## API 速览
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/health` | 健康检查 |
-| POST | `/api/v1/query` | 自然语言查询 |
-| POST | `/api/v1/query/dsl` | 仅生成 DSL |
+| POST | `/api/v1/query` | 自然语言查询（完整管道） |
 | POST | `/api/v1/query/execute` | 直接执行 DSL |
 | POST | `/api/v1/query/stream` | 流式查询（SSE） |
-| POST | `/api/v1/query/resume` | 恢复中断流程 |
-| GET | `/api/v1/schema` | 获取语义层 Schema（支持 `?domain=`） |
-| GET | `/api/v1/metrics` | 获取指标列表（支持 `?domain=`） |
-| POST | `/api/v1/feedback` | 提交纠错反馈 |
-| GET | `/api/v1/admin/audit/queries` | 查询审计日志列表 |
-| GET | `/api/v1/admin/audit/queries/{id}` | 查询审计日志详情 |
-| GET | `/api/v1/debug/rag?q=...` | 调试：查看 RAG 检索结果（支持 `?domain=`） |
+| GET | `/api/v1/schema?domain=` | 获取语义层 Schema |
+| GET | `/api/v1/metrics?domain=` | 获取指标列表 |
+| GET | `/api/v1/debug/rag?q=` | 调试 RAG 检索内容 |
 
-## 核心设计决策
+完整 API 文档启动后访问：`http://localhost:8000/docs`
 
-**为什么 LLM 只生成 DSL 不生成 SQL？**
-- DSL 是结构化 JSON，可校验、可修正
-- SQL 是自由文本，出错后难以定位修复
-- DSL 层级可做权限控制和查询优化
+---
 
-**为什么使用 LangGraph StateGraph？**
-- 原生支持条件分支（校验失败修正、人工审核）
-- 检查点支持流程中断和恢复
-- `astream` 实时推送每个节点结果
-- 子图封装让权限/校验逻辑独立
+## 技术栈
 
-**为什么 RAG 不全部走整句语义检索？**
-- `schema`/`metrics`/`terms` 是**短命名实体**（"brand"、"流水→gmv"），jieba 关键词精确匹配更准
-- `history` 是**完整问句**，整句语义检索能找到表达相似但用词不同的示例
-- 分而治之比一刀切效果更好
+| 用途 | 技术 |
+|------|------|
+| Web 框架 | FastAPI |
+| 工作流引擎 | LangGraph (StateGraph) |
+| LLM 接入 | OpenAI SDK 兼容（智谱 / Ollama / 通义千问） |
+| SQL 构建 | SQLAlchemy Core |
+| 向量存储 | Milvus Lite |
+| 向量模型 | BGE-base-zh-v1.5 |
+| 配置 | Pydantic Settings + YAML |
+| 前端 | React + Vite + AntD + ECharts |
 
-**为什么 NL2DSL 不做数据治理本身？**
-
-就像 **Tableau / PowerBI** 不定义什么是"销售额"，而是消费数据仓库中定义的度量一样：
-
-| 层级 | 职责 | 示例 |
-|------|------|------|
-| 数据治理层 | 定义业务语义、管理数据质量、控制访问权限 | `metrics.yaml`、`permissions.yaml` |
-| NL2DSL 消费层 | 理解用户意图、匹配治理定义、生成并执行查询 | LLM → DSL → SQL |
-
-数据治理是**组织级能力**，需要业务、数据、安全团队共建；NL2DSL 是**技术层能力**，在治理完备的前提下提供自然语言接口。两者是上下游关系，不是替代关系。
+---
 
 ## License
 
