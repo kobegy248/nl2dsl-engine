@@ -264,6 +264,19 @@ def _make_plan_node(
 
     @with_error_handler("plan")
     def plan_node(state: QueryState) -> dict:
+        # If a plan is already present (e.g., from API layer pre-planning), skip.
+        existing_plan = state.get("plan")
+        if existing_plan is not None:
+            return {
+                "plan": existing_plan,
+                "trace": {
+                    "step": "plan",
+                    "status": "skipped",
+                    "reason": "plan_already_present",
+                    "intent": existing_plan.intent,
+                },
+            }
+
         question = state["question"]
 
         # Try LLM path first

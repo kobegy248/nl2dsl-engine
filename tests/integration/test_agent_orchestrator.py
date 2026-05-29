@@ -441,8 +441,8 @@ class TestComplexQueryPath:
             sse_callback=sse_callback,
         )
 
-        # Should still succeed but with partial data
-        assert result.status == "success"
+        # Partial failure returns warning status with available data
+        assert result.status == "warning"
         assert result.data is not None
 
         # Check that sub_query_result events include the error

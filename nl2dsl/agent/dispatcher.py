@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from nl2dsl.agent.models import QueryResult, SubQuery
+from nl2dsl.agent.models import Plan, QueryResult, SubQuery
 from nl2dsl.graph.state import QueryState
 from nl2dsl.utils.logger import get_logger
 
@@ -52,7 +52,13 @@ async def _execute_sub_query(
         "verify_status": base_state.get("verify_status"),
         "verify_reason": base_state.get("verify_reason"),
         "ambiguities": None,
-        "plan": None,
+        # Set a single-query plan to prevent graph plan_node from re-classifying
+        # the sub-query description (which is already a decomposed fragment).
+        "plan": Plan(
+            intent="single_query",
+            sub_queries=[SubQuery(id=sub_query.id, description=sub_query.description)],
+            reasoning="Sub-query from AgentOrchestrator decomposition",
+        ),
         "confidence": None,
         "explanation": None,
         "dsl": sub_query.dsl,
@@ -74,12 +80,37 @@ async def _execute_sub_query(
 
     try:
         result = await domain_context.graph.ainvoke(state, config)
-        data = result.get("data") or []
+        raw_data = result.get("data")
         status = result.get("status", "success")
+        # Preserve non-terminal statuses (clarification, warning, pending_review)
+        valid_statuses = {"success", "error", "clarification", "warning", "pending_review"}
+        if status not in valid_statuses:
+            status = "success"
+
+        # Normalize data to a list without silent loss
+        data: list[dict]
+        if raw_data is None:
+            data = []
+        elif isinstance(raw_data, list):
+            data = raw_data
+        elif isinstance(raw_data, dict):
+            # Some graph nodes return {"rows": [...]} — extract the rows
+            if "rows" in raw_data and isinstance(raw_data["rows"], list):
+                data = raw_data["rows"]
+            else:
+                data = [raw_data]
+        else:
+            logger.warning(
+                "[dispatcher] Unexpected data type %s from sub-query %s, wrapping in list",
+                type(raw_data).__name__,
+                sub_query.id,
+            )
+            data = [raw_data]  # type: ignore[list-item]
+
         return QueryResult(
             sub_query_id=sub_query.id,
-            data=data if isinstance(data, list) else [],
-            status=status if status in ("success", "error") else "success",
+            data=data,
+            status=status,
         )
     except Exception as exc:
         logger.error(

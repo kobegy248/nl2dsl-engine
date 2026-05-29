@@ -52,16 +52,22 @@ class AgentOrchestrator:
         return self._domains["ecommerce"]
 
     @staticmethod
-    def _emit_event(
+    async def _emit_event(
         callback: callable | None,
         event_type: str,
         payload: dict,
     ) -> None:
-        """Emit an SSE event via *callback*, swallowing any errors."""
+        """Emit an SSE event via *callback*, swallowing any errors.
+
+        Supports both sync and async callbacks.
+        """
         if callback is None:
             return
         try:
-            callback(event_type, payload)
+            import asyncio
+            result = callback(event_type, payload)
+            if asyncio.iscoroutine(result):
+                await result
         except Exception as exc:
             logger.warning("[orchestrator] SSE callback error for event '%s': %s", event_type, exc)
 
@@ -156,10 +162,10 @@ class AgentOrchestrator:
             plan = self._plan_question(question, domain_context)
         except Exception as exc:
             logger.error("[orchestrator] Planning failed: %s", exc, exc_info=True)
-            self._emit_event(sse_callback, "error", {"error": str(exc), "step": "plan"})
+            await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "plan"})
             return AgentResult(status="error", error=f"Planning failed: {exc}")
 
-        self._emit_event(sse_callback, "plan", {"plan": plan})
+        await self._emit_event(sse_callback, "plan", {"plan": plan})
 
         # ------------------------------------------------------------------
         # Step 2: Execute (simple vs complex path)
@@ -197,7 +203,7 @@ class AgentOrchestrator:
         """Execute a single-query question directly through the graph."""
         sub_query = plan.sub_queries[0]
 
-        self._emit_event(
+        await self._emit_event(
             sse_callback,
             "sub_query_start",
             {"sub_query_id": sub_query.id, "description": sub_query.description},
@@ -219,7 +225,7 @@ class AgentOrchestrator:
                 exc,
                 exc_info=True,
             )
-            self._emit_event(
+            await self._emit_event(
                 sse_callback,
                 "sub_query_result",
                 {
@@ -237,7 +243,7 @@ class AgentOrchestrator:
         data = graph_result.get("data") or []
         status = graph_result.get("status", "success")
 
-        self._emit_event(
+        await self._emit_event(
             sse_callback,
             "sub_query_result",
             {
@@ -257,7 +263,7 @@ class AgentOrchestrator:
 
         # Generate explanation
         explanation = self._generate_explanation(plan, question, data)
-        self._emit_event(sse_callback, "explain", {"explanation": explanation})
+        await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
         return AgentResult(
             status="success",
@@ -279,7 +285,7 @@ class AgentOrchestrator:
         """Execute a complex query by dispatching sub-queries, aggregating, and explaining."""
         # Emit sub_query_start for each sub-query
         for sq in plan.sub_queries:
-            self._emit_event(
+            await self._emit_event(
                 sse_callback,
                 "sub_query_start",
                 {"sub_query_id": sq.id, "description": sq.description},
@@ -312,7 +318,7 @@ class AgentOrchestrator:
                 exc,
                 exc_info=True,
             )
-            self._emit_event(
+            await self._emit_event(
                 sse_callback,
                 "error",
                 {"error": str(exc), "step": "dispatch"},
@@ -325,7 +331,7 @@ class AgentOrchestrator:
 
         # Emit sub_query_result for each result
         for sq_id, result in sub_results.items():
-            self._emit_event(
+            await self._emit_event(
                 sse_callback,
                 "sub_query_result",
                 {
@@ -348,25 +354,31 @@ class AgentOrchestrator:
                 plan=plan,
             )
 
-        # Aggregate results
+        # Aggregate results (including successful sub-queries only)
         aggregator = Aggregate()
         aggregated = aggregator.run(sub_results, plan.intent)
-        self._emit_event(sse_callback, "aggregate", {"result": aggregated})
+        await self._emit_event(sse_callback, "aggregate", {"result": aggregated})
 
         # Extract rows for explanation
         rows = aggregated.get("rows", [])
 
         # Generate explanation
         explanation = self._generate_explanation(plan, question, rows)
-        self._emit_event(sse_callback, "explain", {"explanation": explanation})
+        await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
         # Compute confidence based on success rate
         total = len(sub_results)
         success_count = sum(1 for r in sub_results.values() if r.status == "success")
         confidence = success_count / total if total > 0 else 0.0
 
+        # Determine status: warning if partial failure, success if all succeeded
+        status = "warning" if failed else "success"
+        if failed:
+            failed_info = "; ".join(f"{r.sub_query_id}: {r.error}" for r in failed)
+            logger.warning("[orchestrator] Partial sub-query failure: %s", failed_info)
+
         return AgentResult(
-            status="success",
+            status=status,
             data=rows,
             explanation=explanation,
             confidence=confidence,

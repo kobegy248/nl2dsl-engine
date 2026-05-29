@@ -292,15 +292,19 @@ def create_app(
         )
 
     def _build_domains_dict() -> dict[str, DomainContext]:
-        """Build domains dict from registry or engine domains."""
+        """Build domains dict using the app's configured components.
+
+        Always builds fresh DomainContexts from the components configured in
+        create_app to ensure test-injected overrides are respected.
+        """
         domains: dict[str, DomainContext] = {}
-        # Try to get domains from the engine's _domains if available
+        # Use the domain names discovered by the engine, but build fresh
+        # DomainContexts with the overridden components from this create_app call.
+        domain_names = ["ecommerce"]
         if hasattr(_nl2dsl_engine, '_domains') and _nl2dsl_engine._domains:
-            for domain_name, ctx in _nl2dsl_engine._domains.items():
-                domains[domain_name] = ctx
-        else:
-            # Fallback: build a single ecommerce domain context
-            domains["ecommerce"] = _get_or_build_domain_context("ecommerce")
+            domain_names = list(_nl2dsl_engine._domains.keys())
+        for domain_name in domain_names:
+            domains[domain_name] = _get_or_build_domain_context(domain_name)
         return domains
 
     # -----------------------------------------------------------------------
@@ -478,12 +482,14 @@ def create_app(
                 )
 
             # Simple query: continue with existing graph flow
+            # Pass the pre-computed plan to avoid double-planning in graph.
             state = QueryState(
                 question=req.question,
                 user_id=req.user_id,
                 tenant_id=req.tenant_id,
                 data_source=req.data_source,
                 ambiguities=None,
+                plan=plan,
                 dsl=None,
                 dsl_attempts=None,
                 sql=None,
@@ -602,32 +608,52 @@ def create_app(
         plan = _decompose_fallback(req.question, intent)
 
         if plan.intent != "single_query":
-            # Complex query: use AgentOrchestrator with SSE callback
+            # Complex query: use AgentOrchestrator with real-time SSE streaming
             domains = _build_domains_dict()
             orchestrator = AgentOrchestrator(domains=domains)
 
             async def agent_event_generator():
-                sse_events: list[dict] = []
+                import asyncio
+                queue: asyncio.Queue = asyncio.Queue()
 
-                def sse_callback(event_type: str, payload: dict):
-                    sse_events.append({"event": event_type, **payload})
+                async def sse_callback(event_type: str, payload: dict):
+                    await queue.put({"event": event_type, "data": payload})
 
-                agent_result = await orchestrator.run(
-                    question=req.question,
-                    user_id=req.user_id,
-                    tenant_id=req.tenant_id,
-                    domain="ecommerce",
-                    sse_callback=sse_callback,
-                )
+                async def run_agent():
+                    try:
+                        agent_result = await orchestrator.run(
+                            question=req.question,
+                            user_id=req.user_id,
+                            tenant_id=req.tenant_id,
+                            domain="ecommerce",
+                            sse_callback=sse_callback,
+                        )
+                        await queue.put({
+                            "event": "result",
+                            "data": {
+                                "status": agent_result.status,
+                                "data": agent_result.data,
+                                "explanation": agent_result.explanation,
+                                "confidence": agent_result.confidence,
+                            },
+                        })
+                    except Exception as exc:
+                        await queue.put({"event": "error", "data": {"error": str(exc)}})
+                    finally:
+                        await queue.put(None)  # sentinel
 
-                # Emit collected events with proper SSE format
-                for event in sse_events:
-                    event_type = event.pop("event", "data")
-                    yield f"event: {event_type}\ndata: {json.dumps(event, default=str)}\n\n"
+                # Start orchestrator in background
+                asyncio.create_task(run_agent())
 
-                # Emit final result
-                yield f"event: result\ndata: {json.dumps({'status': agent_result.status, 'data': agent_result.data, 'explanation': agent_result.explanation, 'confidence': agent_result.confidence}, default=str)}\n\n"
-                yield "data: [DONE]\n\n"
+                while True:
+                    event = await queue.get()
+                    if event is None:
+                        break
+                    event_type = event.get("event", "data")
+                    payload = event.get("data", {})
+                    yield f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
+
+                yield "event: done\ndata: {}\n\n"
 
             return StreamingResponse(
                 agent_event_generator(),
@@ -660,8 +686,8 @@ def create_app(
 
         async def event_generator():
             async for chunk in query_graph.astream(state, config, stream_mode="updates"):
-                yield f"data: {json.dumps(chunk, default=str)}\n\n"
-            yield "data: [DONE]\n\n"
+                yield f"event: update\ndata: {json.dumps(chunk, default=str)}\n\n"
+            yield "event: done\ndata: {}\n\n"
 
         return StreamingResponse(
             event_generator(),

@@ -1,0 +1,561 @@
+[42] test_query_total_balance
+    Description: 查询总余额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"total_balance": 2914474.9100000006}
+
+--------------------------------------------------------------------------------
+[43] test_query_customer_count
+    Description: 查询客户数量.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT count(t_cif_base.cif_no) AS customer_count 
+FROM t_cif_base JOIN t_org_hier AS o ON t_cif_base.org_cd = o.org_cd 
+WHERE t_cif_base.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "DISTINCT cif_no", "alias": "customer_count"}], "data_source": "customers"}
+    Data (1 rows):
+        Row 1: {"customer_count": 10}
+
+--------------------------------------------------------------------------------
+[44] test_query_account_count
+    Description: 查询账户数量.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT count(t_acct_main.acct_no) AS account_count 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "DISTINCT acct_no", "alias": "account_count"}], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"account_count": 11}
+
+--------------------------------------------------------------------------------
+[45] test_query_transaction_count
+    Description: 查询交易笔数.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT count(t_txn_dtl.txn_seq_no) AS txn_count 
+FROM t_txn_dtl JOIN t_acct_main AS a ON t_txn_dtl.acct_no = a.acct_no JOIN t_cif_base AS c ON t_txn_dtl.cif_no = c.cif_no JOIN t_chl_mapping AS ch ON t_txn_dtl.chl_cd = ch.chl_cd JOIN t_txn_type_dict AS tt ON t_txn_dtl.txn_type_cd = tt.txn_type_cd 
+WHERE t_txn_dtl.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "txn_seq_no", "alias": "txn_count"}], "data_source": "transactions"}
+    Data (1 rows):
+        Row 1: {"txn_count": 50}
+
+--------------------------------------------------------------------------------
+[46] test_query_balance_by_account_type
+    Description: 按账户类型统计余额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT t_acct_main.acct_type_cd AS account_type, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001' GROUP BY t_acct_main.acct_type_cd
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["account_type"], "data_source": "customer_accounts"}
+    Data (3 rows):
+        Row 1: {"account_type": "01", "total_balance": 1793395.54}
+        Row 2: {"account_type": "02", "total_balance": 991161.5200000001}
+        Row 3: {"account_type": "03", "total_balance": 129917.85}
+
+--------------------------------------------------------------------------------
+[47] test_query_customers_by_risk_level
+    Description: 按风险等级统计客户数.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT t_cif_base.risk_lvl_cd AS risk_level, count(t_cif_base.cif_no) AS customer_count 
+FROM t_cif_base JOIN t_org_hier AS o ON t_cif_base.org_cd = o.org_cd 
+WHERE t_cif_base.tenant_id = 't001' GROUP BY t_cif_base.risk_lvl_cd
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "DISTINCT cif_no", "alias": "customer_count"}], "dimensions": ["risk_level"], "data_source": "customers"}
+    Data (5 rows):
+        Row 1: {"risk_level": "01", "customer_count": 2}
+        Row 2: {"risk_level": "02", "customer_count": 2}
+        Row 3: {"risk_level": "03", "customer_count": 2}
+        Row 4: {"risk_level": "04", "customer_count": 2}
+        Row 5: {"risk_level": "05", "customer_count": 2}
+
+--------------------------------------------------------------------------------
+[48] test_query_txn_by_channel
+    Description: 按渠道统计交易金额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT ch.chl_nm AS channel_name, sum(t_txn_dtl.txn_amt) AS txn_amount 
+FROM t_txn_dtl JOIN t_acct_main AS a ON t_txn_dtl.acct_no = a.acct_no JOIN t_cif_base AS c ON t_txn_dtl.cif_no = c.cif_no JOIN t_chl_mapping AS ch ON t_txn_dtl.chl_cd = ch.chl_cd JOIN t_txn_type_dict AS tt ON t_txn_dtl.txn_type_cd = tt.txn_type_cd 
+WHERE t_txn_dtl.tenant_id = 't001' GROUP BY ch.chl_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "txn_amt", "alias": "txn_amount"}], "dimensions": ["channel_name"], "data_source": "transactions"}
+    Data (5 rows):
+        Row 1: {"channel_name": "ATM", "txn_amount": 234275.86}
+        Row 2: {"channel_name": "手机银行", "txn_amount": 253148.62999999998}
+        Row 3: {"channel_name": "柜面", "txn_amount": 244791.78000000003}
+        Row 4: {"channel_name": "第三方", "txn_amount": 218411.81}
+        Row 5: {"channel_name": "网银", "txn_amount": 277237.05}
+
+--------------------------------------------------------------------------------
+[49] test_query_balance_by_org
+    Description: 按机构统计余额（JOIN t_org_hier）.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001' GROUP BY o.org_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["org_name"], "data_source": "customer_accounts"}
+    Data (3 rows):
+        Row 1: {"org_name": "上海浦东支行", "total_balance": 746874.1000000001}
+        Row 2: {"org_name": "北京朝阳支行", "total_balance": 1545736.59}
+        Row 3: {"org_name": "深圳分行", "total_balance": 621864.22}
+
+--------------------------------------------------------------------------------
+[50] test_query_current_account_balance
+    Description: 查询活期存款余额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.acct_type_cd = '01' AND t_acct_main.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "filters": [{"field": "account_type", "operator": "=", "value": "01"}], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"total_balance": 1793395.54}
+
+--------------------------------------------------------------------------------
+[51] test_query_normal_customers
+    Description: 查询正常状态客户.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT count(t_cif_base.cif_no) AS customer_count 
+FROM t_cif_base JOIN t_org_hier AS o ON t_cif_base.org_cd = o.org_cd 
+WHERE t_cif_base.cust_sts_cd = '01' AND t_cif_base.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "DISTINCT cif_no", "alias": "customer_count"}], "filters": [{"field": "customer_status", "operator": "=", "value": "01"}], "data_source": "customers"}
+    Data (1 rows):
+        Row 1: {"customer_count": 7}
+
+--------------------------------------------------------------------------------
+[52] test_query_cny_accounts
+    Description: 查询人民币账户.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.ccyc_cd = 'CNY' AND t_acct_main.tenant_id = 't001'
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "filters": [{"field": "currency", "operator": "=", "value": "CNY"}], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"total_balance": 1313333.9200000002}
+
+--------------------------------------------------------------------------------
+[53] test_multi_metric_multi_dimension_accounts
+    Description: 多指标 + 多维度：各机构各账户类型的余额和账户数.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, t_acct_main.acct_type_cd AS account_type, sum(t_acct_main.acct_bal) AS total_balance, count(t_acct_main.acct_no) AS account_count, avg(t_acct_main.acct_bal) AS avg_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001' GROUP BY o.org_nm, t_acct_main.acct_type_cd
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}, {"func": "count", "field": "DISTINCT acct_no", "alias": "account_count"}, {"func": "avg", "field": "acct_bal", "alias": "avg_balance"}], "dimensions": ["org_name", "account_type"], "data_source": "customer_accounts"}
+    Data (5 rows):
+        Row 1: {"org_name": "上海浦东支行", "account_type": "02", "total_balance": 746874.1000000001, "account_count": 4, "avg_balance": 186718.52500000002}
+        Row 2: {"org_name": "北京朝阳支行", "account_type": "01", "total_balance": 1545736.59, "account_count": 4, "avg_balance": 386434.1475}
+        Row 3: {"org_name": "深圳分行", "account_type": "01", "total_balance": 247658.95, "account_count": 1, "avg_balance": 247658.95}
+        Row 4: {"org_name": "深圳分行", "account_type": "02", "total_balance": 244287.42, "account_count": 1, "avg_balance": 244287.42}
+        Row 5: {"org_name": "深圳分行", "account_type": "03", "total_balance": 129917.85, "account_count": 1, "avg_balance": 129917.85}
+
+--------------------------------------------------------------------------------
+[54] test_join_txn_with_channel_and_type
+    Description: 多表 JOIN：交易流水 + 渠道 + 交易类型.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT ch.chl_nm AS channel_name, tt.txn_type_nm AS transaction_type_name, count(t_txn_dtl.txn_seq_no) AS txn_count, sum(t_txn_dtl.txn_amt) AS txn_amount 
+FROM t_txn_dtl JOIN t_acct_main AS a ON t_txn_dtl.acct_no = a.acct_no JOIN t_cif_base AS c ON t_txn_dtl.cif_no = c.cif_no JOIN t_chl_mapping AS ch ON t_txn_dtl.chl_cd = ch.chl_cd JOIN t_txn_type_dict AS tt ON t_txn_dtl.txn_type_cd = tt.txn_type_cd 
+WHERE t_txn_dtl.rvsl_flg = '0' AND t_txn_dtl.tenant_id = 't001' GROUP BY ch.chl_nm, tt.txn_type_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "txn_seq_no", "alias": "txn_count"}, {"func": "sum", "field": "txn_amt", "alias": "txn_amount"}], "dimensions": ["channel_name", "transaction_type_name"], "filters": [{"field": "reversal_flag", "operator": "=", "value": "0"}], "data_source": "transactions"}
+    Data (5 rows):
+        Row 1: {"channel_name": "ATM", "transaction_type_name": "消费", "txn_count": 10, "txn_amount": 234275.86}
+        Row 2: {"channel_name": "手机银行", "transaction_type_name": "取款", "txn_count": 10, "txn_amount": 253148.62999999998}
+        Row 3: {"channel_name": "柜面", "transaction_type_name": "存款", "txn_count": 7, "txn_amount": 147003.77000000002}
+        Row 4: {"channel_name": "第三方", "transaction_type_name": "理财购买", "txn_count": 10, "txn_amount": 218411.81}
+        Row 5: {"channel_name": "网银", "transaction_type_name": "转账", "txn_count": 10, "txn_amount": 277237.05}
+
+--------------------------------------------------------------------------------
+[55] test_agreement_with_product_join
+    Description: 合约 + 产品 JOIN：各产品类目的持有金额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT p.prod_lvl1_nm AS product_level1_name, p.prod_lvl2_nm AS product_level2_name, sum(t_cust_prod_agt.hold_amt) AS product_hold_amount, count(t_cust_prod_agt.agt_no) AS agreement_count 
+FROM t_cust_prod_agt JOIN t_cif_base AS c ON t_cust_prod_agt.cif_no = c.cif_no JOIN t_prod_info AS p ON t_cust_prod_agt.prod_cd = p.prod_cd JOIN t_acct_main AS a ON t_cust_prod_agt.acct_no = a.acct_no 
+WHERE t_cust_prod_agt.agt_sts_cd = '01' AND t_cust_prod_agt.tenant_id = 't001' GROUP BY p.prod_lvl1_nm, p.prod_lvl2_nm ORDER BY product_hold_amount DESC
+ LIMIT 10 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "hold_amt", "alias": "product_hold_amount"}, {"func": "count", "field": "agt_no", "alias": "agreement_count"}], "dimensions": ["product_level1_name", "product_level2_name"], "filters": [{"field": "agreement_status", "operator": "=", "value": "01"}], "order_by": [{"field": "product_hold_amount", "direction": "desc"}], "limit": 10, "data_source": "agreements"}
+    Data (5 rows):
+        Row 1: {"product_level1_name": "理财类", "product_level2_name": "稳健型", "product_hold_amount": 234610.36000000002, "agreement_count": 2}
+        Row 2: {"product_level1_name": "存款类", "product_level2_name": "定期", "product_hold_amount": 199304.12, "agreement_count": 2}
+        Row 3: {"product_level1_name": "基金类", "product_level2_name": "货币型", "product_hold_amount": 141071.23, "agreement_count": 2}
+        Row 4: {"product_level1_name": "存款类", "product_level2_name": "活期", "product_hold_amount": 125895.17, "agreement_count": 2}
+        Row 5: {"product_level1_name": "理财类", "product_level2_name": "进取型", "product_hold_amount": 75843.57, "agreement_count": 2}
+
+--------------------------------------------------------------------------------
+[56] test_inflow_outflow_comparison
+    Description: 流入流出对比：各渠道的流入和流出金额.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT ch.chl_nm AS channel_name, sum(CASE WHEN dr_cr_flg = '2' THEN txn_amt ELSE 0 END) AS inflow_amount, sum(CASE WHEN dr_cr_flg = '1' THEN txn_amt ELSE 0 END) AS outflow_amount 
+FROM t_txn_dtl JOIN t_acct_main AS a ON t_txn_dtl.acct_no = a.acct_no JOIN t_cif_base AS c ON t_txn_dtl.cif_no = c.cif_no JOIN t_chl_mapping AS ch ON t_txn_dtl.chl_cd = ch.chl_cd JOIN t_txn_type_dict AS tt ON t_txn_dtl.txn_type_cd = tt.txn_type_cd 
+WHERE t_txn_dtl.rvsl_flg = '0' AND t_txn_dtl.tenant_id = 't001' GROUP BY ch.chl_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "CASE WHEN dr_cr_flg = '2' THEN txn_amt ELSE 0 END", "alias": "inflow_amount"}, {"func": "sum", "field": "CASE WHEN dr_cr_flg = '1' THEN txn_amt ELSE 0 END", "alias": "outflow_amount"}], "dimensions": ["channel_name"], "filters": [{"field": "reversal_flag", "operator": "=", "value": "0"}], "data_source": "transactions"}
+    Data (5 rows):
+        Row 1: {"channel_name": "ATM", "inflow_amount": 0, "outflow_amount": 234275.86}
+        Row 2: {"channel_name": "手机银行", "inflow_amount": 0, "outflow_amount": 253148.62999999998}
+        Row 3: {"channel_name": "柜面", "inflow_amount": 147003.77000000002, "outflow_amount": 0}
+        Row 4: {"channel_name": "第三方", "inflow_amount": 218411.81, "outflow_amount": 0}
+        Row 5: {"channel_name": "网银", "inflow_amount": 0, "outflow_amount": 277237.05}
+
+--------------------------------------------------------------------------------
+[57] test_top_accounts_by_balance
+    Description: TOP N 查询：余额最高的账户.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT c.cust_nm AS customer_name, t_acct_main.acct_type_cd AS account_type, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001' GROUP BY c.cust_nm, t_acct_main.acct_type_cd ORDER BY total_balance DESC
+ LIMIT 5 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["customer_name", "account_type"], "order_by": [{"field": "total_balance", "direction": "desc"}], "limit": 5, "data_source": "customer_accounts"}
+    Data (5 rows):
+        Row 1: {"customer_name": "冯十", "account_type": "01", "total_balance": 467376.32}
+        Row 2: {"customer_name": "赵四", "account_type": "01", "total_balance": 445895.93}
+        Row 3: {"customer_name": "王一", "account_type": "01", "total_balance": 324124.08}
+        Row 4: {"customer_name": "周七", "account_type": "01", "total_balance": 308340.26}
+        Row 5: {"customer_name": "张三", "account_type": "01", "total_balance": 247658.95}
+
+--------------------------------------------------------------------------------
+[58] test_multi_filter_customer_accounts
+    Description: 多条件过滤：正常状态 + 人民币 + 活期.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT c.cust_nm AS customer_name, sum(t_acct_main.acct_bal) AS total_balance, count(t_acct_main.acct_no) AS account_count 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.acct_sts_cd = '01' AND t_acct_main.ccyc_cd = 'CNY' AND t_acct_main.acct_type_cd = '01' AND t_acct_main.tenant_id = 't001' GROUP BY c.cust_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}, {"func": "count", "field": "DISTINCT acct_no", "alias": "account_count"}], "dimensions": ["customer_name"], "filters": [{"field": "account_status", "operator": "=", "value": "01"}, {"field": "currency", "operator": "=", "value": "CNY"}, {"field": "account_type", "operator": "=", "value": "01"}], "data_source": "customer_accounts"}
+    Data (2 rows):
+        Row 1: {"customer_name": "周七", "total_balance": 308340.26, "account_count": 1}
+        Row 2: {"customer_name": "王一", "total_balance": 324124.08, "account_count": 1}
+
+--------------------------------------------------------------------------------
+[59] test_customer_with_risk_and_org
+    Description: 客户 + 机构 JOIN：各机构各风险等级的客户数.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, t_cif_base.risk_lvl_cd AS risk_level, count(t_cif_base.cif_no) AS customer_count 
+FROM t_cif_base JOIN t_org_hier AS o ON t_cif_base.org_cd = o.org_cd 
+WHERE t_cif_base.tenant_id = 't001' GROUP BY o.org_nm, t_cif_base.risk_lvl_cd
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "count", "field": "DISTINCT cif_no", "alias": "customer_count"}], "dimensions": ["org_name", "risk_level"], "data_source": "customers"}
+    Data (9 rows):
+        Row 1: {"org_name": "上海徐汇支行", "risk_level": "04", "customer_count": 2}
+        Row 2: {"org_name": "上海浦东支行", "risk_level": "02", "customer_count": 1}
+        Row 3: {"org_name": "上海浦东支行", "risk_level": "03", "customer_count": 1}
+        Row 4: {"org_name": "北京朝阳支行", "risk_level": "01", "customer_count": 1}
+        Row 5: {"org_name": "北京朝阳支行", "risk_level": "05", "customer_count": 1}
+        Row 6: {"org_name": "北京海淀支行", "risk_level": "02", "customer_count": 1}
+        Row 7: {"org_name": "北京海淀支行", "risk_level": "03", "customer_count": 1}
+        Row 8: {"org_name": "深圳分行", "risk_level": "01", "customer_count": 1}
+        Row 9: {"org_name": "深圳分行", "risk_level": "05", "customer_count": 1}
+
+--------------------------------------------------------------------------------
+[60] test_b001_only_sees_beijing
+    Description: b001 只能看到北京分行的数据.
+    Domain: bank | Endpoint: /query/execute
+    User: b001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE o.org_nm IN ('北京分行', '北京朝阳支行', '北京海淀支行') AND t_acct_main.tenant_id = 't001' GROUP BY o.org_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["org_name"], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"org_name": "北京朝阳支行", "total_balance": 1545736.59}
+
+--------------------------------------------------------------------------------
+[61] test_b002_only_sees_shanghai
+    Description: b002 只能看到上海分行的数据.
+    Domain: bank | Endpoint: /query/execute
+    User: b002 | Tenant: t002
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE o.org_nm IN ('上海分行', '上海浦东支行', '上海徐汇支行') AND t_acct_main.tenant_id = 't001' GROUP BY o.org_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["org_name"], "data_source": "customer_accounts"}
+    Data (1 rows):
+        Row 1: {"org_name": "上海浦东支行", "total_balance": 746874.1000000001}
+
+--------------------------------------------------------------------------------
+[62] test_b003_sees_all_orgs
+    Description: b003 无行级限制，可以看到所有机构.
+    Domain: bank | Endpoint: /query/execute
+    User: b003 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT o.org_nm AS org_name, sum(t_acct_main.acct_bal) AS total_balance 
+FROM t_acct_main JOIN t_cif_base AS c ON t_acct_main.cif_no = c.cif_no JOIN t_org_hier AS o ON t_acct_main.org_cd = o.org_cd 
+WHERE t_acct_main.tenant_id = 't001' GROUP BY o.org_nm
+ LIMIT 100 OFFSET 0
+    DSL: {"metrics": [{"func": "sum", "field": "acct_bal", "alias": "total_balance"}], "dimensions": ["org_name"], "data_source": "customer_accounts"}
+    Data (3 rows):
+        Row 1: {"org_name": "上海浦东支行", "total_balance": 746874.1000000001}
+        Row 2: {"org_name": "北京朝阳支行", "total_balance": 1545736.59}
+        Row 3: {"org_name": "深圳分行", "total_balance": 621864.22}
+
+--------------------------------------------------------------------------------
+[63] test_query_sales
+    Description: 查询销售额.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, sum(order_fact.pay_amount) AS sales_amount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询销售额
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(pay_amount)", "alias": "sales_amount"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "sales_amount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "sales_amount": 71991.0}
+        Row 2: {"product_name": "华为 Mate 60 Pro", "sales_amount": 55292.1}
+        Row 3: {"product_name": "海尔冰箱 500L", "sales_amount": 30792.3}
+        Row 4: {"product_name": "美的空调 1.5匹", "sales_amount": 12820.25}
+        Row 5: {"product_name": "小米 14", "sales_amount": 9597.6}
+        Row 6: {"product_name": "优衣库羽绒服", "sales_amount": 4041.9}
+        Row 7: {"product_name": "Nike Air Max", "sales_amount": 1438.4}
+
+--------------------------------------------------------------------------------
+[64] test_query_sales_by_category
+    Description: 查询各品类的销售额.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.category AS category, sum(order_fact.pay_amount) AS sales_amount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.category ORDER BY sales_amount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询各品类的销售额
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(pay_amount)", "alias": "sales_amount"}], "dimensions": ["category"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "sales_amount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": [{"table": "product_dim", "on_field": "product_id", "join_type": "inner", "alias": "p"}]}
+    Data (3 rows):
+        Row 1: {"category": "手机", "sales_amount": 136880.7}
+        Row 2: {"category": "家电", "sales_amount": 43612.549999999996}
+        Row 3: {"category": "服饰", "sales_amount": 5480.3}
+
+--------------------------------------------------------------------------------
+[65] test_query_order_count
+    Description: 查询订单量.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, count(order_fact.id) AS order_count 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY order_count DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询订单量
+    Generated DSL: {"metrics": [{"func": "count", "field": "COUNT(id)", "alias": "order_count"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "order_count", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "华为 Mate 60 Pro", "order_count": 4}
+        Row 2: {"product_name": "海尔冰箱 500L", "order_count": 3}
+        Row 3: {"product_name": "iPhone 15 Pro", "order_count": 2}
+        Row 4: {"product_name": "美的空调 1.5匹", "order_count": 1}
+        Row 5: {"product_name": "小米 14", "order_count": 1}
+        Row 6: {"product_name": "优衣库羽绒服", "order_count": 1}
+        Row 7: {"product_name": "Nike Air Max", "order_count": 1}
+
+--------------------------------------------------------------------------------
+[66] test_query_region_filter
+    Description: 查询华东地区的销售额.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.region_code AS region, sum(order_fact.pay_amount) AS sales_amount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code = 'HD' AND order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.region_code ORDER BY sales_amount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询华东地区的销售额
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(pay_amount)", "alias": "sales_amount"}], "dimensions": ["region"], "filters": [{"field": "region_code", "operator": "=", "value": "HD"}, {"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "sales_amount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (1 rows):
+        Row 1: {"region": "HD", "sales_amount": 115561.19999999998}
+
+--------------------------------------------------------------------------------
+[67] test_query_channel_filter
+    Description: 查询线上渠道的销售额.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.channel_code AS channel, sum(order_fact.pay_amount) AS sales_amount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.channel_code = 'online' AND order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.channel_code ORDER BY sales_amount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询线上渠道的销售额
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(pay_amount)", "alias": "sales_amount"}], "dimensions": ["channel"], "filters": [{"field": "channel_code", "operator": "=", "value": "online"}, {"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "sales_amount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (1 rows):
+        Row 1: {"channel": "online", "sales_amount": 91586.6}
+
+--------------------------------------------------------------------------------
+[68] test_query_product_top_sales
+    Description: 查询销售额最高的产品.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, sum(order_fact.pay_amount) AS sales_amount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY sales_amount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询销售额最高的产品
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(pay_amount)", "alias": "sales_amount"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "sales_amount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "sales_amount": 71991.0}
+        Row 2: {"product_name": "华为 Mate 60 Pro", "sales_amount": 55292.1}
+        Row 3: {"product_name": "海尔冰箱 500L", "sales_amount": 30792.3}
+        Row 4: {"product_name": "美的空调 1.5匹", "sales_amount": 12820.25}
+        Row 5: {"product_name": "小米 14", "sales_amount": 9597.6}
+        Row 6: {"product_name": "优衣库羽绒服", "sales_amount": 4041.9}
+        Row 7: {"product_name": "Nike Air Max", "sales_amount": 1438.4}
+
+--------------------------------------------------------------------------------
+[69] test_query_avg_order_value
+    Description: 查询客单价.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, avg(order_fact.pay_amount) AS avg_order_value 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY avg_order_value DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询客单价
+    Generated DSL: {"metrics": [{"func": "avg", "field": "AVG(pay_amount)", "alias": "avg_order_value"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "avg_order_value", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": [{"table": "product_dim", "on_field": "product_id", "join_type": "inner", "alias": "p"}]}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "avg_order_value": 35995.5}
+        Row 2: {"product_name": "华为 Mate 60 Pro", "avg_order_value": 13823.025}
+        Row 3: {"product_name": "美的空调 1.5匹", "avg_order_value": 12820.25}
+        Row 4: {"product_name": "海尔冰箱 500L", "avg_order_value": 10264.1}
+        Row 5: {"product_name": "小米 14", "avg_order_value": 9597.6}
+        Row 6: {"product_name": "优衣库羽绒服", "avg_order_value": 4041.9}
+        Row 7: {"product_name": "Nike Air Max", "avg_order_value": 1438.4}
+
+--------------------------------------------------------------------------------
+[70] test_query_gmv
+    Description: 查询GMV.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, sum(order_fact.order_amount) AS gmv 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY gmv DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询GMV
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(order_amount)", "alias": "gmv"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "gmv", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "gmv": 79990.0}
+        Row 2: {"product_name": "华为 Mate 60 Pro", "gmv": 55992.0}
+        Row 3: {"product_name": "海尔冰箱 500L", "gmv": 31992.0}
+        Row 4: {"product_name": "美的空调 1.5匹", "gmv": 13495.0}
+        Row 5: {"product_name": "小米 14", "gmv": 11997.0}
+        Row 6: {"product_name": "优衣库羽绒服", "gmv": 4491.0}
+        Row 7: {"product_name": "Nike Air Max", "gmv": 1798.0}
+
+--------------------------------------------------------------------------------
+[71] test_query_total_quantity
+    Description: 查询销量.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, sum(order_fact.quantity) AS total_quantity 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY total_quantity DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询销量
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(quantity)", "alias": "total_quantity"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "total_quantity", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "total_quantity": 10}
+        Row 2: {"product_name": "优衣库羽绒服", "total_quantity": 9}
+        Row 3: {"product_name": "海尔冰箱 500L", "total_quantity": 8}
+        Row 4: {"product_name": "华为 Mate 60 Pro", "total_quantity": 8}
+        Row 5: {"product_name": "美的空调 1.5匹", "total_quantity": 5}
+        Row 6: {"product_name": "小米 14", "total_quantity": 3}
+        Row 7: {"product_name": "Nike Air Max", "total_quantity": 2}
+
+--------------------------------------------------------------------------------
+[72] test_query_discount
+    Description: 查询优惠总额.
+    Domain: ecommerce | Endpoint: /query
+    User: u001 | Tenant: t001
+    Status: success (HTTP 200)
+    SQL:
+        SELECT order_fact.product_name AS product_name, sum(order_fact.discount_amount) AS total_discount 
+FROM order_fact JOIN product_dim AS p ON order_fact.product_id = p.product_id JOIN customer_dim AS c ON order_fact.customer_id = c.customer_id JOIN region_dim AS r ON order_fact.region_code = r.region_code JOIN date_dim AS d ON order_fact.date_id = d.date_id JOIN supplier_dim AS s ON p.supplier_id = s.supplier_id 
+WHERE order_fact.region_code IN ('HD', 'HN') AND order_fact.tenant_id = 't001' GROUP BY order_fact.product_name ORDER BY total_discount DESC
+ LIMIT 10 OFFSET 0
+    Question: 查询优惠总额
+    Generated DSL: {"metrics": [{"func": "sum", "field": "SUM(discount_amount)", "alias": "total_discount"}], "dimensions": ["product_name"], "filters": [{"field": "region_code", "operator": "in", "value": ["HD", "HN"]}, {"field": "tenant_id", "operator": "=", "value": "t001"}], "order_by": [{"field": "total_discount", "direction": "desc"}], "limit": 10, "offset": 0, "data_source": "orders", "time_field": null, "time_range": null, "joins": null}
+    Data (7 rows):
+        Row 1: {"product_name": "iPhone 15 Pro", "total_discount": 7999.0}
+        Row 2: {"product_name": "小米 14", "total_discount": 2399.4}
+        Row 3: {"product_name": "海尔冰箱 500L", "total_discount": 1199.6999999999998}
+        Row 4: {"product_name": "华为 Mate 60 Pro", "total_discount": 699.9}
+        Row 5: {"product_name": "美的空调 1.5匹", "total_discount": 674.75}
+        Row 6: {"product_name": "优衣库羽绒服", "total_discount": 449.1}
+        Row 7: {"product_name": "Nike Air Max", "total_discount": 359.6}
+

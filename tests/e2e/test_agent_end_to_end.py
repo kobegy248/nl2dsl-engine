@@ -83,15 +83,17 @@ def _parse_sse_events(response_text: str) -> list[dict]:
                 event_type = line[len("event:"):].strip()
             elif line.startswith("data:"):
                 data_str = line[len("data:"):].strip()
-        if data_str and data_str != "[DONE]":
-            try:
-                payload = json.loads(data_str)
-                if event_type:
-                    payload["_event_type"] = event_type
-                events.append(payload)
-            except json.JSONDecodeError:
-                # Skip non-JSON data lines (like [DONE])
-                pass
+        # Skip empty data or done marker
+        if not data_str or data_str == "{}":
+            continue
+        try:
+            payload = json.loads(data_str)
+            if event_type:
+                payload["_event_type"] = event_type
+            events.append(payload)
+        except json.JSONDecodeError:
+            # Skip non-JSON data lines
+            pass
     return events
 
 
@@ -352,13 +354,13 @@ class TestSSEStreaming:
         assert "explanation" in first or any(isinstance(v, str) and len(v) > 0 for v in first.values())
 
     def test_stream_ends_with_done(self, agent_api_client):
-        """Stream ends with a [DONE] marker."""
+        """Stream ends with a done event."""
         response = agent_api_client.post("/api/v1/query/stream", json={
             "question": "查询销售额",
             "user_id": "u001",
             "tenant_id": "t001",
         })
-        assert "[DONE]" in response.text
+        assert "event: done" in response.text
 
 
 # ---------------------------------------------------------------------------

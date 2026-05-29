@@ -1349,9 +1349,16 @@ def create_node_functions(
         if sql is None:
             raise ValidationError("SQL is None, cannot execute")
         data = executor.execute(sql)
+        # Preserve "warning" status from confidence node, but upgrade
+        # "pending" / "pending_review" to "success" since execution completed.
+        current_status = state.get("status")
+        if current_status == "warning":
+            new_status = "warning"
+        else:
+            new_status = "success"
         return {
             "data": data,
-            "status": "success",
+            "status": new_status,
             "trace": {"step": "execute_sql", "status": "success", "rows_returned": len(data)},
         }
 
