@@ -74,33 +74,51 @@
 ## 架构定位：数据治理的消费层
 
 ```mermaid
-graph TD
-    A[业务人员] --> B[NL2DSL 消费层]
+flowchart TB
+    User([业务人员<br/>自然语言查询])
 
-    subgraph NL2DSL[NL2DSL 消费层 — 本项目]
-        B1[RAG 语义检索]
-        B2[LLM DSL 生成]
-        B3[校验 / 权限 / 安全扫描]
-        B4[SQL 构建与执行]
-        B1 --> B2 --> B3 --> B4
+    subgraph Engine["NL2DSL 查询引擎"]
+        direction TB
+        API[FastAPI<br/>API 网关]
+        Router[领域路由器<br/>QueryRouter]
+
+        subgraph Domains["多域自治 — 每个域独立隔离"]
+            direction LR
+            EC["电商域<br/>DomainContext"]
+            BK["银行域<br/>DomainContext"]
+        end
+
+        Shared[共享组件<br/>LLM / Embedder / Reranker / Audit]
     end
 
-    subgraph Governance[数据治理服务层 — 前置依赖]
-        C1[configs/metrics.yaml<br/>指标注册中心]
-        C2[configs/dimensions.yaml<br/>维度注册中心]
-        C3[configs/data_sources.yaml<br/>数据源血缘]
-        C4[configs/permissions.yaml<br/>权限策略]
+    subgraph Governance["数据治理层 — 前置依赖"]
+        direction LR
+        M[指标注册<br/>metrics.yaml]
+        D[维度注册<br/>dimensions.yaml]
+        DS[数据源血缘<br/>data_sources.yaml]
+        P[权限策略<br/>permissions.yaml]
     end
 
-    subgraph Infra[数据基础设施层]
-        D1[物理数据库<br/>OLAP / OLTP]
-        D2[向量数据库<br/>Milvus Lite]
+    subgraph Infra["基础设施层"]
+        direction LR
+        DB[(物理数据库<br/>OLAP/OLTP)]
+        Vec[(向量数据库<br/>Milvus Lite)]
     end
 
-    B -.消费.-> Governance
-    B -.读写.-> D1
-    B -.读写.-> D2
+    User --> API
+    API --> Router
+    Router --> EC & BK
+    EC & BK --> DB
+    EC & BK --> Vec
+    Shared -.-> EC & BK
+    Governance -.-> Engine
 ```
+
+**图的阅读指南**：
+- **实线箭头** = 数据流向（用户请求 → 引擎处理 → 数据库执行）
+- **虚线箭头** = 依赖关系（引擎消费治理配置、共享组件被各域复用）
+- **DomainContext** = 每个域的完整运行时（独立的 RAG、DSL 校验器、SQL 构建器、权限组件）
+- 电商域和银行域的 `metrics.yaml` 彼此隔离，不会互相污染
 
 **核心原则**：NL2DSL 不定义"什么是销售额"，只消费治理层已经定义好的 `sales_amount: SUM(pay_amount)`。就像 Tableau 消费数据仓库的度量定义一样。
 
@@ -274,24 +292,48 @@ configs/
 
 ---
 
-## 查询管道
+## 查询管道（LangGraph 状态机）
 
+```mermaid
+flowchart TB
+    Start([用户输入]) --> Clarify["歧义检测<br/>clarification"]
+
+    Clarify -->|"有歧义"| Ask["追问用户"]
+    Ask --> Clarify
+    Clarify -->|"无歧义"| Decompose["查询改写<br/>decompose"]
+
+    Decompose --> RAG["RAG 语义检索<br/>BGE + Milvus"]
+    RAG --> LLM["LLM 生成 DSL<br/>结构化 JSON"]
+    LLM --> Validate["DSL 校验<br/>Schema 验证"]
+
+    Validate -->|"校验失败"| Correct["自动修正<br/>correct_dsl"]
+    Correct --> RAG
+    Validate -->|"校验通过"| Permission["权限注入<br/>row + col level"]
+
+    Permission --> Resolve["语义解析<br/>指标→SQL 表达式"]
+    Resolve --> Build["SQL 构建<br/>精确 JOIN"]
+
+    Build --> Scan["SQL 安全扫描<br/>禁止操作检测"]
+    Scan -->|"危险"| Reject["拒绝执行"]
+    Scan -->|"安全"| Sandbox["沙箱预检<br/>EXPLAIN + LIMIT"]
+
+    Sandbox -->|"扫描量过大"| HumanReview["人工审核<br/>human_review"]
+    HumanReview -->|"批准"| Execute
+    HumanReview -->|"拒绝"| Reject
+    Sandbox -->|"正常"| Execute["执行 SQL"]
+
+    Execute -->|"失败"| Simplify["简化 DSL 重试"]
+    Simplify --> Execute
+    Execute --> Verify["结果验证<br/>verify_dsl"]
+    Verify --> Result(["返回结果"])
+    Reject --> Result
 ```
-用户请求
-  → clarification      歧义检测（缺少时间范围？指标歧义？）
-  → decompose          复杂查询改写
-  → [validation 子图]  RAG → LLM 生成 DSL → 校验 → 修正循环
-  → [permission 子图] 行级过滤注入 + 列级权限检查
-  → resolve_semantic   指标名 → SQL 表达式
-  → build_sql          SQLAlchemy Core 构建（精确 JOIN）
-  → scan_sql           安全扫描
-  → sandbox_check      沙箱预检
-    → 风险 → human_review 人工审核
-  → execute_sql        数据库执行
-    → 失败 → simplify_dsl → 重试
-  → verify_dsl         执行后自检
-  → 审计日志 + 响应
-```
+
+**流程说明**：
+- **菱形条件分支**：系统在每个检查点做出路由决策（歧义/无歧义、校验失败/通过、危险/安全、扫描量过大/正常）
+- **循环修正**：DSL 校验失败 → 自动修正 → 重新 RAG → 重新生成，最多循环 3 次
+- **安全闸门**：SQL 安全扫描（拦截 DELETE/UNION/注释注入）和沙箱预检（全表扫描告警）两道防线
+- **人工审核**：仅当沙箱判定扫描量超过阈值时触发，审批后可放行或拒绝
 
 ---
 
