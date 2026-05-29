@@ -73,32 +73,33 @@
 
 ## 架构定位：数据治理的消费层
 
-```
-  业务人员
-      |
-      v
-+-------------------------------------------+
-|  NL2DSL 消费层（自然语言 → DSL → SQL）    |
-|  - RAG 语义检索                           |
-|  - LLM DSL 生成                           |
-|  - 校验 / 权限 / 安全扫描                 |
-|  - SQL 构建与执行                         |
-+-------------------------------------------+
-                    ^ 消费
-+-------------------------------------------+
-|  数据治理服务层（前置依赖，本项目不内置）   |
-|                                           |
-|  configs/metrics.yaml    指标注册中心      |
-|  configs/dimensions.yaml 维度注册中心      |
-|  configs/data_sources.yaml 数据源血缘      |
-|  configs/permissions.yaml  权限策略        |
-+-------------------------------------------+
-                    ^ 消费
-+-------------------------------------------+
-|  数据基础设施层                            |
-|  - 物理数据库（OLAP/OLTP）                 |
-|  - 向量数据库（RAG 知识库）                |
-+-------------------------------------------+
+```mermaid
+graph TD
+    A[业务人员] --> B[NL2DSL 消费层]
+
+    subgraph NL2DSL[NL2DSL 消费层 — 本项目]
+        B1[RAG 语义检索]
+        B2[LLM DSL 生成]
+        B3[校验 / 权限 / 安全扫描]
+        B4[SQL 构建与执行]
+        B1 --> B2 --> B3 --> B4
+    end
+
+    subgraph Governance[数据治理服务层 — 前置依赖]
+        C1[configs/metrics.yaml<br/>指标注册中心]
+        C2[configs/dimensions.yaml<br/>维度注册中心]
+        C3[configs/data_sources.yaml<br/>数据源血缘]
+        C4[configs/permissions.yaml<br/>权限策略]
+    end
+
+    subgraph Infra[数据基础设施层]
+        D1[物理数据库<br/>OLAP / OLTP]
+        D2[向量数据库<br/>Milvus Lite]
+    end
+
+    B -.消费.-> Governance
+    B -.读写.-> D1
+    B -.读写.-> D2
 ```
 
 **核心原则**：NL2DSL 不定义"什么是销售额"，只消费治理层已经定义好的 `sales_amount: SUM(pay_amount)`。就像 Tableau 消费数据仓库的度量定义一样。
