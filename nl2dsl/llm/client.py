@@ -1,3 +1,4 @@
+import json
 import time
 
 from openai import OpenAI
@@ -38,5 +39,40 @@ class LLMClient:
         content = response.choices[0].message.content
         elapsed = int((time.time() - start) * 1000)
         logger.info("LLM response: tokens=%s time=%dms content_length=%d",
+                    response.usage, elapsed, len(content) if content else 0)
+        return content
+
+    def generate_structured(self, user_prompt: str, system_prompt: str, json_schema: str) -> str:
+        """Generate with JSON Schema enforcement via OpenAI structured output.
+
+        Uses response_format={"type": "json_schema", ...} for deterministic
+        JSON output. Always uses temperature=0.
+        """
+        start = time.time()
+        logger.info("LLM structured request: model=%s schema_length=%d", self._model, len(json_schema))
+
+        schema_dict = json_schema if isinstance(json_schema, dict) else json.loads(json_schema)
+
+        kwargs = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "dsl_response",
+                    "strict": True,
+                    "schema": schema_dict,
+                },
+            },
+        }
+
+        response = self._client.chat.completions.create(**kwargs)
+        content = response.choices[0].message.content
+        elapsed = int((time.time() - start) * 1000)
+        logger.info("LLM structured response: tokens=%s time=%dms content_length=%d",
                     response.usage, elapsed, len(content) if content else 0)
         return content
