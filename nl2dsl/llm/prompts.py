@@ -191,7 +191,7 @@ DSL_JSON_SCHEMA = json.dumps(
                     },
                 },
             },
-            "limit": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             "offset": {"type": "integer", "minimum": 0},
             "data_source": {"type": "string"},
             "joins": {
@@ -227,7 +227,7 @@ DSL_JSON_SCHEMA = json.dumps(
                             "between", "in", "like", "is_null",
                         ]
                     },
-                    "value": {},
+                    "value": {"type": ["string", "number", "array", "boolean", "null"]},
                 },
             },
             "filter_tree": {
