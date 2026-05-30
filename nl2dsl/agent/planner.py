@@ -18,13 +18,14 @@ import re
 from typing import Callable
 
 from nl2dsl.agent.models import Plan, SubQuery
+from nl2dsl.agent.strategies import IntentRegistry
 from nl2dsl.graph.state import QueryState
 from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("agent.planner")
 
 # ---------------------------------------------------------------------------
-# Intent classification keywords
+# Intent classification keywords (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
 _INTENT_KEYWORDS = {
@@ -47,7 +48,7 @@ _SPLIT_CHARS = ("和", "与", "vs", "VS")
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Public API (backward-compatible free functions)
 # ---------------------------------------------------------------------------
 
 
@@ -78,8 +79,81 @@ def _split_question(question: str) -> list[str]:
     return parts if parts else [question]
 
 
+def _decompose_by_intent(
+    question: str,
+    intent: str,
+    intents: IntentRegistry,
+) -> Plan:
+    """Create a Plan using the intent registry configuration.
+
+    Args:
+        question: The user's question.
+        intent: The classified intent.
+        intents: IntentRegistry with decomposition strategies.
+
+    Returns:
+        A Plan with sub-queries derived from the intent config.
+    """
+    sub_queries: list[SubQuery] = []
+
+    # Look up decomposition strategy from registry
+    config = intents.intents.get(intent)
+    decomposition = config.decomposition if config else "passthrough"
+
+    if decomposition == "split_by_objects":
+        parts = _split_question(question)
+        if len(parts) >= 2:
+            sub_queries = [
+                SubQuery(id="sq-1", description=parts[0], depends_on=[]),
+                SubQuery(id="sq-2", description=parts[1], depends_on=[]),
+            ]
+        else:
+            sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
+
+    elif decomposition == "single_with_time_grouping":
+        sub_queries = [
+            SubQuery(
+                id="sq-1",
+                description=f"{question}（按时间分组）",
+                depends_on=[],
+            ),
+        ]
+
+    elif decomposition == "total_plus_groups":
+        sub_queries = [
+            SubQuery(id="sq-1", description=f"{question}（总计）", depends_on=[]),
+            SubQuery(id="sq-2", description=f"{question}（分组明细）", depends_on=[]),
+        ]
+
+    elif decomposition == "single_with_ordering":
+        sub_queries = [
+            SubQuery(
+                id="sq-1",
+                description=f"{question}（按排序）",
+                depends_on=[],
+            ),
+        ]
+
+    else:  # passthrough or unknown
+        sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
+
+    reasoning = (
+        f"基于意图配置 '{intent}'（分解策略: {decomposition}），"
+        f"将问题分解为 {len(sub_queries)} 个子查询。"
+    )
+
+    return Plan(
+        intent=intent,
+        sub_queries=sub_queries,
+        reasoning=reasoning,
+    )
+
+
 def _decompose_fallback(question: str, intent: str) -> Plan:
     """Create a Plan using rule-based decomposition (no LLM).
+
+    This is a backward-compatible wrapper that delegates to
+    _decompose_by_intent with a default IntentRegistry.
 
     Args:
         question: The user's question.
@@ -88,6 +162,9 @@ def _decompose_fallback(question: str, intent: str) -> Plan:
     Returns:
         A Plan with sub-queries derived from the intent.
     """
+    # For backward compatibility, use the old hardcoded logic
+    # when no registry is available, but delegate to _decompose_by_intent
+    # when a registry is present.
     sub_queries: list[SubQuery] = []
 
     if intent == "compare":
@@ -132,6 +209,129 @@ def _decompose_fallback(question: str, intent: str) -> Plan:
         sub_queries=sub_queries,
         reasoning=reasoning,
     )
+
+
+# ---------------------------------------------------------------------------
+# Planner class (config-driven + LLM-based)
+# ---------------------------------------------------------------------------
+
+
+class Planner:
+    """Config-driven planner with LLM support and rule-based fallback.
+
+    The Planner classifies user intent and decomposes questions into
+    executable sub-queries. It uses an :class:`IntentRegistry` loaded
+    from ``configs/intents.yaml`` by default, and can optionally use an
+    LLM client for richer planning.
+
+    Args:
+        llm_client: Optional LLM client with an ``agenerate`` or
+            ``generate`` method. If provided, the planner tries LLM-based
+            planning first and falls back to rules on failure.
+        intents: Optional :class:`IntentRegistry` instance. Defaults to
+            loading from ``configs/intents.yaml``.
+    """
+
+    def __init__(
+        self,
+        llm_client=None,
+        intents: IntentRegistry | None = None,
+    ):
+        self._llm = llm_client
+        self._intents = intents or IntentRegistry.load("configs/intents.yaml")
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _classify_by_keywords(self, question: str) -> str:
+        """Classify intent using the IntentRegistry keywords."""
+        matched = self._intents.get_intent_by_keywords(question)
+        return matched or "single_query"
+
+    def _rule_based_plan(self, question: str) -> Plan:
+        """Create a plan using keyword classification + rule decomposition."""
+        intent = self._classify_by_keywords(question)
+        return _decompose_by_intent(question, intent, self._intents)
+
+    async def _llm_plan(self, question: str, registry_dict: dict) -> Plan:
+        """Create a plan using the LLM client.
+
+        Args:
+            question: The user's question.
+            registry_dict: Registry containing available metrics and dimensions.
+
+        Returns:
+            A Plan parsed from the LLM response.
+
+        Raises:
+            Exception: If the LLM call fails or returns invalid data.
+        """
+        prompt = _build_plan_prompt(question, registry_dict)
+        system_prompt = (
+            "你是一个数据分析意图识别助手。只输出 JSON，不要 markdown 代码块标记。"
+        )
+
+        # Try async generate first, then sync fallback
+        if getattr(self._llm, "agenerate", None) is not None:
+            raw = await self._llm.agenerate(prompt, system_prompt)
+        elif getattr(self._llm, "generate", None) is not None:
+            raw = self._llm.generate(prompt, system_prompt)
+        else:
+            raise TypeError(
+                f"LLM client has no generate/agenerate method: {type(self._llm)}"
+            )
+
+        if not raw:
+            raise ValueError("LLM returned empty response")
+
+        return _parse_llm_plan(raw)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def plan(
+        self,
+        question: str,
+        registry_dict: dict | None = None,
+    ) -> Plan:
+        """Create an execution plan for the given question.
+
+        Tries LLM-based planning first (if an LLM client is available),
+        and falls back to rule-based planning on any failure.
+
+        Args:
+            question: The user's natural language question.
+            registry_dict: Optional registry of available metrics/dimensions
+                for the LLM prompt.
+
+        Returns:
+            A :class:`Plan` with intent, sub-queries, and reasoning.
+        """
+        if self._llm is not None:
+            try:
+                plan = await self._llm_plan(
+                    question, registry_dict or {}
+                )
+                logger.info(
+                    "[plan] LLM plan: intent=%s, sub_queries=%d",
+                    plan.intent,
+                    len(plan.sub_queries),
+                )
+                return plan
+            except Exception as exc:
+                logger.warning(
+                    "[plan] LLM call failed, falling back: %s", exc
+                )
+                return self._rule_based_plan(question)
+
+        return self._rule_based_plan(question)
+
+
+# ---------------------------------------------------------------------------
+# LLM prompt / parse helpers
+# ---------------------------------------------------------------------------
 
 
 def _build_plan_prompt(question: str, registry_dict: dict) -> str:
@@ -243,6 +443,11 @@ def _parse_llm_plan(raw: str) -> Plan:
         reasoning=data.get("reasoning", ""),
         requires_approval=data.get("requires_approval", False),
     )
+
+
+# ---------------------------------------------------------------------------
+# LangGraph node factory (backward compatible)
+# ---------------------------------------------------------------------------
 
 
 def _make_plan_node(
