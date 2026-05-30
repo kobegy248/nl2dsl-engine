@@ -302,6 +302,40 @@ class TestEntities:
         )
         assert entities.has_comparison_marker() is False
 
+    def test_empty_metrics_and_dimensions(self):
+        entities = Entities(
+            metrics=[],
+            dimensions=[],
+        )
+        assert entities.metrics == []
+        assert entities.dimensions == []
+        assert entities.has_comparison_marker() is False
+
+    def test_empty_time_range_string(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+            time_range="",
+        )
+        assert entities.time_range == ""
+        assert entities.has_comparison_marker() is False
+
+    def test_has_comparison_marker_mixed_case_yoy(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+            time_range="YoY 2023 vs 2024",
+        )
+        assert entities.has_comparison_marker() is True
+
+    def test_has_comparison_marker_mixed_case_mom(self):
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["channel"],
+            time_range="MOM comparison",
+        )
+        assert entities.has_comparison_marker() is True
+
 
 class TestExecutionPlan:
     """Tests for ExecutionPlan and its subclasses."""
@@ -379,3 +413,18 @@ class TestExecutionPlan:
         )
         assert plan.question == "What are sales by store?"
         assert isinstance(plan, ExecutionPlan)
+
+    def test_exploration_plan_empty_steps(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region", "product", "channel"],
+        )
+        plan = ExplorationPlan(
+            question="Explore revenue trends",
+            entities=entities,
+            exploration_steps=[],
+        )
+        assert plan.question == "Explore revenue trends"
+        assert plan.exploration_steps == []
+        assert isinstance(plan, ExecutionPlan)
+        assert isinstance(plan, ExplorationPlan)
