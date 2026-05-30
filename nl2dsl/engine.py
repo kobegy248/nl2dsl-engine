@@ -13,6 +13,7 @@ from nl2dsl.config import settings
 from nl2dsl.domain_context import DomainContext
 from nl2dsl.plugin import Registry, Pipeline, Plugin
 from nl2dsl.graph.builder import build_graph
+from nl2dsl.dsl.semantic_validator import SemanticValidator
 from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("engine")
@@ -245,6 +246,9 @@ class Engine:
                 except Exception as e:
                     logger.warning("RAG init failed for domain '%s': %s", domain, e)
 
+            # Create semantic validator
+            semantic_validator = SemanticValidator(rd)
+
             # 7. Build graph
             graph = build_graph(
                 llm_client=llm,
@@ -261,6 +265,7 @@ class Engine:
                 registry_dict=rd,
                 llm_system_prompt=DSL_SYSTEM_PROMPT,
                 checkpointer=self._checkpointer,
+                semantic_validator=semantic_validator,
             )
 
             # 8. Assemble DomainContext
