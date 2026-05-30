@@ -29,7 +29,7 @@ from nl2dsl.agent.models import (
     SimpleExecutionPlan,
     SubQuery,
 )
-from nl2dsl.agent.planner import _decompose_fallback, classify_intent
+from nl2dsl.agent.planner import classify_intent
 from nl2dsl.graph.state import QueryState
 from nl2dsl.utils.logger import get_logger
 
@@ -144,20 +144,6 @@ class AgentOrchestrator:
             dimensions=dimensions,
             time_range=time_range,
         )
-
-    def _plan_question(self, question: str, domain_context: "DomainContext") -> Plan:
-        """Classify intent and decompose *question* into a ``Plan``.
-
-        Uses the domain's registry for richer planning when available.
-        """
-        intent = classify_intent(question)
-        plan = _decompose_fallback(question, intent)
-        logger.info(
-            "[orchestrator] Plan: intent=%s, sub_queries=%d",
-            plan.intent,
-            len(plan.sub_queries),
-        )
-        return plan
 
     @staticmethod
     def _build_query_state(
