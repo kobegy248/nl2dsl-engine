@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-from nl2dsl.agent.models import AgentResult, AgentState, Plan, QueryResult, SubQuery
+from nl2dsl.agent.models import (
+    AgentResult,
+    AgentState,
+    ComplexExecutionPlan,
+    Entities,
+    ExecutionPlan,
+    ExplorationPlan,
+    Plan,
+    QueryResult,
+    SimpleExecutionPlan,
+    SubQuery,
+)
 
 
 class TestSubQuery:
@@ -238,3 +249,133 @@ class TestAgentState:
                 trace=[],
             )
             assert state["status"] == status
+
+
+class TestEntities:
+    """Tests for the Entities model."""
+
+    def test_basic_creation(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+            time_range="2024-01-01 to 2024-12-31",
+        )
+        assert entities.metrics == ["revenue"]
+        assert entities.dimensions == ["region"]
+        assert entities.time_range == "2024-01-01 to 2024-12-31"
+
+    def test_optional_time_range(self):
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["product"],
+        )
+        assert entities.time_range is None
+
+    def test_has_comparison_marker_with_yoy(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+            time_range="YoY 2023 vs 2024",
+        )
+        assert entities.has_comparison_marker() is True
+
+    def test_has_comparison_marker_with_mom(self):
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["channel"],
+            time_range="MoM comparison",
+        )
+        assert entities.has_comparison_marker() is True
+
+    def test_has_comparison_marker_no_marker(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+            time_range="2024-01-01 to 2024-01-31",
+        )
+        assert entities.has_comparison_marker() is False
+
+    def test_has_comparison_marker_no_time_range(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+        )
+        assert entities.has_comparison_marker() is False
+
+
+class TestExecutionPlan:
+    """Tests for ExecutionPlan and its subclasses."""
+
+    def test_simple_execution_plan(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region"],
+        )
+        plan = SimpleExecutionPlan(
+            question="What is the revenue by region?",
+            entities=entities,
+        )
+        assert plan.question == "What is the revenue by region?"
+        assert plan.entities.metrics == ["revenue"]
+        assert plan.entities.dimensions == ["region"]
+        assert isinstance(plan, ExecutionPlan)
+        assert isinstance(plan, SimpleExecutionPlan)
+
+    def test_complex_execution_plan(self):
+        sub_query = SubQuery(
+            id="sq1",
+            description="Get revenue by region",
+        )
+        plan_obj = Plan(
+            intent="aggregate",
+            sub_queries=[sub_query],
+            reasoning="Need to aggregate revenue",
+        )
+        entities = Entities(
+            metrics=["revenue", "profit"],
+            dimensions=["region", "quarter"],
+        )
+        plan = ComplexExecutionPlan(
+            question="What is revenue and profit by region and quarter?",
+            entities=entities,
+            plan=plan_obj,
+        )
+        assert plan.question == "What is revenue and profit by region and quarter?"
+        assert plan.entities.metrics == ["revenue", "profit"]
+        assert plan.plan.intent == "aggregate"
+        assert len(plan.plan.sub_queries) == 1
+        assert isinstance(plan, ExecutionPlan)
+        assert isinstance(plan, ComplexExecutionPlan)
+
+    def test_exploration_plan(self):
+        entities = Entities(
+            metrics=["revenue"],
+            dimensions=["region", "product", "channel"],
+        )
+        plan = ExplorationPlan(
+            question="Explore revenue trends",
+            entities=entities,
+            exploration_steps=[
+                "Analyze revenue by region",
+                "Drill down by product",
+                "Compare channels",
+            ],
+        )
+        assert plan.question == "Explore revenue trends"
+        assert plan.exploration_steps == [
+            "Analyze revenue by region",
+            "Drill down by product",
+            "Compare channels",
+        ]
+        assert isinstance(plan, ExecutionPlan)
+        assert isinstance(plan, ExplorationPlan)
+
+    def test_execution_plan_base_model(self):
+        """ExecutionPlan can be instantiated directly as a base model."""
+        entities = Entities(metrics=["sales"], dimensions=["store"])
+        plan = ExecutionPlan(
+            question="What are sales by store?",
+            entities=entities,
+        )
+        assert plan.question == "What are sales by store?"
+        assert isinstance(plan, ExecutionPlan)

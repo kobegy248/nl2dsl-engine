@@ -31,6 +31,8 @@ class QueryResult(BaseModel):
     data: list[dict]
     status: str = "success"
     error: str | None = None
+    confidence: float | None = None
+    explanation: str | None = None
 
     @property
     def row_count(self) -> int:
@@ -64,3 +66,43 @@ class AgentState(TypedDict):
     explanation: str | None
     status: str  # "planning" | "executing" | "aggregating" | "done" | "error"
     trace: list[dict]
+
+
+class Entities(BaseModel):
+    """Extracted entities from a natural language question."""
+
+    metrics: list[str]
+    dimensions: list[str]
+    time_range: str | None = None
+
+    def has_comparison_marker(self) -> bool:
+        """Return True if the entities suggest a comparison (e.g. YoY, MoM)."""
+        if not self.time_range:
+            return False
+        lower = self.time_range.lower()
+        comparison_keywords = ("year", "yoy", "quarter", "qoq", "month", "mom",
+                               "week", "wow", "period", "compare", "versus", "vs")
+        return any(kw in lower for kw in comparison_keywords)
+
+
+class ExecutionPlan(BaseModel):
+    """Base model for all execution plans."""
+
+    question: str
+    entities: Entities
+
+
+class SimpleExecutionPlan(ExecutionPlan):
+    """Execution plan for simple, single-step queries."""
+
+
+class ComplexExecutionPlan(ExecutionPlan):
+    """Execution plan for complex, multi-step queries."""
+
+    plan: Plan
+
+
+class ExplorationPlan(ExecutionPlan):
+    """Execution plan for open-ended data exploration queries."""
+
+    exploration_steps: list[str]
