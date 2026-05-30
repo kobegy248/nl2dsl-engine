@@ -1,5 +1,5 @@
 import re
-from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, join as sa_join
+from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, literal, join as sa_join
 from nl2dsl.dsl.models import DSL, Join
 from nl2dsl.exceptions import ValidationError
 
@@ -376,20 +376,32 @@ class SQLBuilder:
         if dsl.having:
             having_conditions = []
             for h in dsl.having:
-                if h.operator == "between":
-                    val = h.value
-                    if isinstance(val, (list, tuple)) and len(val) == 2:
+                col_ref = text(h.field)
+                val = literal(h.value)
+                if h.operator == "=":
+                    having_conditions.append(col_ref == val)
+                elif h.operator == "!=":
+                    having_conditions.append(col_ref != val)
+                elif h.operator == ">":
+                    having_conditions.append(col_ref > val)
+                elif h.operator == "<":
+                    having_conditions.append(col_ref < val)
+                elif h.operator == ">=":
+                    having_conditions.append(col_ref >= val)
+                elif h.operator == "<=":
+                    having_conditions.append(col_ref <= val)
+                elif h.operator == "between":
+                    bval = h.value
+                    if isinstance(bval, (list, tuple)) and len(bval) == 2:
                         having_conditions.append(
-                            text(f"{h.field} BETWEEN {val[0]} AND {val[1]}")
+                            col_ref.between(literal(bval[0]), literal(bval[1]))
                         )
                     else:
                         raise ValidationError(
-                            f"'between' in having requires [min, max] list, got {val!r}"
+                            f"'between' in having requires [min, max] list, got {bval!r}"
                         )
                 else:
-                    having_conditions.append(
-                        text(f"{h.field} {h.operator} {h.value}")
-                    )
+                    raise ValidationError(f"Unknown operator in having: {h.operator}")
             if having_conditions:
                 stmt = stmt.having(and_(*having_conditions))
 
