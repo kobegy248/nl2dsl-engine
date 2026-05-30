@@ -42,11 +42,12 @@ class LLMClient:
                     response.usage, elapsed, len(content) if content else 0)
         return content
 
-    def generate_structured(self, user_prompt: str, system_prompt: str, json_schema: str) -> str:
+    def generate_structured(self, user_prompt: str, system_prompt: str, json_schema: str | dict) -> str:
         """Generate with JSON Schema enforcement via OpenAI structured output.
 
         Uses response_format={"type": "json_schema", ...} for deterministic
-        JSON output. Always uses temperature=0.
+        JSON output. Always uses temperature=0 for maximum determinism in
+        structured output.
         """
         start = time.time()
         logger.info("LLM structured request: model=%s schema_length=%d", self._model, len(json_schema))
