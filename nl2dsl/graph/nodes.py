@@ -404,6 +404,17 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
     return dsl_dict
 
 
+def _run_semantic_validation(dsl, semantic_validator) -> None:
+    """Run semantic validation and raise ValidationError on errors."""
+    if semantic_validator is None:
+        return
+    errors, warnings = semantic_validator.validate(dsl)
+    for w in warnings:
+        logger.warning("[semantic_validator] %s: %s", w.category, w.message)
+    if errors:
+        raise ValidationError(f"Semantic validation failed: {'; '.join(errors)}")
+
+
 def _restore_metric_fields(dsl: DSL) -> DSL:
     """After SemanticResolver replaces metric.field with expr like SUM(col),
     restore the raw column name so SQLBuilder can look it up.
@@ -563,15 +574,7 @@ def _make_generate_dsl_node(
         dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
         dsl = DSL.model_validate(dsl_dict)
 
-        # Semantic validation
-        if semantic_validator is not None:
-            errors, warnings = semantic_validator.validate(dsl)
-            for w in warnings:
-                logger.warning("[semantic_validator] %s: %s", w.category, w.message)
-            if errors:
-                raise ValidationError(
-                    f"Semantic validation failed: {'; '.join(errors)}"
-                )
+        _run_semantic_validation(dsl, semantic_validator)
 
         return {
             "dsl": dsl,
@@ -683,17 +686,7 @@ def _make_correct_dsl_node(
                 dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
                 dsl = DSL.model_validate(dsl_dict)
 
-                # Semantic validation
-                if semantic_validator is not None:
-                    errors, warnings = semantic_validator.validate(dsl)
-                    for w in warnings:
-                        logger.warning(
-                            "[semantic_validator] %s: %s", w.category, w.message
-                        )
-                    if errors:
-                        raise ValidationError(
-                            f"Semantic validation failed: {'; '.join(errors)}"
-                        )
+                _run_semantic_validation(dsl, semantic_validator)
 
                 return {
                     "dsl": dsl,
@@ -1000,125 +993,16 @@ def create_node_functions(
         }
 
     # -----------------------------------------------------------------------
-    # generate_dsl_node (LLM path - does NOT fallback to mock on failure)
+    # generate_dsl_node — delegate to standalone factory for DRY
     # -----------------------------------------------------------------------
-    @with_error_handler("generate_dsl")
-    def generate_dsl_node(state: QueryState) -> dict:
-        question = state["question"]
-        data_source = state.get("data_source")
-
-        if llm_client is None:
-            raise ValidationError("LLM client not available")
-
-        if rag_retriever is not None:
-            prompt = rag_retriever.build_prompt(question)
-        else:
-            prompt = _build_fallback_prompt(question)
-
-        raw = llm_client.generate(prompt, llm_system_prompt)
-        if not raw:
-            raise ValidationError("LLM returned empty response")
-        logger.info("[generate_dsl] LLM raw output (len=%d): %s", len(raw), raw)
-
-        dsl_dict = _parse_llm_output(raw)
-        dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-        dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
-        dsl = DSL.model_validate(dsl_dict)
-
-        # Semantic validation
-        if semantic_validator is not None:
-            errors, warnings = semantic_validator.validate(dsl)
-            for w in warnings:
-                logger.warning("[semantic_validator] %s: %s", w.category, w.message)
-            if errors:
-                raise ValidationError(
-                    f"Semantic validation failed: {'; '.join(errors)}"
-                )
-
-        return {
-            "dsl": dsl,
-            "llm_used": True,
-            "dsl_attempts": {
-                "source": "llm",
-                "dsl": dsl.model_dump(),
-                "valid": True,
-                "timestamp": time.time(),
-            },
-            "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
-        }
+    generate_dsl_node = _make_generate_dsl_node(
+        llm_client, rag_retriever, semantic_validator, llm_system_prompt
+    )
 
     # -----------------------------------------------------------------------
-    # validate_dsl_node — returns explicit validation record on failure
-    # so route_after_validate can decide retry vs error based on the
-    # "source" / "valid" flags rather than the generic status field.
+    # validate_dsl_node — delegate to standalone factory for DRY
     # -----------------------------------------------------------------------
-    def validate_dsl_node(state: QueryState) -> dict:
-        dsl = state.get("dsl")
-        if dsl is None:
-            return {
-                "status": "error",
-                "error": "DSL is None, cannot validate",
-                "error_code": "VALIDATION_ERROR",
-                "dsl_attempts": {
-                    "source": "validation",
-                    "valid": False,
-                    "error": "DSL is None",
-                    "timestamp": time.time(),
-                },
-                "trace": [
-                    {
-                        "step": "validate_dsl",
-                        "status": "error",
-                        "error_code": "VALIDATION_ERROR",
-                        "error_message": "DSL is None, cannot validate",
-                    }
-                ],
-            }
-        try:
-            validator.validate(dsl)
-            return {"trace": [{"step": "validate_dsl", "status": "success"}]}
-        except ValidationError as exc:
-            logger.warning("[validate_dsl] Validation failed: %s - %s", exc.error_code, exc.message)
-            return {
-                "status": "error",
-                "error": exc.message,
-                "error_code": exc.error_code,
-                "dsl_attempts": {
-                    "source": "validation",
-                    "valid": False,
-                    "error": exc.message,
-                    "timestamp": time.time(),
-                },
-                "trace": [
-                    {
-                        "step": "validate_dsl",
-                        "status": "error",
-                        "error_code": exc.error_code,
-                        "error_message": exc.message,
-                    }
-                ],
-            }
-        except Exception as exc:
-            logger.error("[validate_dsl] Unexpected exception: %s", exc, exc_info=True)
-            return {
-                "status": "error",
-                "error": str(exc),
-                "error_code": "INTERNAL_ERROR",
-                "dsl_attempts": {
-                    "source": "validation",
-                    "valid": False,
-                    "error": str(exc),
-                    "timestamp": time.time(),
-                },
-                "trace": [
-                    {
-                        "step": "validate_dsl",
-                        "status": "error",
-                        "error_code": "INTERNAL_ERROR",
-                        "error_message": str(exc),
-                    }
-                ],
-            }
+    validate_dsl_node = _make_validate_dsl_node(validator)
 
     # -----------------------------------------------------------------------
     # correct_dsl_node — see _make_correct_dsl_node (agentic version) above.

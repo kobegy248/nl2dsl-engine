@@ -50,6 +50,7 @@ def build_graph(
     registry_dict: dict,
     llm_system_prompt: str = "",
     checkpointer=None,
+    semantic_validator=None,
 ):
     """Build and compile the NL2DSL query pipeline StateGraph.
 
@@ -128,7 +129,7 @@ def build_graph(
     # -----------------------------------------------------------------------
     permission_subgraph = build_permission_subgraph(row_security, col_security)
     validation_subgraph = build_validation_subgraph(
-        validator, llm_client, rag_retriever, registry_dict
+        validator, llm_client, rag_retriever, registry_dict, semantic_validator
     )
 
     # -----------------------------------------------------------------------
