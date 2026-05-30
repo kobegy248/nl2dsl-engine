@@ -8,7 +8,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nl2dsl.agent.models import AgentResult, Plan, QueryResult, SubQuery
+from nl2dsl.agent.models import (
+    AgentResult,
+    ComplexExecutionPlan,
+    Entities,
+    ExplorationPlan,
+    Plan,
+    QueryResult,
+    SimpleExecutionPlan,
+    SubQuery,
+)
 from nl2dsl.agent.orchestrator import AgentOrchestrator
 
 
@@ -754,3 +763,147 @@ class TestEdgeCases:
         assert result.data == [{"balance": 5000}]
         assert bank_ctx.graph.ainvoke.called
         assert not ecommerce_ctx.graph.ainvoke.called
+
+
+# ---------------------------------------------------------------------------
+# Controller routing integration
+# ---------------------------------------------------------------------------
+
+
+class TestControllerRouting:
+    """Tests that AgentOrchestrator uses AgentController for routing."""
+
+    def test_orchestrator_has_controller(self, orchestrator):
+        """Orchestrator initializes an AgentController."""
+        assert hasattr(orchestrator, "_controller")
+        from nl2dsl.agent.controller import AgentController
+        assert isinstance(orchestrator._controller, AgentController)
+
+    def test_extract_entities_returns_entities(self, orchestrator):
+        """_extract_entities returns an Entities instance."""
+        entities = AgentOrchestrator._extract_entities("查询华东销售额")
+        assert isinstance(entities, Entities)
+        assert "销售额" in entities.metrics
+        assert "华东" in entities.dimensions
+
+    def test_extract_entities_trend_markers(self, orchestrator):
+        """Trend markers are captured in time_range."""
+        entities = AgentOrchestrator._extract_entities("销售额趋势")
+        assert entities.time_range is not None
+        assert "period" in entities.time_range.lower()
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_uses_controller_for_routing(self, orchestrator, sse_callback):
+        """Controller routing determines the execution path."""
+        # Mock the controller to return a known SimpleExecutionPlan
+        with patch.object(
+            orchestrator._controller,
+            "route",
+            return_value=SimpleExecutionPlan(
+                question="查询销售额",
+                entities=Entities(metrics=["销售额"], dimensions=[], time_range=None),
+            ),
+        ):
+            orchestrator._domains["ecommerce"].graph.ainvoke.return_value = {
+                "data": [{"sales": 100}],
+                "status": "success",
+            }
+
+            result = await orchestrator.run(
+                question="查询销售额",
+                user_id="u1",
+                tenant_id="t1",
+                domain="ecommerce",
+                sse_callback=sse_callback,
+            )
+
+            assert result.status == "success"
+            assert result.plan is not None
+            assert result.plan.intent == "single_query"
+            # Controller.route was called
+            orchestrator._controller.route.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_controller_routes_to_complex_path(self, orchestrator, sse_callback):
+        """Controller can route to complex path via ComplexExecutionPlan."""
+        from nl2dsl.agent.planner import Planner
+        planner = Planner()
+        plan = await planner.plan("对比华东和华南的销售额")
+
+        with patch.object(
+            orchestrator._controller,
+            "route",
+            return_value=ComplexExecutionPlan(
+                question="对比华东和华南的销售额",
+                entities=Entities(
+                    metrics=["销售额"],
+                    dimensions=["华东", "华南"],
+                    time_range=None,
+                ),
+                plan=plan,
+            ),
+        ):
+            async def side_effect(state, config):
+                return {"data": [{"sales": 100}], "status": "success"}
+
+            orchestrator._domains["ecommerce"].graph.ainvoke.side_effect = side_effect
+
+            result = await orchestrator.run(
+                question="对比华东和华南的销售额",
+                user_id="u1",
+                tenant_id="t1",
+                domain="ecommerce",
+                sse_callback=sse_callback,
+            )
+
+            assert result.status == "success"
+            orchestrator._controller.route.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_controller_routes_to_exploration_path(self, orchestrator, sse_callback):
+        """Controller can route to exploration path via ExplorationPlan."""
+        with patch.object(
+            orchestrator._controller,
+            "route",
+            return_value=ExplorationPlan(
+                question="分析一下数据",
+                entities=Entities(metrics=[], dimensions=[], time_range=None),
+                exploration_steps=["Step 1", "Step 2"],
+            ),
+        ):
+            orchestrator._domains["ecommerce"].graph.ainvoke.return_value = {
+                "data": [{"sales": 100}],
+                "status": "success",
+            }
+
+            result = await orchestrator.run(
+                question="分析一下数据",
+                user_id="u1",
+                tenant_id="t1",
+                domain="ecommerce",
+                sse_callback=sse_callback,
+            )
+
+            assert result.status == "success"
+            assert result.plan is not None
+            assert result.plan.intent == "exploration"
+            orchestrator._controller.route.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_controller_routing_error_handled(self, orchestrator, sse_callback):
+        """Errors from controller routing are handled gracefully."""
+        with patch.object(
+            orchestrator._controller,
+            "route",
+            side_effect=RuntimeError("Controller failed"),
+        ):
+            result = await orchestrator.run(
+                question="查询销售额",
+                user_id="u1",
+                tenant_id="t1",
+                domain="ecommerce",
+                sse_callback=sse_callback,
+            )
+
+            assert result.status == "error"
+            assert "Routing failed" in result.error

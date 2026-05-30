@@ -14,9 +14,21 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nl2dsl.agent.aggregator import Aggregate
+from nl2dsl.agent.controller import AgentController
 from nl2dsl.agent.dispatcher import dispatch_sub_queries
 from nl2dsl.agent.explainer import _generate_template_explanation
-from nl2dsl.agent.models import AgentResult, AgentState, Plan, QueryResult, SubQuery
+from nl2dsl.agent.models import (
+    AgentResult,
+    AgentState,
+    ComplexExecutionPlan,
+    Entities,
+    ExecutionPlan,
+    ExplorationPlan,
+    Plan,
+    QueryResult,
+    SimpleExecutionPlan,
+    SubQuery,
+)
 from nl2dsl.agent.planner import _decompose_fallback, classify_intent
 from nl2dsl.graph.state import QueryState
 from nl2dsl.utils.logger import get_logger
@@ -36,6 +48,7 @@ class AgentOrchestrator:
 
     def __init__(self, domains: dict[str, "DomainContext"]) -> None:
         self._domains = domains
+        self._controller = AgentController()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -70,6 +83,67 @@ class AgentOrchestrator:
                 await result
         except Exception as exc:
             logger.warning("[orchestrator] SSE callback error for event '%s': %s", event_type, exc)
+
+    @staticmethod
+    def _extract_entities(question: str) -> Entities:
+        """Extract entities from *question* using simple keyword matching (MVP).
+
+        Uses hardcoded keyword lists for metrics and dimensions.
+        Time ranges are detected via common temporal markers.
+        """
+        # Simple keyword lists for MVP entity extraction
+        _METRIC_KEYWORDS = {
+            "销售额", "sales", "订单量", "orders", "用户数", "users",
+            "转化率", "conversion", "客单价", "aov", "利润", "profit",
+            "收入", "revenue", "成本", "cost", "库存", "inventory",
+            "访问量", "pv", "浏览量", "views", "点击量", "clicks",
+        }
+        _DIMENSION_KEYWORDS = {
+            "地区", "region", "华东", "华南", "华北", "华西",
+            "城市", "city", "省份", "province",
+            "品类", "category", "商品", "product",
+            "渠道", "channel", "平台", "platform",
+            "时间", "time", "日期", "date", "月份", "month", "年份", "year",
+            "用户", "user", "客户", "customer",
+            "品牌", "brand",
+        }
+        _TIME_RANGE_KEYWORDS = {
+            "今年": "this year",
+            "去年": "last year",
+            "本月": "this month",
+            "上月": "last month",
+            "本周": "this week",
+            "上周": "last week",
+            "今天": "today",
+            "昨天": "yesterday",
+            "同比": "yoy",
+            "环比": "mom",
+            "yoy": "yoy",
+            "mom": "mom",
+            "最近": "recent period",
+            "过去": "past period",
+            "近": "recent period",
+            "趋势": "trend period",
+            "走势": "trend period",
+            "变化": "change period",
+            "增长": "growth period",
+            "下降": "decline period",
+        }
+
+        metrics = [kw for kw in _METRIC_KEYWORDS if kw in question]
+        dimensions = [kw for kw in _DIMENSION_KEYWORDS if kw in question]
+
+        time_range = None
+        for kw, val in _TIME_RANGE_KEYWORDS.items():
+            if kw in question:
+                time_range = val
+                break
+
+        return Entities(
+            metrics=metrics,
+            dimensions=dimensions,
+            time_range=time_range,
+        )
 
     def _plan_question(self, question: str, domain_context: "DomainContext") -> Plan:
         """Classify intent and decompose *question* into a ``Plan``.
@@ -156,22 +230,36 @@ class AgentOrchestrator:
         domain_context = self._get_domain_context(domain)
 
         # ------------------------------------------------------------------
-        # Step 1: Plan
+        # Step 1: Extract entities
         # ------------------------------------------------------------------
         try:
-            plan = self._plan_question(question, domain_context)
+            entities = self._extract_entities(question)
         except Exception as exc:
-            logger.error("[orchestrator] Planning failed: %s", exc, exc_info=True)
-            await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "plan"})
-            return AgentResult(status="error", error=f"Planning failed: {exc}")
-
-        await self._emit_event(sse_callback, "plan", {"plan": plan})
+            logger.error("[orchestrator] Entity extraction failed: %s", exc, exc_info=True)
+            await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "entity_extraction"})
+            return AgentResult(status="error", error=f"Entity extraction failed: {exc}")
 
         # ------------------------------------------------------------------
-        # Step 2: Execute (simple vs complex path)
+        # Step 2: Route via AgentController
         # ------------------------------------------------------------------
-        if plan.intent == "single_query" and len(plan.sub_queries) == 1:
-            # Simple query path: execute directly through the graph
+        try:
+            execution_plan = await self._controller.route(question, entities)
+        except Exception as exc:
+            logger.error("[orchestrator] Controller routing failed: %s", exc, exc_info=True)
+            await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "route"})
+            return AgentResult(status="error", error=f"Routing failed: {exc}")
+
+        # ------------------------------------------------------------------
+        # Step 3: Dispatch based on execution plan type
+        # ------------------------------------------------------------------
+        if isinstance(execution_plan, SimpleExecutionPlan):
+            # Build a simple single-query plan for the simple path
+            plan = Plan(
+                intent="single_query",
+                sub_queries=[SubQuery(id="sq-1", description=question, depends_on=[])],
+                reasoning="Simple execution plan: single metric + single dimension",
+            )
+            await self._emit_event(sse_callback, "plan", {"plan": plan})
             return await self._run_simple_path(
                 question=question,
                 plan=plan,
@@ -181,8 +269,27 @@ class AgentOrchestrator:
                 sse_callback=sse_callback,
             )
 
-        # Complex query path: dispatch sub-queries, aggregate, explain
-        return await self._run_complex_path(
+        if isinstance(execution_plan, ComplexExecutionPlan):
+            # Use the plan embedded in the ComplexExecutionPlan
+            plan = execution_plan.plan
+            await self._emit_event(sse_callback, "plan", {"plan": plan})
+            return await self._run_complex_path(
+                question=question,
+                plan=plan,
+                domain_context=domain_context,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                sse_callback=sse_callback,
+            )
+
+        # ExplorationPlan (and any other): delegate to simple path as MVP placeholder
+        plan = Plan(
+            intent="exploration",
+            sub_queries=[SubQuery(id="sq-1", description=question, depends_on=[])],
+            reasoning="Exploration plan: delegated to simple path (MVP)",
+        )
+        await self._emit_event(sse_callback, "plan", {"plan": plan})
+        return await self._run_exploration_path(
             question=question,
             plan=plan,
             domain_context=domain_context,
@@ -242,6 +349,7 @@ class AgentOrchestrator:
 
         data = graph_result.get("data") or []
         status = graph_result.get("status", "success")
+        confidence = graph_result.get("confidence") or 0.0
 
         await self._emit_event(
             sse_callback,
@@ -250,6 +358,7 @@ class AgentOrchestrator:
                 "sub_query_id": sub_query.id,
                 "status": status,
                 "data": data,
+                "confidence": confidence,
             },
         )
 
@@ -259,6 +368,21 @@ class AgentOrchestrator:
                 status="error",
                 error=error_msg,
                 plan=plan,
+                confidence=confidence,
+            )
+
+        if status == "clarification":
+            clarification = graph_result.get("clarification", {})
+            clarification_msg = (
+                clarification.get("question", "需要澄清")
+                if isinstance(clarification, dict)
+                else "需要澄清"
+            )
+            return AgentResult(
+                status="clarification",
+                error=clarification_msg,
+                plan=plan,
+                confidence=confidence,
             )
 
         # Generate explanation
@@ -266,10 +390,10 @@ class AgentOrchestrator:
         await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
         return AgentResult(
-            status="success",
+            status=status,
             data=data,
             explanation=explanation,
-            confidence=1.0,
+            confidence=confidence,
             plan=plan,
         )
 
@@ -342,19 +466,26 @@ class AgentOrchestrator:
                 },
             )
 
-        # Check for failures
+        # Categorize sub-query results
         failed = [r for r in sub_results.values() if r.status == "error"]
-        if failed and len(failed) == len(sub_results):
-            # All sub-queries failed
-            errors = "; ".join(f"{r.sub_query_id}: {r.error}" for r in failed)
-            logger.error("[orchestrator] All sub-queries failed: %s", errors)
+        clarified = [r for r in sub_results.values() if r.status == "clarification"]
+        warnings = [r for r in sub_results.values() if r.status == "warning"]
+        non_executable = failed + clarified
+
+        if non_executable and len(non_executable) == len(sub_results):
+            # All sub-queries failed or were blocked
+            messages = "; ".join(
+                f"{r.sub_query_id}: {r.error or r.explanation or 'blocked'}"
+                for r in non_executable
+            )
+            logger.error("[orchestrator] All sub-queries blocked: %s", messages)
             return AgentResult(
                 status="error",
-                error=f"All sub-queries failed: {errors}",
+                error=f"All sub-queries blocked: {messages}",
                 plan=plan,
             )
 
-        # Aggregate results (including successful sub-queries only)
+        # Aggregate results (including success and warning sub-queries)
         aggregator = Aggregate()
         aggregated = aggregator.run(sub_results, plan.intent)
         await self._emit_event(sse_callback, "aggregate", {"result": aggregated})
@@ -362,20 +493,28 @@ class AgentOrchestrator:
         # Extract rows for explanation
         rows = aggregated.get("rows", [])
 
-        # Generate explanation
-        explanation = self._generate_explanation(plan, question, rows)
+        # Generate explanation with quality annotations
+        explanation = self._generate_explanation(plan, question, rows, sub_results)
         await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
-        # Compute confidence based on success rate
-        total = len(sub_results)
-        success_count = sum(1 for r in sub_results.values() if r.status == "success")
-        confidence = success_count / total if total > 0 else 0.0
+        # Compute confidence from sub-query confidence scores (weighted average)
+        confidences = [
+            r.confidence for r in sub_results.values() if r.confidence is not None
+        ]
+        confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
-        # Determine status: warning if partial failure, success if all succeeded
-        status = "warning" if failed else "success"
-        if failed:
-            failed_info = "; ".join(f"{r.sub_query_id}: {r.error}" for r in failed)
-            logger.warning("[orchestrator] Partial sub-query failure: %s", failed_info)
+        # Determine status based on sub-query health
+        if failed or clarified:
+            status = "warning"
+            blocked_info = "; ".join(
+                f"{r.sub_query_id}: {r.error or r.explanation or 'blocked'}"
+                for r in non_executable
+            )
+            logger.warning("[orchestrator] Partial sub-query blocked: %s", blocked_info)
+        elif warnings:
+            status = "warning"
+        else:
+            status = "success"
 
         return AgentResult(
             status=status,
@@ -385,14 +524,56 @@ class AgentOrchestrator:
             plan=plan,
         )
 
+    async def _run_exploration_path(
+        self,
+        question: str,
+        plan: Plan,
+        domain_context: "DomainContext",
+        user_id: str,
+        tenant_id: str,
+        sse_callback: callable | None,
+    ) -> AgentResult:
+        """Execute an exploration query — MVP placeholder delegating to simple path."""
+        logger.info("[orchestrator] Exploration path: delegating to simple path (MVP)")
+        return await self._run_simple_path(
+            question=question,
+            plan=plan,
+            domain_context=domain_context,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            sse_callback=sse_callback,
+        )
+
     @staticmethod
-    def _generate_explanation(plan: Plan, question: str, data: list[dict]) -> str:
+    def _generate_explanation(
+        plan: Plan,
+        question: str,
+        data: list[dict],
+        sub_results: dict[str, "QueryResult"] | None = None,
+    ) -> str:
         """Generate a natural language explanation for the results.
 
         Uses template-based explanation as the fallback.
+        When sub_results is provided, appends quality annotations for
+        clarification or warning sub-queries.
         """
         try:
-            return _generate_template_explanation(question, plan, data)
+            explanation = _generate_template_explanation(question, plan, data)
         except Exception as exc:
             logger.warning("[orchestrator] Explanation generation failed: %s", exc)
-            return f"查询完成。共返回 {len(data)} 条数据。"
+            explanation = f"查询完成。共返回 {len(data)} 条数据。"
+
+        # Append quality annotations for non-success sub-queries
+        if sub_results:
+            quality_notes: list[str] = []
+            for sq_id, result in sub_results.items():
+                if result.status == "clarification":
+                    reason = result.explanation or result.error or "置信度不足"
+                    quality_notes.append(f"[{sq_id}] 未执行: {reason}")
+                elif result.status == "warning" and result.explanation:
+                    quality_notes.append(f"[{sq_id}] 置信度偏低: {result.explanation}")
+
+            if quality_notes:
+                explanation += "\n\n子查询质量提示:\n" + "\n".join(quality_notes)
+
+        return explanation
