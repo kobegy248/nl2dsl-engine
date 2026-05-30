@@ -10,6 +10,15 @@ from nl2dsl.graph.state import QueryState
 from nl2dsl.dsl.models import DSL
 
 
+def _make_mock_llm_client():
+    """Create a mock LLM client that returns valid DSL JSON."""
+    llm_client = MagicMock()
+    llm_client.generate = MagicMock(return_value=(
+        '{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}'
+    ))
+    return llm_client
+
+
 @pytest.fixture
 def mock_services():
     """Create mock services for graph testing."""
@@ -30,7 +39,7 @@ def mock_services():
         "scanner": MagicMock(),
         "sandbox": MagicMock(),
         "executor": engine,
-        "llm_client": None,
+        "llm_client": _make_mock_llm_client(),
         "rag_retriever": None,
         "registry_dict": {},
     }
@@ -116,4 +125,4 @@ class TestFullPipeline:
         assert len(trace) > 0
         steps = [t["step"] for t in trace if isinstance(t, dict)]
         assert "clarification" in steps
-        assert "generate_dsl" in steps or "mock_dsl" in steps
+        assert "generate_dsl" in steps

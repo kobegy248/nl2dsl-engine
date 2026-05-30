@@ -14,8 +14,10 @@ from nl2dsl.graph.nodes import (
     _build_fallback_prompt,
     _parse_llm_output,
     _post_process_dsl,
-    _mock_dsl_from_question,
     _restore_metric_fields,
+    _semantic_fix_dsl,
+    _extract_top_n,
+    _fix_metric_format,
 )
 from nl2dsl.graph.state import QueryState
 from nl2dsl.permission.row_level import RowLevelSecurity
@@ -204,7 +206,6 @@ class TestCreateNodeFunctions:
             "explain_node",
             "decompose_node",
             "generate_dsl_node",
-            "mock_dsl_node",
             "validate_dsl_node",
             "correct_dsl_node",
             "inject_row_permission_node",
@@ -306,29 +307,6 @@ class TestGenerateDSLNode:
 
 
 # ---------------------------------------------------------------------------
-# mock_dsl_node tests
-# ---------------------------------------------------------------------------
-
-
-class TestMockDSLNode:
-    def test_returns_dsl_without_llm(self, nodes, base_state):
-        result = nodes["mock_dsl_node"](base_state)
-        assert result["dsl"] is not None
-        assert isinstance(result["dsl"], DSL)
-        assert result["llm_used"] is False
-        assert result["dsl_attempts"]["source"] == "mock"
-
-    def test_mock_dsl_has_expected_structure(self, nodes, base_state):
-        result = nodes["mock_dsl_node"](base_state)
-        dsl = result["dsl"]
-        assert dsl.data_source == "orders"
-        assert dsl.metrics is not None
-        assert len(dsl.metrics) > 0
-        assert dsl.dimensions is not None
-        assert dsl.limit is not None
-
-
-# ---------------------------------------------------------------------------
 # validate_dsl_node tests
 # ---------------------------------------------------------------------------
 
@@ -367,7 +345,7 @@ class TestCorrectDSLNode:
         assert result["dsl_attempts"]["source"] == "llm_corrected_agentic"
         assert result["dsl_attempts"]["error_feedback"] == "Invalid metric 'foo'"
 
-    def test_falls_back_to_mock_when_llm_none(self, base_state, test_registry):
+    def test_returns_error_when_llm_none(self, base_state, test_registry):
         validator = DSLValidator(test_registry)
         row_security = RowLevelSecurity({})
         col_security = ColumnLevelSecurity()
@@ -389,8 +367,8 @@ class TestCorrectDSLNode:
 
         base_state["error"] = "Some error"
         result = nodes_no_llm["correct_dsl_node"](base_state)
-        assert result["dsl"] is not None
-        assert result["dsl_attempts"]["source"] == "mock_corrected"
+        assert result["status"] == "error"
+        assert result["error_code"] == "CORRECTION_FAILED"
 
 
 # ---------------------------------------------------------------------------
@@ -678,24 +656,56 @@ class TestPostProcessDSL:
         assert result["filters"][0]["operator"] == "="
 
 
-class TestMockDSLFromQuestion:
-    def test_basic_question(self):
-        dsl = _mock_dsl_from_question("查询销售额")
-        assert dsl.data_source == "orders"
-        assert any(m.alias == "sales_amount" for m in dsl.metrics)
+class TestPostProcessFilterTree:
+    """Tests that _post_process_dsl correctly handles filter trees."""
 
-    def test_with_region_filter(self):
-        dsl = _mock_dsl_from_question("查询华东地区的销售额")
-        assert any(f.field == "region" and f.value == "华东" for f in (dsl.filters or []))
+    def test_post_process_flat_list_still_works(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "dimensions": ["product_name"],
+            "filters": [
+                {"field": "region", "operator": "=", "value": "华东"},
+            ],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert isinstance(result["filters"], list)
+        assert result["filters"][0]["field"] == "region"
 
-    def test_with_join(self):
-        dsl = _mock_dsl_from_question("查询客户的销售额")
-        assert dsl.joins is not None
-        assert any(j.table == "customer_dim" for j in dsl.joins)
+    def test_post_process_tree_preserved(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "dimensions": ["product_name"],
+            "filters": {
+                "op": "and",
+                "children": [
+                    {"field": "region", "operator": "=", "value": "华东"},
+                    {"field": "pay_amount", "operator": ">", "value": 5000},
+                ],
+            },
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert isinstance(result["filters"], dict)
+        assert result["filters"]["op"] == "and"
+        assert len(result["filters"]["children"]) == 2
 
-    def test_custom_data_source(self):
-        dsl = _mock_dsl_from_question("查询", data_source="products")
-        assert dsl.data_source == "products"
+    def test_post_process_validates_filter_ops_in_tree(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "dimensions": ["product_name"],
+            "filters": {
+                "op": "and",
+                "children": [
+                    {"field": "region", "operator": "=", "value": "华东"},
+                    {"field": "pay_amount", "operator": "invalid_op", "value": 5000},
+                ],
+            },
+        }
+        result = _post_process_dsl(dsl_dict)
+        children = result["filters"]["children"]
+        assert children[1]["operator"] == "="
 
 
 class TestRestoreMetricFields:
@@ -719,3 +729,262 @@ class TestRestoreMetricFields:
         dsl = DSL(data_source="orders")
         result = _restore_metric_fields(dsl)
         assert result.metrics is None
+
+
+# ---------------------------------------------------------------------------
+# _extract_top_n tests
+# ---------------------------------------------------------------------------
+
+
+class TestExtractTopN:
+    def test_extracts_numeric_prefix(self):
+        assert _extract_top_n("查询前5的产品") == 5
+
+    def test_extracts_top_keyword(self):
+        assert _extract_top_n("top10的产品") == 10
+
+    def test_extracts_chinese_number(self):
+        assert _extract_top_n("最好的三款产品") == 3
+
+    def test_extracts_前十名(self):
+        assert _extract_top_n("销售额前十名") == 10
+
+    def test_extracts_排名前(self):
+        assert _extract_top_n("排名前5的品牌") == 5
+
+    def test_returns_default_when_no_match(self):
+        assert _extract_top_n("查询销售额", default=20) == 20
+
+    def test_returns_default_for_out_of_range(self):
+        """Numbers > 100 or < 1 should fall back to default."""
+        assert _extract_top_n("查询前999个产品") == 10  # > 100 capped at default
+
+    def test_all_keyword_returns_100(self):
+        assert _extract_top_n("查询全部产品") == 100
+
+    def test_extracts_from_vague_patterns(self):
+        assert _extract_top_n("最畅销的5款产品") == 5
+
+
+# ---------------------------------------------------------------------------
+# _fix_metric_format tests
+# ---------------------------------------------------------------------------
+
+
+class TestFixMetricFormat:
+    def test_maps_known_alias(self):
+        m = {"alias": "sales_amount"}
+        result = _fix_metric_format(m)
+        assert result["func"] == "sum"
+        assert result["field"] == "order_amount"
+        assert result["alias"] == "sales_amount"
+
+    def test_uses_name_instead_of_alias(self):
+        m = {"name": "gmv"}
+        result = _fix_metric_format(m)
+        assert result["alias"] == "gmv"
+        assert result["func"] == "sum"
+
+    def test_uses_metric_instead_of_alias(self):
+        m = {"metric": "order_count"}
+        result = _fix_metric_format(m)
+        assert result["alias"] == "order_count"
+        assert result["func"] == "count"
+
+    def test_falls_back_to_defaults_for_unknown(self):
+        m = {}
+        result = _fix_metric_format(m)
+        assert result["func"] == "sum"
+        assert result["field"] == "order_amount"
+        assert result["alias"] == "order_amount"
+
+    def test_preserves_existing_func(self):
+        m = {"func": "avg", "field": "pay_amount", "alias": "avg_pay"}
+        result = _fix_metric_format(m)
+        assert result["func"] == "avg"
+        assert result["field"] == "pay_amount"
+
+    def test_maps_whitespace_alias_via_metric_map(self):
+        """Whitespace-padded alias is normalized via _METRIC_MAP lookup
+        (but the original alias key is NOT overwritten due to setdefault).
+        This documents current behavior — may be a bug worth fixing.
+        """
+        m = {"alias": "  sales_amount  "}
+        result = _fix_metric_format(m)
+        # setdefault does not overwrite existing key
+        assert result["alias"] == "  sales_amount  "
+        # But func/field are set because the normalized alias maps
+        assert result["func"] == "sum"
+        assert result["field"] == "order_amount"
+
+
+# ---------------------------------------------------------------------------
+# _semantic_fix_dsl tests (fallback path, no LLM)
+# ---------------------------------------------------------------------------
+
+
+class TestSemanticFixDSL:
+    def test_adds_region_filter_from_question(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询华南地区的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "region" and f.get("value") == "华南" for f in filters)
+
+    def test_adds_channel_filter_online(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询线上渠道的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "channel" and f.get("value") == "线上" for f in filters)
+
+    def test_adds_channel_filter_offline(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询线下渠道的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "channel" and f.get("value") == "线下" for f in filters)
+
+    def test_adds_vip_customer_filter(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询VIP客户的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "customer_type" and f.get("value") == "VIP" for f in filters)
+
+    def test_adds_new_customer_filter(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询新客户的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "customer_type" and f.get("value") == "新客" for f in filters)
+
+    def test_adds_old_customer_filter(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": []}
+        result = _semantic_fix_dsl(dsl_dict, "查询老客户的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert any(f.get("field") == "customer_type" and f.get("value") == "老客" for f in filters)
+
+    def test_extracts_top_n_from_question(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "limit": 10}
+        result = _semantic_fix_dsl(dsl_dict, "查询前20的产品", llm_client=None)
+        assert result["limit"] == 20
+
+    def test_does_not_duplicate_existing_filter(self):
+        """If region filter already exists, don't add another."""
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [],
+            "filters": [{"field": "region", "operator": "=", "value": "华北"}],
+        }
+        result = _semantic_fix_dsl(dsl_dict, "查询华北地区的销售额", llm_client=None)
+        filters = result.get("filters") or []
+        assert len([f for f in filters if f.get("field") == "region"]) == 1
+
+    def test_sets_none_filters_when_empty(self):
+        dsl_dict = {"data_source": "orders", "metrics": [], "filters": None}
+        result = _semantic_fix_dsl(dsl_dict, "查询销售额", llm_client=None)
+        assert result.get("filters") is None
+
+
+# ---------------------------------------------------------------------------
+# _parse_llm_output additional tests (edge cases)
+# ---------------------------------------------------------------------------
+
+
+class TestParseLLMOutputEdgeCases:
+    def test_parses_plain_text_without_fences(self):
+        raw = 'Some explanation text\n{"data_source": "orders", "metrics": []}\nMore text'
+        result = _parse_llm_output(raw)
+        assert result["data_source"] == "orders"
+
+    def test_parses_raw_json_when_no_brackets_found(self):
+        raw = '{"data_source": "orders"}'
+        result = _parse_llm_output(raw)
+        assert result["data_source"] == "orders"
+
+    def test_raises_on_invalid_json(self):
+        with pytest.raises(Exception):
+            _parse_llm_output("not json at all")
+
+
+# ---------------------------------------------------------------------------
+# _post_process_dsl additional tests (edge cases)
+# ---------------------------------------------------------------------------
+
+
+class TestPostProcessDSLEdgeCases:
+    def test_metrics_as_string(self):
+        """LLM may return a string instead of array for metrics."""
+        dsl_dict = {"data_source": "orders", "metrics": "sales_amount"}
+        result = _post_process_dsl(dsl_dict)
+        assert isinstance(result["metrics"], list)
+        assert result["metrics"][0]["alias"] == "sales_amount"
+
+    def test_empty_dimensions_list(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": [],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["dimensions"] == ["product_name"]
+
+    def test_dimensions_with_non_string_items(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["product_name", 123, None],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert "product_name" in result["dimensions"]
+        assert 123 not in result["dimensions"]
+
+    def test_generates_order_by_when_missing(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["order_by"] is not None
+        assert result["order_by"][0]["field"] == "sales_amount"
+
+    def test_zero_limit_becomes_default(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "limit": 0,
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["limit"] == 10
+
+    def test_string_limit_becomes_default(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "limit": "ten",
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["limit"] == 10
+
+    def test_invalid_operator_in_filter(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "filters": [{"field": "region", "operator": "eq", "value": "华东"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["filters"][0]["operator"] == "="
+
+    def test_strips_distinct_from_metric_field(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "count", "field": "COUNT(DISTINCT customer_id)", "alias": "customer_count"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["metrics"][0]["field"] == "customer_id"
+
+    def test_strips_func_wrapper_from_field(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "SUM(order_amount)", "alias": "sales_amount"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["metrics"][0]["field"] == "order_amount"
+
+

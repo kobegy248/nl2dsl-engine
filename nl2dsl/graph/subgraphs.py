@@ -107,7 +107,6 @@ def build_validation_subgraph(
         _make_generate_dsl_node,
         _make_validate_dsl_node,
         _make_correct_dsl_node,
-        _make_mock_dsl_node,
     )
 
     builder = StateGraph(QueryState)
@@ -115,51 +114,28 @@ def build_validation_subgraph(
     generate_node = _make_generate_dsl_node(llm_client, rag_retriever)
     validate_node = _make_validate_dsl_node(validator)
     correct_node = _make_correct_dsl_node(llm_client, rag_retriever, registry_dict)
-    mock_node = _make_mock_dsl_node(registry_dict)
 
     builder.add_node("generate_dsl", generate_node)
     builder.add_node("validate_dsl", validate_node)
     builder.add_node("correct_dsl", correct_node)
-    builder.add_node("mock_dsl", mock_node)
 
     # Entry point: if DSL already present (e.g. /query/execute), go straight
-    # to validation. Otherwise route to generate_dsl (LLM) or mock_dsl (fallback).
+    # to validation. Otherwise route to generate_dsl (LLM).
     def _route_entry(state: QueryState) -> str:
         if state.get("dsl") is not None:
             return "validate"
-        if llm_client is not None:
-            return "llm"
-        return "mock"
+        return "llm"
 
     builder.set_conditional_entry_point(
         _route_entry,
         {
             "validate": "validate_dsl",
             "llm": "generate_dsl",
-            "mock": "mock_dsl",
         },
     )
 
-    # Route from generate_dsl:
-    #   - on success -> validate_dsl
-    #   - on error (e.g. LLM connection failure) -> mock_dsl (fallback)
-    def _route_after_generate_dsl(state: QueryState) -> str:
-        if state.get("status") == "error":
-            # Clear error state so mock_dsl can proceed
-            return "fallback"
-        return "continue"
-
-    builder.add_conditional_edges(
-        "generate_dsl",
-        _route_after_generate_dsl,
-        {
-            "fallback": "mock_dsl",
-            "continue": "validate_dsl",
-        },
-    )
-
-    # Mock DSL path goes directly to validation
-    builder.add_edge("mock_dsl", "validate_dsl")
+    # Route from generate_dsl to validate_dsl
+    builder.add_edge("generate_dsl", "validate_dsl")
 
     # Conditional routing after validation
     builder.add_conditional_edges(

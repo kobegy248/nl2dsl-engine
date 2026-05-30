@@ -378,133 +378,30 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
         if first_alias:
             dsl_dict["order_by"] = [{"field": first_alias, "direction": "desc"}]
 
-    # 8. Validate filters operator values
+    # 8. Validate filters operator values (support both flat list and tree)
     valid_ops = {"=", "!=", ">", "<", ">=", "<=", "in", "like", "between", "is_null"}
-    for f in dsl_dict.get("filters", []):
-        if isinstance(f, dict):
-            op = f.get("operator", "")
-            if op not in valid_ops:
-                f["operator"] = "="
+    filters = dsl_dict.get("filters")
+    if filters:
+        if isinstance(filters, dict) and filters.get("op") in {"and", "or", "not"}:
+            # Filter tree format
+            def _validate_tree(node):
+                if node.get("op") in {"and", "or", "not"}:
+                    for child in node.get("children", []):
+                        _validate_tree(child)
+                elif isinstance(node, dict) and "field" in node:
+                    op = node.get("operator", "")
+                    if op not in valid_ops:
+                        node["operator"] = "="
+
+            _validate_tree(filters)
+        elif isinstance(filters, list):
+            for f in filters:
+                if isinstance(f, dict):
+                    op = f.get("operator", "")
+                    if op not in valid_ops:
+                        f["operator"] = "="
 
     return dsl_dict
-
-
-def _mock_dsl_from_question(question: str, data_source: str | None = None) -> DSL:
-    """Generate a mock DSL based on question keywords (no LLM key needed).
-
-    Supports multi-table joins and handles vague semantic queries.
-    """
-    ds = data_source or "orders"
-    metrics = []
-    dimensions = []
-    filters = []
-    order_by = []
-    joins = []
-    limit = 10
-
-    q = question.lower()
-
-    # Detect join intent (vague semantic patterns)
-    join_indicators = {
-        "customer_dim": ["客户", "customer", "用户", "user", "买家", "高价值", "VIP", "会员"],
-        "product_dim": ["品牌", "brand", "品类", "category", "产品详情", "单价", "price"],
-    }
-
-    for table_name, indicators in join_indicators.items():
-        if any(kw in question for kw in indicators):
-            if table_name == "customer_dim":
-                joins.append(Join(table="customer_dim", on_field="customer_id", join_type="left", alias="c"))
-            elif table_name == "product_dim":
-                joins.append(Join(table="product_dim", on_field="product_id", join_type="inner", alias="p"))
-
-    # Metrics (handle vague semantic queries)
-    if any(kw in question for kw in ["销售额", "sales", "业绩", "营收", "收入"]):
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="sales_amount"))
-    elif any(kw in q for kw in ["gmv", "成交总额", "交易额"]):
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="gmv"))
-    elif any(kw in q for kw in ["订单量", "订单数", "单量", "order count"]):
-        metrics.append(Aggregation(func="count", field="id", alias="order_count"))
-    elif any(kw in q for kw in ["客单价", "平均订单", "avg order"]):
-        metrics.append(Aggregation(func="avg", field="pay_amount", alias="avg_order_value"))
-    elif any(kw in q for kw in ["客户数", "用户数", "人数", "customer count"]):
-        metrics.append(Aggregation(func="count", field="customer_id", alias="customer_count"))
-    elif any(kw in q for kw in ["优惠", "折扣", "discount"]):
-        metrics.append(Aggregation(func="sum", field="discount_amount", alias="total_discount"))
-    elif any(kw in question for kw in ["销量", "数量", "quantity"]):
-        metrics.append(Aggregation(func="sum", field="quantity", alias="total_quantity"))
-    else:
-        # Vague query: default to sales
-        metrics.append(Aggregation(func="sum", field="order_amount", alias="sales_amount"))
-
-    # Dimensions (with cross-table support)
-    if "品牌" in question or "brand" in q:
-        dimensions.append("brand")
-    if "品类" in question or "category" in q:
-        dimensions.append("category")
-    if "产品" in question or "product" in q:
-        dimensions.append("product_name")
-    if "地区" in question or "区域" in question or "region" in q:
-        dimensions.append("region")
-    if "时间" in question or "日期" in question or "date" in q:
-        dimensions.append("order_date")
-    if "渠道" in question or "channel" in q or "销售方式" in question:
-        dimensions.append("channel")
-    if any(kw in question for kw in ["客户", "customer", "用户", "user", "买家"]):
-        if not any(j.table == "customer_dim" for j in joins):
-            joins.append(Join(table="customer_dim", on_field="customer_id", join_type="left", alias="c"))
-        if "客户名" in question or "customer_name" in q or "名称" in question:
-            dimensions.append("customer_name")
-        else:
-            dimensions.append("customer_type")
-
-    if not dimensions:
-        dimensions.append("product_name")
-
-    # Filters
-    if "华东" in question:
-        filters.append(Filter(field="region", operator="=", value="华东"))
-    if "华南" in question:
-        filters.append(Filter(field="region", operator="=", value="华南"))
-    if "华北" in question:
-        filters.append(Filter(field="region", operator="=", value="华北"))
-    if "西南" in question:
-        filters.append(Filter(field="region", operator="=", value="西南"))
-    if "线上" in question:
-        filters.append(Filter(field="channel", operator="=", value="线上"))
-    if "线下" in question:
-        filters.append(Filter(field="channel", operator="=", value="线下"))
-    if "分销" in question:
-        filters.append(Filter(field="channel", operator="=", value="分销"))
-
-    # Vague semantic filter: "高价值" -> filter for VIP + high amount
-    if "高价值" in question or "高价值" in q:
-        filters.append(Filter(field="customer_type", operator="=", value="VIP"))
-        filters.append(Filter(field="pay_amount", operator=">=", value=5000))
-
-    # Vague semantic filter: "新客" / "老客" / "VIP"
-    if "新客" in question or "新客户" in question:
-        filters.append(Filter(field="customer_type", operator="=", value="新客"))
-    elif "老客" in question or "老客户" in question:
-        filters.append(Filter(field="customer_type", operator="=", value="老客"))
-    elif "VIP" in question.upper():
-        filters.append(Filter(field="customer_type", operator="=", value="VIP"))
-
-    # Order by
-    if metrics:
-        order_by.append(OrderBy(field=metrics[0].alias or metrics[0].field, direction="desc"))
-
-    # Limit
-    limit = _extract_top_n(question, default=10)
-
-    return DSL(
-        metrics=metrics,
-        dimensions=dimensions,
-        filters=filters or None,
-        order_by=order_by or None,
-        limit=limit,
-        data_source=ds,
-        joins=joins or None,
-    )
 
 
 def _restore_metric_fields(dsl: DSL) -> DSL:
@@ -638,8 +535,11 @@ def _make_validate_dsl_node(validator: DSLValidator):
     return validate_dsl_node
 
 
-def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = ""):
+def _make_generate_dsl_node(
+    llm_client, rag_retriever, semantic_validator=None, llm_system_prompt: str = ""
+):
     """Create a generate_dsl node with injected LLM and RAG dependencies."""
+
     @with_error_handler("generate_dsl")
     def generate_dsl_node(state: QueryState) -> dict:
         question = state["question"]
@@ -663,6 +563,16 @@ def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = 
         dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
         dsl = DSL.model_validate(dsl_dict)
 
+        # Semantic validation
+        if semantic_validator is not None:
+            errors, warnings = semantic_validator.validate(dsl)
+            for w in warnings:
+                logger.warning("[semantic_validator] %s: %s", w.category, w.message)
+            if errors:
+                raise ValidationError(
+                    f"Semantic validation failed: {'; '.join(errors)}"
+                )
+
         return {
             "dsl": dsl,
             "llm_used": True,
@@ -674,32 +584,17 @@ def _make_generate_dsl_node(llm_client, rag_retriever, llm_system_prompt: str = 
             },
             "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
         }
+
     return generate_dsl_node
 
 
-def _make_mock_dsl_node(registry_dict: dict):
-    """Create a mock_dsl node that generates DSL without LLM."""
-    @with_error_handler("mock_dsl")
-    def mock_dsl_node(state: QueryState) -> dict:
-        dsl = _mock_dsl_from_question(state["question"], state.get("data_source"))
-        return {
-            "dsl": dsl,
-            "llm_used": False,
-            "status": "pending",  # Clear any previous error status
-            "error": None,
-            "error_code": None,
-            "dsl_attempts": {
-                "source": "mock",
-                "dsl": dsl.model_dump(),
-                "valid": True,
-                "timestamp": time.time(),
-            },
-            "trace": {"step": "mock_dsl", "status": "success", "source": "mock"},
-        }
-    return mock_dsl_node
-
-
-def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_system_prompt: str = ""):
+def _make_correct_dsl_node(
+    llm_client,
+    rag_retriever,
+    registry_dict: dict,
+    semantic_validator=None,
+    llm_system_prompt: str = "",
+):
     """Create an agentic correct_dsl node.
 
     Unlike the previous "stuff error into prompt and retry" approach, this node
@@ -787,6 +682,19 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
                 dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
                 dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
                 dsl = DSL.model_validate(dsl_dict)
+
+                # Semantic validation
+                if semantic_validator is not None:
+                    errors, warnings = semantic_validator.validate(dsl)
+                    for w in warnings:
+                        logger.warning(
+                            "[semantic_validator] %s: %s", w.category, w.message
+                        )
+                    if errors:
+                        raise ValidationError(
+                            f"Semantic validation failed: {'; '.join(errors)}"
+                        )
+
                 return {
                     "dsl": dsl,
                     "status": "pending",  # 清掉错误状态，让 validate 再判一次
@@ -808,21 +716,16 @@ def _make_correct_dsl_node(llm_client, rag_retriever, registry_dict: dict, llm_s
                     },
                 }
 
-        # Fallback: try mock with a note that it was corrected
-        dsl = _mock_dsl_from_question(question, data_source)
+        # No fallback: if LLM correction fails, return error state
         return {
-            "dsl": dsl,
-            "status": "pending",
-            "error": None,
-            "error_code": None,
-            "dsl_attempts": {
-                "source": "mock_corrected",
-                "dsl": dsl.model_dump(),
-                "valid": True,
-                "timestamp": time.time(),
-                "error_feedback": error,
+            "status": "error",
+            "error": f"DSL correction failed: {error}",
+            "error_code": "CORRECTION_FAILED",
+            "trace": {
+                "step": "correct_dsl",
+                "status": "error",
+                "error": error,
             },
-            "trace": {"step": "correct_dsl", "status": "success", "source": "mock_corrected"},
         }
     return correct_dsl_node
 
@@ -1059,6 +962,7 @@ def create_node_functions(
     sandbox: QuerySandbox,
     executor: SQLExecutor,
     clarification_detector: ClarificationDetector,
+    semantic_validator=None,
     llm_system_prompt: str = "",
 ) -> dict[str, Callable[[QueryState], dict]]:
     """Factory that creates all node functions with injected dependencies.
@@ -1121,6 +1025,16 @@ def create_node_functions(
         dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
         dsl = DSL.model_validate(dsl_dict)
 
+        # Semantic validation
+        if semantic_validator is not None:
+            errors, warnings = semantic_validator.validate(dsl)
+            for w in warnings:
+                logger.warning("[semantic_validator] %s: %s", w.category, w.message)
+            if errors:
+                raise ValidationError(
+                    f"Semantic validation failed: {'; '.join(errors)}"
+                )
+
         return {
             "dsl": dsl,
             "llm_used": True,
@@ -1131,24 +1045,6 @@ def create_node_functions(
                 "timestamp": time.time(),
             },
             "trace": {"step": "generate_dsl", "status": "success", "source": "llm"},
-        }
-
-    # -----------------------------------------------------------------------
-    # mock_dsl_node (separate mock path)
-    # -----------------------------------------------------------------------
-    @with_error_handler("mock_dsl")
-    def mock_dsl_node(state: QueryState) -> dict:
-        dsl = _mock_dsl_from_question(state["question"], state.get("data_source"))
-        return {
-            "dsl": dsl,
-            "llm_used": False,
-            "dsl_attempts": {
-                "source": "mock",
-                "dsl": dsl.model_dump(),
-                "valid": True,
-                "timestamp": time.time(),
-            },
-            "trace": {"step": "mock_dsl", "status": "success", "source": "mock"},
         }
 
     # -----------------------------------------------------------------------
@@ -1231,7 +1127,7 @@ def create_node_functions(
     # can still look it up by name.
     # -----------------------------------------------------------------------
     correct_dsl_node = _make_correct_dsl_node(
-        llm_client, rag_retriever, {}, llm_system_prompt
+        llm_client, rag_retriever, {}, semantic_validator, llm_system_prompt
     )
 
     # -----------------------------------------------------------------------
@@ -1431,7 +1327,6 @@ def create_node_functions(
         "confidence_node": confidence_node,
         "decompose_node": decompose_node,
         "generate_dsl_node": generate_dsl_node,
-        "mock_dsl_node": mock_dsl_node,
         "validate_dsl_node": validate_dsl_node,
         "correct_dsl_node": correct_dsl_node,
         "inject_row_permission_node": inject_row_permission_node,

@@ -49,7 +49,9 @@ class FakeRetriever:
 def main():
     llm = FakeLLM()
     retriever = FakeRetriever()
-    correct_node = _make_correct_dsl_node(llm, retriever, {}, "test-system-prompt")
+    correct_node = _make_correct_dsl_node(
+        llm, retriever, {}, llm_system_prompt="test-system-prompt"
+    )
 
     # 构造一个"上一次失败"的 state
     from nl2dsl.dsl.models import DSL, Aggregation

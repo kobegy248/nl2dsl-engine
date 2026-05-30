@@ -70,8 +70,10 @@ def _make_smart_mock_llm_client():
         if "质量检查" in prompt_str or "verify" in prompt_str.lower() or "PASS" in prompt_str:
             return "PASS\nDSL matches the question"
 
-        # Explain node prompt
-        if "解释" in prompt_str or "explanation" in prompt_str.lower() or "第一人称" in prompt_str:
+        # Explain node prompt (must check before generic "解释" matches)
+        if "第一人称" in prompt_str or (
+            "explanation" in prompt_str.lower() and "json" not in prompt_str.lower()
+        ):
             return "查询结果显示销售额为1000元。"
 
         # Decompose prompt
@@ -237,8 +239,8 @@ class TestBuildGraphInvocation:
         assert "human_review" in trace_steps
 
     def test_error_in_validation_subgraph(self, mock_services):
-        """If LLM returns invalid JSON, graph falls back to mock_dsl and succeeds."""
-        # Disable LLM entirely to test the mock_dsl fallback path
+        """If LLM is unavailable, generate_dsl fails with validation error."""
+        # Disable LLM entirely — no mock fallback anymore
         mock_services["llm_client"] = None
         mock_services["clarification_detector"].detect.return_value = []
 
@@ -247,11 +249,10 @@ class TestBuildGraphInvocation:
         state = make_minimal_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Without LLM, validation subgraph uses mock_dsl
-        # Note: confidence will be 50 (neutral_no_llm) which routes to "clarify"
-        # This is expected behavior when LLM is unavailable
-        assert result["dsl"] is not None
-        assert result["llm_used"] is False
+        # Without LLM, generate_dsl raises ValidationError
+        # which propagates through the pipeline
+        assert result["status"] == "error"
+        assert result["error_code"] == "VALIDATION_ERROR"
 
     def test_complex_query_routes_through_scan(self, mock_services):
         """Complex queries should still route to scan_sql."""
@@ -495,13 +496,22 @@ class TestAgentNodesInGraph:
         assert "plan" in trace_steps
 
     def test_confidence_node_routes_continue_when_high(self, mock_services, valid_dsl):
-        """High confidence (>= 60) should route: confidence -> build_sql -> ... -> END."""
-        # Disable LLM so confidence node uses neutral semantic score (50)
-        # With validator passing (syntax=100), confidence = min(100, 50) = 50 < 60
-        # So we also need to mock the LLM to return a high semantic score
-        mock_services["llm_client"] = _make_mock_llm_client()
-        # Override generate to return a high confidence score for the confidence node's prompt
-        mock_services["llm_client"].generate = MagicMock(return_value="85")
+        """High confidence (>= 0.6) should route: confidence -> build_sql -> ... -> END."""
+        # Use smart mock that returns DSL JSON for generate_dsl
+        # and a high confidence score for the confidence node's prompt
+        smart_llm = _make_smart_mock_llm_client()
+
+        orig_generate = smart_llm.generate
+
+        def _generate_with_confidence(prompt, system_prompt=""):
+            prompt_str = prompt if isinstance(prompt, str) else str(prompt)
+            # Confidence node prompt asks for a score
+            if "评分" in prompt_str or "confidence" in prompt_str.lower() or "分数" in prompt_str:
+                return "0.85"
+            return orig_generate(prompt, system_prompt)
+
+        smart_llm.generate = MagicMock(side_effect=_generate_with_confidence)
+        mock_services["llm_client"] = smart_llm
         mock_services["clarification_detector"].detect.return_value = []
         mock_services["row_security"].inject.side_effect = lambda dsl, uid: dsl
         mock_services["col_security"].check.return_value = None
@@ -511,7 +521,7 @@ class TestAgentNodesInGraph:
         mock_services["sandbox"].check.return_value = SandboxResult(
             passed=True, risks=[], sample_rows=[]
         )
-        # Mock validator to pass (syntax confidence = 100)
+        # Mock validator to pass (syntax confidence = 1.0)
         mock_services["validator"].validate.return_value = None
 
         graph = build_graph(**mock_services)
@@ -523,7 +533,7 @@ class TestAgentNodesInGraph:
         assert result["status"] == "success"
         # Confidence should be set
         assert result["confidence"] is not None
-        assert result["confidence"] >= 60.0
+        assert result["confidence"] >= 0.6
         # Trace should show confidence was visited
         trace_steps = [t["step"] for t in (result.get("trace") or [])]
         assert "confidence" in trace_steps
