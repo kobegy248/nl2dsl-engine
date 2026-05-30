@@ -1,5 +1,5 @@
 import re
-from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, literal, join as sa_join
+from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, literal, column, join as sa_join
 from nl2dsl.dsl.models import DSL, Join
 from nl2dsl.exceptions import ValidationError
 
@@ -382,7 +382,7 @@ class SQLBuilder:
                         f"Invalid having field name: {h.field!r}. "
                         f"Must be a valid metric alias (letters, digits, underscores only)."
                     )
-                col_ref = text(h.field)
+                col_ref = column(h.field)
                 val = literal(h.value)
                 if h.operator == "=":
                     having_conditions.append(col_ref == val)
