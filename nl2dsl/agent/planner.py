@@ -79,6 +79,28 @@ def _split_question(question: str) -> list[str]:
     return parts if parts else [question]
 
 
+def _extract_common_suffix(question: str, parts: list[str]) -> str:
+    """Extract a common suffix from *question* that not all *parts* contain.
+
+    For example, given ``question="对比华东和华南的销售额"`` and
+    ``parts=["华东", "华南的销售额"]``, the suffix ``"的销售额"`` is
+    returned so it can be appended to ``"华东"``.
+
+    Returns an empty string when no meaningful suffix is found.
+    """
+    # Simple heuristic: find the substring after the last splitter
+    # that appears in the original question but not in every part.
+    for splitter in _SPLIT_CHARS:
+        if splitter in question:
+            idx = question.rfind(splitter)
+            if idx != -1:
+                suffix = question[idx + len(splitter):].strip()
+                # Only return if at least one part is missing it
+                if suffix and any(suffix not in p for p in parts):
+                    return suffix
+    return ""
+
+
 def _decompose_by_intent(
     question: str,
     intent: str,
@@ -103,9 +125,29 @@ def _decompose_by_intent(
     if decomposition == "split_by_objects":
         parts = _split_question(question)
         if len(parts) >= 2:
+            # Strip comparison prefixes (对比/比较) from each part
+            comparison_prefixes = ("对比", "比较", "和", "与")
+            cleaned_parts = []
+            for part in parts:
+                cleaned = part.strip()
+                for prefix in comparison_prefixes:
+                    if cleaned.startswith(prefix):
+                        cleaned = cleaned[len(prefix):].strip()
+                        break
+                cleaned_parts.append(cleaned)
+
+            # Preserve common context (e.g., "销售额") for each sub-query.
+            # If the original question has a suffix like "的销售额", append it
+            # to sub-queries that don't already contain it.
+            suffix = _extract_common_suffix(question, cleaned_parts)
+            if suffix:
+                for i, part in enumerate(cleaned_parts):
+                    if suffix not in part:
+                        cleaned_parts[i] = f"{part}{suffix}"
+
             sub_queries = [
-                SubQuery(id="sq-1", description=parts[0], depends_on=[]),
-                SubQuery(id="sq-2", description=parts[1], depends_on=[]),
+                SubQuery(id=f"sq-{i+1}", description=desc, depends_on=[])
+                for i, desc in enumerate(cleaned_parts[:2])
             ]
         else:
             sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
