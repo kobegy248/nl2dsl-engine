@@ -1,5 +1,5 @@
 import re
-from sqlalchemy import MetaData, select, func, and_, desc, asc, text, join as sa_join
+from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, join as sa_join
 from nl2dsl.dsl.models import DSL, Join
 from nl2dsl.exceptions import ValidationError
 
@@ -72,6 +72,59 @@ class SQLBuilder:
                 return tbl
         raise ValidationError(f"Table for column '{field}' not found")
 
+    def _build_condition_tree(self, tables: dict[str, object], node) -> object:
+        """Recursively build SQLAlchemy expression from a filter tree."""
+        from nl2dsl.dsl.models import FilterTreeNode
+
+        if isinstance(node, FilterTreeNode):
+            if node.op == "and":
+                return and_(*[self._build_condition_tree(tables, c) for c in node.children])
+            elif node.op == "or":
+                return or_(*[self._build_condition_tree(tables, c) for c in node.children])
+            elif node.op == "not":
+                return not_(self._build_condition_tree(tables, node.children[0]))
+        # Leaf node
+        return self._build_leaf_condition(tables, node)
+
+    def _build_leaf_condition(self, tables: dict[str, object], f) -> object:
+        """Build a single filter condition (leaf node)."""
+        col = self._resolve_column(tables, f.field)
+        if f.operator == "=":
+            return col == f.value
+        elif f.operator == "!=":
+            return col != f.value
+        elif f.operator == ">":
+            return col > f.value
+        elif f.operator == "<":
+            return col < f.value
+        elif f.operator == ">=":
+            return col >= f.value
+        elif f.operator == "<=":
+            return col <= f.value
+        elif f.operator == "in":
+            return col.in_(f.value)
+        elif f.operator == "like":
+            return col.like(f"%{f.value}%")
+        elif f.operator == "between":
+            val = f.value
+            if isinstance(val, (list, tuple)) and len(val) == 2:
+                return col.between(val[0], val[1])
+            raise ValidationError(f"'between' requires [min, max] list, got {val!r}")
+        elif f.operator == "is_null":
+            return col.is_(None)
+        else:
+            raise ValidationError(f"Unknown operator: {f.operator}")
+
+    def _collect_columns_from_tree(self, node, columns: set) -> None:
+        """Recursively collect field names from a filter tree."""
+        from nl2dsl.dsl.models import FilterTreeNode
+
+        if isinstance(node, FilterTreeNode):
+            for child in node.children:
+                self._collect_columns_from_tree(child, columns)
+        else:
+            columns.add(node.field)
+
     def _collect_referenced_columns(self, dsl: DSL) -> set[str]:
         """Collect all physical column names referenced in the DSL."""
         columns: set[str] = set()
@@ -94,8 +147,15 @@ class SQLBuilder:
 
         # Filters
         if dsl.filters:
-            for f in dsl.filters:
-                columns.add(f.field)
+            if isinstance(dsl.filters, list):
+                for f in dsl.filters:
+                    columns.add(f.field)
+            else:
+                self._collect_columns_from_tree(dsl.filters, columns)
+
+        # Time field
+        if dsl.time_field:
+            columns.add(dsl.time_field)
 
         # Order by
         if dsl.order_by:
@@ -290,25 +350,19 @@ class SQLBuilder:
 
         # Build where
         conditions = []
+
+        # time_range -> between condition
+        if dsl.time_field and dsl.time_range:
+            time_col = self._resolve_column(tables, dsl.time_field)
+            conditions.append(time_col.between(dsl.time_range[0], dsl.time_range[1]))
+
+        # filters: flat list or condition tree
         if dsl.filters:
-            for f in dsl.filters:
-                col = self._resolve_column(tables, f.field)
-                if f.operator == "=":
-                    conditions.append(col == f.value)
-                elif f.operator == "!=":
-                    conditions.append(col != f.value)
-                elif f.operator == ">":
-                    conditions.append(col > f.value)
-                elif f.operator == "<":
-                    conditions.append(col < f.value)
-                elif f.operator == ">=":
-                    conditions.append(col >= f.value)
-                elif f.operator == "<=":
-                    conditions.append(col <= f.value)
-                elif f.operator == "in":
-                    conditions.append(col.in_(f.value))
-                elif f.operator == "like":
-                    conditions.append(col.like(f"%{f.value}%"))
+            if isinstance(dsl.filters, list):
+                for f in dsl.filters:
+                    conditions.append(self._build_leaf_condition(tables, f))
+            else:
+                conditions.append(self._build_condition_tree(tables, dsl.filters))
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -317,6 +371,27 @@ class SQLBuilder:
         if dsl.dimensions and dsl.metrics:
             group_cols = [self._resolve_column(tables, self._dimension_mapping.get(d, d)) for d in dsl.dimensions]
             stmt = stmt.group_by(*group_cols)
+
+        # Having
+        if dsl.having:
+            having_conditions = []
+            for h in dsl.having:
+                if h.operator == "between":
+                    val = h.value
+                    if isinstance(val, (list, tuple)) and len(val) == 2:
+                        having_conditions.append(
+                            text(f"{h.field} BETWEEN {val[0]} AND {val[1]}")
+                        )
+                    else:
+                        raise ValidationError(
+                            f"'between' in having requires [min, max] list, got {val!r}"
+                        )
+                else:
+                    having_conditions.append(
+                        text(f"{h.field} {h.operator} {h.value}")
+                    )
+            if having_conditions:
+                stmt = stmt.having(and_(*having_conditions))
 
         # Collect metric aliases for ORDER BY resolution
         metric_aliases = {m.alias for m in (dsl.metrics or []) if m.alias}
