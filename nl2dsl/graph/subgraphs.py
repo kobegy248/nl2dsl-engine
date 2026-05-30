@@ -80,6 +80,7 @@ def build_validation_subgraph(
     llm_client,
     rag_retriever,
     registry_dict: dict,
+    semantic_validator=None,
 ) -> StateGraph:
     """Build the DSL validation + correction loop subgraph.
 
@@ -111,9 +112,9 @@ def build_validation_subgraph(
 
     builder = StateGraph(QueryState)
 
-    generate_node = _make_generate_dsl_node(llm_client, rag_retriever)
+    generate_node = _make_generate_dsl_node(llm_client, rag_retriever, semantic_validator)
     validate_node = _make_validate_dsl_node(validator)
-    correct_node = _make_correct_dsl_node(llm_client, rag_retriever, registry_dict)
+    correct_node = _make_correct_dsl_node(llm_client, rag_retriever, registry_dict, semantic_validator)
 
     builder.add_node("generate_dsl", generate_node)
     builder.add_node("validate_dsl", validate_node)

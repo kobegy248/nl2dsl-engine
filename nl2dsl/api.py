@@ -273,12 +273,6 @@ async def query_dsl(req: QueryRequest) -> DSLGenerateResponse:
 
     elapsed = int((time.time() - start) * 1000)
 
-    # If clarification is needed and no DSL was produced, fall back to mock
-    if result.get("status") == "clarification" and result.get("dsl") is None:
-        from nl2dsl.graph.nodes import _mock_dsl_from_question
-        mock_dsl = _mock_dsl_from_question(req.question, req.data_source)
-        result = {"dsl": mock_dsl, "status": "pending"}
-
     dsl = result.get("dsl")
     return DSLGenerateResponse(
         status="success",
@@ -468,7 +462,12 @@ async def query_resume(req: ResumeRequest):
 
     # Get current state
     ctx = _nl2dsl_engine.get_domain("ecommerce")
-    current_state = await ctx.graph.aget_state(config)
+    try:
+        current_state = await ctx.graph.aget_state(config)
+    except ValueError as exc:
+        if "No checkpointer set" in str(exc):
+            raise NotFoundError(f"Query not found: query_id={req.query_id}")
+        raise
     if current_state is None:
         raise NotFoundError(f"Query not found: query_id={req.query_id}")
 
