@@ -114,25 +114,21 @@ class SemanticValidator:
         # Value domain check -> warning
         field_info = self._fields.get(f.field, {})
         allowed = field_info.get("allowed_values")
-        if allowed and f.value is not None and f.value not in allowed:
-            if f.operator == "=" or (f.operator == "in" and isinstance(f.value, list)):
-                val_to_check = f.value if f.operator == "=" else f.value
-                if isinstance(val_to_check, list):
-                    unknown = [v for v in val_to_check if v not in allowed]
-                    if unknown:
-                        warnings.append(
-                            SemanticWarning(
-                                "value_domain",
-                                f"值 {unknown!r} 不在 '{f.field}' 的已知取值中 "
-                                f"{allowed!r}",
-                            )
-                        )
-                elif val_to_check not in allowed:
+        if allowed and f.value is not None:
+            if f.operator == "=" and f.value not in allowed:
+                warnings.append(
+                    SemanticWarning(
+                        "value_domain",
+                        f"值 '{f.value}' 不在 '{f.field}' 的已知取值中 {allowed!r}",
+                    )
+                )
+            elif f.operator == "in" and isinstance(f.value, list):
+                unknown = [v for v in f.value if v not in allowed]
+                if unknown:
                     warnings.append(
                         SemanticWarning(
                             "value_domain",
-                            f"值 '{val_to_check}' 不在 '{f.field}' 的已知取值中 "
-                            f"{allowed!r}",
+                            f"值 {unknown!r} 不在 '{f.field}' 的已知取值中 {allowed!r}",
                         )
                     )
 
@@ -152,33 +148,55 @@ class SemanticValidator:
                 )
 
     def _validate_condition_conflicts(self, dsl: DSL, errors: list[str]) -> None:
-        """Detect conflicting conditions like A=1 AND A=2."""
+        """Detect conflicting conditions like A=1 AND A=2.
+
+        Only checks within 'and' subtrees — 'or' branches are not conflicts.
+        """
         filters = dsl.filters
         if filters is None:
             return
 
-        # Collect all leaf filters
-        leafs: list[Filter] = []
+        def _check_and_subtree(node: FilterTreeNode | Filter) -> None:
+            """Recursively check conflicts, only within 'and' nodes."""
+            if isinstance(node, FilterTreeNode):
+                if node.op == "and":
+                    # Collect all '=' leafs directly under this 'and'
+                    leafs: list[Filter] = []
+                    for child in node.children:
+                        if isinstance(child, FilterTreeNode) and child.op in ("and", "or"):
+                            # Recurse into nested and/or
+                            _check_and_subtree(child)
+                        elif isinstance(child, FilterTreeNode) and child.op == "not":
+                            # Skip 'not' branches for conflict detection
+                            pass
+                        elif isinstance(child, Filter):
+                            leafs.append(child)
+
+                    eq_conditions: dict[str, list[Any]] = {}
+                    for f in leafs:
+                        if f.operator == "=":
+                            eq_conditions.setdefault(f.field, []).append(f.value)
+                    for field, values in eq_conditions.items():
+                        if len(values) > 1 and len(set(str(v) for v in values)) > 1:
+                            errors.append(
+                                f"conflict: '{field}' has multiple different values {values!r}"
+                            )
+                elif node.op == "or":
+                    for child in node.children:
+                        _check_and_subtree(child)
+                # 'not' branches are skipped
+            # leaf nodes are not checked at top level (they're checked via parent and)
+
         if isinstance(filters, FilterTreeNode):
-            self._collect_leafs(filters, leafs)
+            _check_and_subtree(filters)
         elif isinstance(filters, list):
-            leafs = filters
-
-        # Group by field+operator and check for conflicts on '='
-        eq_conditions: dict[str, list[Any]] = {}
-        for f in leafs:
-            if f.operator == "=":
-                eq_conditions.setdefault(f.field, []).append(f.value)
-
-        for field, values in eq_conditions.items():
-            if len(values) > 1 and len(set(str(v) for v in values)) > 1:
-                errors.append(
-                    f"conflict: '{field}' has multiple different values {values!r}"
-                )
-
-    def _collect_leafs(self, node: FilterTreeNode, out: list[Filter]) -> None:
-        for child in node.children:
-            if isinstance(child, FilterTreeNode):
-                self._collect_leafs(child, out)
-            else:
-                out.append(child)
+            # Flat list: treat as implicit 'and'
+            eq_conditions: dict[str, list[Any]] = {}
+            for f in filters:
+                if f.operator == "=":
+                    eq_conditions.setdefault(f.field, []).append(f.value)
+            for field, values in eq_conditions.items():
+                if len(values) > 1 and len(set(str(v) for v in values)) > 1:
+                    errors.append(
+                        f"conflict: '{field}' has multiple different values {values!r}"
+                    )

@@ -183,6 +183,41 @@ class TestConditionConflict:
         assert not errors
 
 
+    def test_or_not_conflict(self, validator):
+        """A=1 OR A=2 is NOT a conflict."""
+        dsl = DSL(
+            data_source="orders",
+            filters={
+                "op": "or",
+                "children": [
+                    {"field": "region", "operator": "=", "value": "华东"},
+                    {"field": "region", "operator": "=", "value": "华南"},
+                ],
+            },
+        )
+        errors, _ = validator.validate(dsl)
+        assert not errors, "OR branches should not be flagged as conflicts"
+
+    def test_between_valid_list(self, validator):
+        """between with proper 2-element list should pass."""
+        dsl = DSL(
+            data_source="orders",
+            filters=[{"field": "pay_amount", "operator": "between", "value": [100, 500]}],
+        )
+        errors, _ = validator.validate(dsl)
+        assert not errors
+
+    def test_value_domain_warning(self, validator):
+        """Value not in allowed_values should produce warning."""
+        dsl = DSL(
+            data_source="orders",
+            filters=[{"field": "region", "operator": "=", "value": "未知地区"}],
+        )
+        errors, warnings = validator.validate(dsl)
+        assert not errors  # warning, not error
+        assert any("未知地区" in w.message for w in warnings)
+
+
 class TestHavingValidation:
     def test_having_with_metric_ok(self, validator):
         dsl = DSL(
