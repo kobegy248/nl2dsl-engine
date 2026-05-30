@@ -376,6 +376,12 @@ class SQLBuilder:
         if dsl.having:
             having_conditions = []
             for h in dsl.having:
+                # Whitelist validation: alias must be alphanumeric + underscore
+                if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", h.field):
+                    raise ValidationError(
+                        f"Invalid having field name: {h.field!r}. "
+                        f"Must be a valid metric alias (letters, digits, underscores only)."
+                    )
                 col_ref = text(h.field)
                 val = literal(h.value)
                 if h.operator == "=":
