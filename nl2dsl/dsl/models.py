@@ -3,17 +3,17 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class Filter(BaseModel):
+    """A filter condition for the WHERE clause (flat list format)."""
+
     field: str
     operator: Literal["=", "!=", ">", "<", ">=", "<=", "between", "in", "like", "is_null"]
     value: Any = None
 
 
-class FilterLeaf(BaseModel):
+class FilterLeaf(Filter):
     """A leaf node in a condition tree -- a single filter condition."""
 
-    field: str
-    operator: Literal["=", "!=", ">", "<", ">=", "<=", "between", "in", "like", "is_null"]
-    value: Any = None
+    pass
 
 
 class FilterTreeNode(BaseModel):
@@ -30,15 +30,14 @@ class FilterTreeNode(BaseModel):
         return v
 
 
+# Resolve forward references (FilterTreeNode.children references FilterLeaf)
 FilterTreeNode.model_rebuild()
 
 
-class Having(BaseModel):
+class Having(Filter):
     """HAVING clause condition -- references a metric alias."""
 
-    field: str
-    operator: Literal["=", "!=", ">", "<", ">=", "<=", "between", "in", "like", "is_null"]
-    value: Any = None
+    pass
 
 
 class OrderBy(BaseModel):
@@ -72,22 +71,26 @@ class DSL(BaseModel):
     time_range: tuple[str, str] | None = None
     joins: list[Join] | None = None
 
+    @staticmethod
+    def _coerce_model_list(v, model_class):
+        """Coerce a list of dicts to a list of model instances."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [
+                model_class.model_validate(item) if isinstance(item, dict) else item
+                for item in v
+            ]
+        return v
+
     @field_validator("filters", mode="before")
     @classmethod
     def _coerce_filters(cls, v):
         """Accept both old flat list and new tree dict."""
-        if v is None:
-            return None
         if isinstance(v, dict):
             # Tree format: {"op": "and", "children": [...]}
             return FilterTreeNode.model_validate(v)
-        if isinstance(v, list):
-            # Old flat list format
-            return [
-                Filter.model_validate(item) if isinstance(item, dict) else item
-                for item in v
-            ]
-        return v
+        return cls._coerce_model_list(v, Filter)
 
     @field_validator("time_range", mode="before")
     @classmethod
@@ -102,14 +105,7 @@ class DSL(BaseModel):
     @field_validator("having", mode="before")
     @classmethod
     def _coerce_having(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, list):
-            return [
-                Having.model_validate(item) if isinstance(item, dict) else item
-                for item in v
-            ]
-        return v
+        return cls._coerce_model_list(v, Having)
 
 
 class ClarificationItem(BaseModel):

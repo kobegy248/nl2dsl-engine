@@ -47,6 +47,16 @@ def test_dsl_default_limit():
     assert dsl.limit == 100
 
 
+def test_dsl_default_offset():
+    dsl = DSL(data_source="orders")
+    assert dsl.offset == 0
+
+
+def test_time_range_none():
+    dsl = DSL(data_source="orders")
+    assert dsl.time_range is None
+
+
 class TestFilterTreeNode:
     """Tests for the new filter tree structure."""
 
