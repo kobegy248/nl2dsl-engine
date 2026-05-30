@@ -1,0 +1,39 @@
+# Intent configuration for the NL2DSL agent layer.
+# New intents can be added here without code changes.
+
+intents:
+  compare:
+    keywords: ["对比", "比较", "vs", "相比", "同比", "环比"]
+    decomposition: split_by_objects
+    aggregation: diff
+    description: Compare two or more objects (metrics, dimensions, time periods)
+
+  trend:
+    keywords: ["趋势", "走势", "变化", "增长", "下降"]
+    decomposition: single_with_time_grouping
+    aggregation: trend_direction
+    description: Analyze trends and changes over time
+
+  correlation:
+    keywords: ["关联", "影响", "相关", "关系"]
+    decomposition: split_by_objects
+    aggregation: pearson
+    description: Discover relationships between metrics
+
+  proportion:
+    keywords: ["占比", "构成", "贡献度"]
+    decomposition: total_plus_groups
+    aggregation: proportion
+    description: Break down totals into proportional contributions
+
+  ranking:
+    keywords: ["排名", "Top", "第几"]
+    decomposition: single_with_ordering
+    aggregation: ranking
+    description: Order results and return top-N or rank positions
+
+  single_query:
+    keywords: []
+    decomposition: passthrough
+    aggregation: passthrough
+    description: Fallback for simple single-object queries
