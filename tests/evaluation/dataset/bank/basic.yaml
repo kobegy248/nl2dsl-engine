@@ -1,0 +1,170 @@
+version: "1.0"
+domain: bank
+description: "Bank domain basic queries"
+
+test_cases:
+  - id: bank_001
+    query: "查询客户数量"
+    description: "Simple customer count"
+    tags: ["count", "basic"]
+    expected_dsl:
+      data_source: customers
+      metrics:
+        - func: count
+          field: cif_no
+          alias: customer_count
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_002
+    query: "查询账户总余额"
+    description: "Total account balance"
+    tags: ["sum", "basic"]
+    expected_dsl:
+      data_source: customer_accounts
+      metrics:
+        - func: sum
+          field: acct_bal
+          alias: total_balance
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_003
+    query: "各账户类型的平均余额"
+    description: "Average balance by account type"
+    tags: ["avg", "dimension", "group_by"]
+    expected_dsl:
+      data_source: customer_accounts
+      metrics:
+        - func: avg
+          field: acct_bal
+          alias: avg_balance
+      dimensions:
+        - account_type
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_004
+    query: "交易笔数最多的客户"
+    description: "Top customers by transaction count"
+    tags: ["count", "top_n", "order_by", "customer"]
+    expected_dsl:
+      data_source: transactions
+      metrics:
+        - func: count
+          field: txn_seq_no
+          alias: txn_count
+      dimensions:
+        - customer_name
+      filters: []
+      order_by:
+        - field: txn_count
+          direction: desc
+      limit: 10
+
+  - id: bank_005
+    query: "存款交易金额合计"
+    description: "Total deposit amount"
+    tags: ["sum", "filter", "transaction_type"]
+    expected_dsl:
+      data_source: transactions
+      metrics:
+        - func: sum
+          field: txn_amt
+          alias: txn_amount
+      dimensions: []
+      filters:
+        - field: transaction_type
+          operator: "="
+          value: "1001"
+      order_by: []
+      limit: 10
+
+  - id: bank_006
+    query: "各产品的持有金额"
+    description: "Product holding amounts"
+    tags: ["sum", "dimension", "product"]
+    expected_dsl:
+      data_source: agreements
+      metrics:
+        - func: sum
+          field: hold_amt
+          alias: product_hold_amount
+      dimensions:
+        - product_name
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_007
+    query: "查询冻结金额"
+    description: "Total frozen amount"
+    tags: ["sum", "basic"]
+    expected_dsl:
+      data_source: customer_accounts
+      metrics:
+        - func: sum
+          field: frz_amt
+          alias: frozen_amount
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_008
+    query: "各风险等级的客户数量"
+    description: "Customer count by risk level"
+    tags: ["count", "dimension", "risk"]
+    expected_dsl:
+      data_source: customers
+      metrics:
+        - func: count
+          field: cif_no
+          alias: customer_count
+      dimensions:
+        - risk_level
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_009
+    query: "资金流入和流出金额"
+    description: "Inflow and outflow amounts"
+    tags: ["sum", "multi_metric", "cash_flow"]
+    expected_dsl:
+      data_source: transactions
+      metrics:
+        - func: sum
+          field: txn_amt
+          alias: inflow_amount
+        - func: sum
+          field: txn_amt
+          alias: outflow_amount
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: bank_010
+    query: "各渠道的存款金额"
+    description: "Deposit amount by channel"
+    tags: ["sum", "dimension", "filter", "channel"]
+    expected_dsl:
+      data_source: transactions
+      metrics:
+        - func: sum
+          field: txn_amt
+          alias: txn_amount
+      dimensions:
+        - channel_name
+      filters:
+        - field: transaction_type
+          operator: "="
+          value: "1001"
+      order_by: []
+      limit: 10

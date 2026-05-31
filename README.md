@@ -91,6 +91,85 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 ---
 
+## 评测 (Evaluation)
+
+运行评测套件，量化 NL→DSL 各维度准确率：
+
+```bash
+# 安装评测依赖
+pip install -e ".[dev]"
+
+# 运行完整评测
+nl2dsl-eval --dataset tests/evaluation/dataset --output reports/ --format both
+
+# 仅评测指定 domain
+nl2dsl-eval --dataset tests/evaluation/dataset --domain ecommerce --format markdown
+
+# 仅评测指定标签的用例
+nl2dsl-eval --dataset tests/evaluation/dataset --tags filter join --output reports/
+```
+
+评测报告示例（Markdown）：
+
+```
+# NL2DSL Evaluation Report
+
+**Generated:** 2026-05-31T10:30:00
+**Total Cases:** 50
+**Execution Time:** 45.2s
+
+## Overall Score
+
+### 87.3%
+
+| Metric | Value |
+|--------|-------|
+| Passed | 43 |
+| Failed | 7 |
+| Pass Rate | 86.0% |
+
+## By Category
+
+| Category | Weight | Score |
+|----------|--------|-------|
+| Semantic | 56% | 88.5% |
+| Planning | 14% | 75.0% |
+| Execution | 20% | 90.0% |
+| Governance | 10% | 65.0% |
+
+## Per Domain
+
+| Domain | Cases | Passed | Failed | Avg Score |
+|--------|-------|--------|--------|-----------|
+| ecommerce | 30 | 27 | 3 | 89.5% |
+| bank | 10 | 8 | 2 | 84.2% |
+| supply_chain | 10 | 8 | 2 | 82.1% |
+```
+
+### 评测维度说明（4 大类 12 维度）
+
+| 类别 | 维度 | 权重 | 评分方式 |
+|------|------|------|---------|
+| **Semantic** | Intent | 8% | data_source 精确匹配 (0/1) |
+| | Metric | 20% | func + field + alias 部分匹配 |
+| | Dimension | 12% | Jaccard 相似度 |
+| | Filter | 16% | field + operator + value 部分匹配 |
+| **Planning** | Join | 7% | table + on_field + join_type 匹配 |
+| | Limit | 4% | 精确匹配 |
+| | OrderBy | 3% | 序列感知匹配 |
+| **Execution** | SQL Success | 10% | SQL 执行成功 (0/1) |
+| | Result Accuracy | 10% | 查询结果数据对比 |
+| **Governance** | Permission | 4% | 敏感字段越权拦截 |
+| | Masking | 3% | 敏感数据脱敏检查 |
+| | Audit | 3% | 审计日志记录 |
+
+评测框架支持自定义权重：
+```bash
+nl2dsl-eval --dataset tests/evaluation/dataset --weights metric=0.3 filter=0.25
+```
+
+---
+
 ## License
 
 MIT

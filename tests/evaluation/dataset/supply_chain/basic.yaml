@@ -1,0 +1,162 @@
+version: "1.0"
+domain: supply_chain
+description: "Supply chain domain basic queries"
+
+test_cases:
+  - id: sc_001
+    query: "查询采购订单总金额"
+    description: "Total purchase amount"
+    tags: ["sum", "basic", "purchase"]
+    expected_dsl:
+      data_source: purchase_fact
+      metrics:
+        - func: sum
+          field: order_amount
+          alias: total_purchase_amount
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_002
+    query: "各供应商的采购金额"
+    description: "Purchase amount by supplier"
+    tags: ["sum", "dimension", "supplier"]
+    expected_dsl:
+      data_source: purchase_fact
+      metrics:
+        - func: sum
+          field: order_amount
+          alias: total_purchase_amount
+      dimensions:
+        - supplier_name
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_003
+    query: "总库存量"
+    description: "Total inventory quantity"
+    tags: ["sum", "basic", "inventory"]
+    expected_dsl:
+      data_source: inventory_fact
+      metrics:
+        - func: sum
+          field: stock_quantity
+          alias: total_stock
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_004
+    query: "各仓库的库存量"
+    description: "Inventory by warehouse"
+    tags: ["sum", "dimension", "warehouse", "inventory"]
+    expected_dsl:
+      data_source: inventory_fact
+      metrics:
+        - func: sum
+          field: stock_quantity
+          alias: total_stock
+      dimensions:
+        - warehouse_name
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_005
+    query: "准时交货率"
+    description: "On-time delivery rate"
+    tags: ["avg", "delivery", "performance"]
+    expected_dsl:
+      data_source: purchase_fact
+      metrics:
+        - func: avg
+          field: on_time
+          alias: on_time_delivery_rate
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_006
+    query: "各运输方式的运输成本"
+    description: "Shipping cost by transport mode"
+    tags: ["sum", "dimension", "shipping", "transport"]
+    expected_dsl:
+      data_source: shipment_fact
+      metrics:
+        - func: sum
+          field: shipping_cost
+          alias: total_shipping_cost
+      dimensions:
+        - transport_mode
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_007
+    query: "各物料类别的库存量"
+    description: "Inventory by material category"
+    tags: ["sum", "dimension", "material", "inventory"]
+    expected_dsl:
+      data_source: inventory_fact
+      metrics:
+        - func: sum
+          field: stock_quantity
+          alias: total_stock
+      dimensions:
+        - material_category
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_008
+    query: "平均采购提前期"
+    description: "Average purchase lead time"
+    tags: ["avg", "basic", "purchase", "lead_time"]
+    expected_dsl:
+      data_source: purchase_fact
+      metrics:
+        - func: avg
+          field: lead_time_days
+          alias: avg_lead_time
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_009
+    query: "各地区的采购金额"
+    description: "Purchase amount by region"
+    tags: ["sum", "dimension", "region", "purchase"]
+    expected_dsl:
+      data_source: purchase_fact
+      metrics:
+        - func: sum
+          field: order_amount
+          alias: total_purchase_amount
+      dimensions:
+        - region
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: sc_010
+    query: "库存可售天数最低的物料"
+    description: "Lowest days of supply materials"
+    tags: ["min", "top_n", "order_by", "inventory"]
+    expected_dsl:
+      data_source: inventory_fact
+      metrics:
+        - func: min
+          field: days_of_supply
+          alias: min_days_of_supply
+      dimensions:
+        - material_name
+      filters: []
+      order_by:
+        - field: min_days_of_supply
+          direction: asc
+      limit: 10

@@ -1,0 +1,118 @@
+version: "1.0"
+domain: ecommerce
+description: "Ecommerce queries with multiple dimensions and complex patterns"
+
+test_cases:
+  - id: ec_multi_001
+    query: "按地区和品类统计销售额"
+    description: "Two dimension grouping"
+    tags: ["multi_dimension", "group_by", "region", "category"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - region
+        - category
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_multi_002
+    query: "各渠道各品类的订单量"
+    description: "Two dimensions with count metric"
+    tags: ["multi_dimension", "group_by", "channel", "category", "count"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: count
+          field: id
+          alias: order_count
+      dimensions:
+        - channel
+        - category
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_multi_003
+    query: "按品牌统计销售额和订单量"
+    description: "Multiple metrics with single dimension"
+    tags: ["multi_metric", "dimension", "brand"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+        - func: count
+          field: id
+          alias: order_count
+      dimensions:
+        - brand
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_multi_004
+    query: "华东地区按品类统计销售额降序"
+    description: "Filter + dimension + order by"
+    tags: ["filter", "dimension", "order_by", "region", "category"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - category
+      filters:
+        - field: region
+          operator: "="
+          value: 华东
+      order_by:
+        - field: sales_amount
+          direction: desc
+      limit: 10
+
+  - id: ec_multi_005
+    query: "各客户类型的平均客单价和订单量"
+    description: "Multiple metrics + dimension"
+    tags: ["multi_metric", "dimension", "customer_type", "avg", "count"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: avg
+          field: pay_amount
+          alias: avg_order_value
+        - func: count
+          field: id
+          alias: order_count
+      dimensions:
+        - customer_type
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_multi_006
+    query: "线上渠道按品牌统计销售额top5"
+    description: "Filter + dimension + top_n + order_by"
+    tags: ["filter", "dimension", "top_n", "order_by", "channel", "brand"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - brand
+      filters:
+        - field: channel
+          operator: "="
+          value: 线上
+      order_by:
+        - field: sales_amount
+          direction: desc
+      limit: 5

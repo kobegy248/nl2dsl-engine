@@ -1,0 +1,144 @@
+version: "1.0"
+domain: ecommerce
+description: "Ecommerce queries requiring table joins"
+
+test_cases:
+  - id: ec_join_001
+    query: "按客户名称统计销售额"
+    description: "Single join: orders → customer_dim"
+    tags: ["join", "single_join", "customer"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - customer_name
+      joins:
+        - table: customer_dim
+          on_field: customer_id
+          join_type: left
+          alias: c
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_join_002
+    query: "按供应商统计销售额"
+    description: "Two joins: orders → product_dim → supplier_dim"
+    tags: ["join", "multi_join", "supplier"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - supplier_name
+      joins:
+        - table: product_dim
+          on_field: product_id
+          join_type: left
+          alias: p
+        - table: supplier_dim
+          on_field: product_dim.supplier_id
+          join_type: left
+          alias: s
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_join_003
+    query: "按城市等级统计销售额"
+    description: "Join to region_dim for tier_level"
+    tags: ["join", "region", "tier_level"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - tier_level
+      joins:
+        - table: region_dim
+          on_field: region_code
+          join_type: left
+          alias: r
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_join_004
+    query: "周末的销售额"
+    description: "Join to date_dim for is_weekend filter"
+    tags: ["join", "date", "weekend"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      joins:
+        - table: date_dim
+          on_field: date_id
+          join_type: left
+          alias: d
+      filters:
+        - field: is_weekend
+          operator: "="
+          value: 1
+      order_by: []
+      limit: 10
+
+  - id: ec_join_005
+    query: "信用等级为A的供应商的销售额"
+    description: "Join with filter on joined table"
+    tags: ["join", "filter", "supplier", "credit"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - supplier_name
+      joins:
+        - table: product_dim
+          on_field: product_id
+          join_type: left
+          alias: p
+        - table: supplier_dim
+          on_field: product_dim.supplier_id
+          join_type: left
+          alias: s
+      filters:
+        - field: credit_rating
+          operator: "="
+          value: A
+      order_by: []
+      limit: 10
+
+  - id: ec_join_006
+    query: "按客户名称和品类统计销售额"
+    description: "Join with multiple dimensions"
+    tags: ["join", "multi_dimension", "customer", "category"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - customer_name
+        - category
+      joins:
+        - table: customer_dim
+          on_field: customer_id
+          join_type: left
+          alias: c
+      filters: []
+      order_by: []
+      limit: 10

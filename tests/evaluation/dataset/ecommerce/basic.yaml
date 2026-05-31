@@ -1,0 +1,177 @@
+version: "1.0"
+domain: ecommerce
+description: "Basic ecommerce queries covering simple aggregation, grouping, filtering, and ordering"
+
+test_cases:
+  - id: ec_basic_001
+    query: "查询销售额"
+    description: "Simple aggregation without grouping"
+    tags: ["aggregation", "basic", "single_metric"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_002
+    query: "查询各品类的销售额"
+    description: "Aggregation with dimension grouping"
+    tags: ["aggregation", "dimension", "group_by", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - category
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_003
+    query: "查询华东地区的销售额"
+    description: "Aggregation with region filter"
+    tags: ["aggregation", "filter", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: region
+          operator: "="
+          value: 华东
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_004
+    query: "销售额最高的10个产品"
+    description: "Top-N aggregation with ordering"
+    tags: ["aggregation", "top_n", "order_by", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions:
+        - product_name
+      filters: []
+      order_by:
+        - field: sales_amount
+          direction: desc
+      limit: 10
+
+  - id: ec_basic_005
+    query: "查询销售额和订单量"
+    description: "Multiple metrics aggregation"
+    tags: ["aggregation", "multi_metric", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+        - func: count
+          field: id
+          alias: order_count
+      dimensions: []
+      filters: []
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_006
+    query: "查询本月销售额"
+    description: "Aggregation with time filter"
+    tags: ["aggregation", "filter", "time_filter", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: order_date
+          operator: ">="
+          value: "2026-05-01"
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_007
+    query: "查询线上渠道销售额"
+    description: "Aggregation with channel filter"
+    tags: ["aggregation", "filter", "channel", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: channel
+          operator: "="
+          value: 线上
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_008
+    query: "查询VIP客户消费金额"
+    description: "Aggregation with customer type filter"
+    tags: ["aggregation", "filter", "customer_type", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: customer_type
+          operator: "="
+          value: VIP
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_009
+    query: "查询苹果品牌销售额"
+    description: "Aggregation with brand filter"
+    tags: ["aggregation", "filter", "brand", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: brand
+          operator: "="
+          value: 苹果
+      order_by: []
+      limit: 10
+
+  - id: ec_basic_010
+    query: "查询各地区的GMV"
+    description: "GMV aggregation with region grouping"
+    tags: ["aggregation", "dimension", "gmv", "basic"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: order_amount
+          alias: gmv
+      dimensions:
+        - region
+      filters: []
+      order_by: []
+      limit: 10
