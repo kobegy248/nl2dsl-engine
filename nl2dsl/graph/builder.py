@@ -121,6 +121,7 @@ def build_graph(
         sandbox=sandbox,
         executor=executor,
         clarification_detector=clarification_detector,
+        registry_dict=registry_dict,
         llm_system_prompt=llm_system_prompt,
     )
 

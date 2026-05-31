@@ -76,7 +76,12 @@ class Entities(BaseModel):
     time_range: str | None = None
 
     def has_comparison_marker(self) -> bool:
-        """Return True if the entities suggest a comparison (e.g. YoY, MoM)."""
+        """Return True if the entities suggest a comparison (e.g. YoY, MoM).
+
+        .. deprecated::
+            This method is no longer used for routing.  AgentController now
+            routes via :class:`Planner` intent classification instead.
+        """
         if not self.time_range:
             return False
         lower = self.time_range.lower()

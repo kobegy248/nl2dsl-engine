@@ -3,7 +3,7 @@
 The aggregator combines data from multiple sub-query executions and produces
 a unified result enriched with intent-specific analysis:
 
-- compare   → diff + growth_rate between first two results
+- compare   → diff + growth_rate between sub-query totals
 - trend     → sort by time-like columns, detect direction
 - correlation → Pearson correlation coefficient
 - single_query → pass-through (default)
@@ -12,6 +12,7 @@ a unified result enriched with intent-specific analysis:
 from __future__ import annotations
 
 import math
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from nl2dsl.utils.logger import get_logger
@@ -55,11 +56,18 @@ def _find_numeric_value(row: dict, prefer_key: str | None = None) -> float | Non
 
 
 def _collect_rows(results: dict[str, "QueryResult"]) -> list[dict]:
-    """Collect all rows from successful sub-query results."""
+    """Collect all rows from successful or warning sub-query results.
+
+    Injects ``__sub_query_id`` so downstream code can distinguish which
+    sub-query each row came from.
+    """
     rows: list[dict] = []
-    for res in results.values():
-        if res.status == "success":
-            rows.extend(res.data)
+    for sq_id, res in results.items():
+        if res.status in ("success", "warning"):
+            for row in res.data:
+                row_copy = dict(row)
+                row_copy["__sub_query_id"] = sq_id
+                rows.append(row_copy)
     return rows
 
 
@@ -69,26 +77,72 @@ def _aggregate_single(rows: list[dict]) -> dict:
 
 
 def _aggregate_compare(rows: list[dict]) -> dict:
-    """Compare aggregation: diff and growth rate between first two results."""
+    """Compare aggregation: diff and growth rate between sub-query totals.
+
+    When rows carry ``__sub_query_id`` (injected by ``_collect_rows``),
+    they are grouped by that id, summed per group, and the first two
+    group totals are compared.
+
+    When no ``__sub_query_id`` is present (e.g. direct unit-test calls or
+    single-query path), the function falls back to the legacy behaviour:
+    compare the numeric values in the first two rows.
+    """
     comparison: dict = {"diff": None, "growth_rate": "N/A"}
 
     if not rows:
         return {"rows": rows, "comparison": comparison}
 
-    # Try to find numeric values in the first two rows
-    first = _find_numeric_value(rows[0])
-    second = _find_numeric_value(rows[1]) if len(rows) >= 2 else None
+    # Check whether rows have sub-query provenance markers
+    has_provenance = any("__sub_query_id" in row for row in rows)
 
-    if first is not None and second is not None:
-        comparison["diff"] = second - first
-        if first != 0:
-            growth = (second - first) / first * 100
-            comparison["growth_rate"] = f"{growth:.2f}%"
-        else:
+    if has_provenance:
+        # Group rows by sub_query_id
+        groups: dict[str, list[dict]] = defaultdict(list)
+        for row in rows:
+            sq_id = row.get("__sub_query_id", "unknown")
+            groups[sq_id].append(row)
+
+        # Sum numeric values per group
+        totals: dict[str, float] = {}
+        for sq_id, group_rows in groups.items():
+            total = sum(
+                (_find_numeric_value(r) or 0.0)
+                for r in group_rows
+            )
+            totals[sq_id] = total
+
+        # Compute diff and growth rate between first two groups
+        if len(totals) >= 2:
+            values = list(totals.values())
+            first = values[0]
+            second = values[1]
+            comparison["diff"] = round(second - first, 2)
+            if first != 0:
+                growth = (second - first) / first * 100
+                comparison["growth_rate"] = f"{growth:.2f}%"
+            else:
+                comparison["growth_rate"] = "N/A"
+
+        # Also include per-group totals in the result for the explainer
+        comparison["totals"] = {
+            sq_id: round(total, 2)
+            for sq_id, total in totals.items()
+        }
+    else:
+        # Legacy fallback: compare first two rows directly
+        first = _find_numeric_value(rows[0])
+        second = _find_numeric_value(rows[1]) if len(rows) >= 2 else None
+
+        if first is not None and second is not None:
+            comparison["diff"] = round(second - first, 2)
+            if first != 0:
+                growth = (second - first) / first * 100
+                comparison["growth_rate"] = f"{growth:.2f}%"
+            else:
+                comparison["growth_rate"] = "N/A"
+        elif first is not None:
+            comparison["diff"] = 0
             comparison["growth_rate"] = "N/A"
-    elif first is not None:
-        comparison["diff"] = 0
-        comparison["growth_rate"] = "N/A"
 
     return {"rows": rows, "comparison": comparison}
 

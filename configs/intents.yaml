@@ -26,6 +26,12 @@ intents:
     aggregation: proportion
     description: Break down totals into proportional contributions
 
+  sequential:
+    keywords: ["先查", "然后", "再查", "接着"]
+    decomposition: sequential
+    aggregation: sequential_filter
+    description: Multi-step queries where later steps depend on earlier results
+
   ranking:
     keywords: ["排名", "Top", "第几"]
     decomposition: single_with_ordering

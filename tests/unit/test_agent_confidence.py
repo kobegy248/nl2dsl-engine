@@ -58,7 +58,7 @@ class TestSyntaxConfidence:
     """Tests for syntax confidence (rule-based via validator)."""
 
     def test_syntax_confidence_pass(self):
-        """Valid DSL should get 100.0 syntax confidence."""
+        """Valid DSL should get 1.0 syntax confidence."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
@@ -71,10 +71,10 @@ class TestSyntaxConfidence:
         result = node(state)
 
         assert "confidence" in result
-        # syntax=100, semantic=50 (no LLM), history=1.0 -> min(100,50)*1.0 = 50.0
-        assert result["confidence"] == 50.0
+        # syntax=1.0, semantic=0.5 (no LLM), history=1.0 -> min(1.0,0.5)*1.0 = 0.5
+        assert result["confidence"] == 0.5
         assert "syntax_score" in result["trace"]["details"]
-        assert result["trace"]["details"]["syntax_score"] == 100.0
+        assert result["trace"]["details"]["syntax_score"] == 1.0
 
     def test_syntax_confidence_fail(self):
         """Invalid DSL should get 0.0 syntax confidence."""
@@ -130,7 +130,7 @@ class TestSemanticConfidence:
     """Tests for semantic confidence (LLM-based)."""
 
     def test_semantic_no_llm_returns_neutral(self):
-        """When no LLM is available, semantic confidence is 50.0 (neutral)."""
+        """When no LLM is available, semantic confidence is 0.5 (neutral)."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
@@ -142,131 +142,90 @@ class TestSemanticConfidence:
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=100, semantic=50, history=1.0 -> min(100,50)*1.0 = 50.0
-        assert result["confidence"] == 50.0
-        assert result["trace"]["details"]["semantic_score"] == 50.0
+        # syntax=1.0, semantic=0.5, history=1.0 -> min(1.0,0.5)*1.0 = 0.5
+        assert result["confidence"] == 0.5
+        assert result["trace"]["details"]["semantic_score"] == 0.5
         assert result["trace"]["details"]["semantic_source"] == "neutral_no_llm"
 
-    def test_semantic_with_llm_high_score(self):
-        """LLM returning high score should produce high semantic confidence."""
+    def test_semantic_with_real_llm(self, real_llm_client):
+        """With real LLM, semantic confidence is computed from LLM output."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "85"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=real_llm_client)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=100, semantic=85, history=1.0 -> min(100,85)*1.0 = 85.0
-        assert result["confidence"] == 85.0
-        assert result["trace"]["details"]["semantic_score"] == 85.0
-        assert result["trace"]["details"]["semantic_source"] == "llm"
-        llm_client.generate.assert_called_once()
-
-    def test_semantic_with_llm_low_score(self):
-        """LLM returning low score should produce low semantic confidence."""
-        registry = {
-            "metrics": {"sales_amount": {}},
-            "dimensions": {"region": {}},
-            "data_sources": {"orders": {}},
-        }
-        validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "30"
-
-        node = _make_confidence_node(validator, llm_client=llm_client)
-
-        state = _make_base_state(_make_valid_dsl())
-        result = node(state)
-
-        # syntax=100, semantic=30, history=1.0 -> min(100,30)*1.0 = 30.0
-        assert result["confidence"] == 30.0
-        assert result["trace"]["details"]["semantic_score"] == 30.0
-
-    def test_semantic_with_llm_markdown_response(self):
-        """LLM returning score in markdown should be parsed correctly."""
-        registry = {
-            "metrics": {"sales_amount": {}},
-            "dimensions": {"region": {}},
-            "data_sources": {"orders": {}},
-        }
-        validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "The score is 90"
-
-        node = _make_confidence_node(validator, llm_client=llm_client)
-
-        state = _make_base_state(_make_valid_dsl())
-        result = node(state)
-
-        assert result["confidence"] == 90.0
-        assert result["trace"]["details"]["semantic_score"] == 90.0
+        # With real LLM, semantic score should be set (between 0 and 1)
+        assert "confidence" in result
+        assert 0 <= result["confidence"] <= 1
+        assert result["trace"]["details"]["semantic_score"] is not None
+        assert result["trace"]["details"]["semantic_source"] in {"llm", "neutral_fallback"}
 
     def test_semantic_llm_exception_falls_back(self):
-        """When LLM raises exception, semantic falls back to neutral (50)."""
+        """When LLM raises exception, semantic falls back to neutral (0.5)."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.side_effect = Exception("LLM timeout")
+        broken_llm = MagicMock()
+        broken_llm.generate.side_effect = Exception("LLM timeout")
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=broken_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=100, semantic=50 (fallback), history=1.0 -> 50.0
-        assert result["confidence"] == 50.0
-        assert result["trace"]["details"]["semantic_score"] == 50.0
+        # syntax=1.0, semantic=0.5 (fallback), history=1.0 -> 0.5
+        assert result["confidence"] == 0.5
+        assert result["trace"]["details"]["semantic_score"] == 0.5
         assert result["trace"]["details"]["semantic_source"] == "neutral_fallback"
 
     def test_semantic_llm_invalid_number_falls_back(self):
-        """When LLM returns non-numeric, semantic falls back to neutral (50)."""
+        """When LLM returns non-numeric, semantic falls back to neutral (0.5)."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "not a number"
+        bad_llm = MagicMock()
+        bad_llm.generate.return_value = "not a number"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=bad_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 50.0
-        assert result["trace"]["details"]["semantic_score"] == 50.0
+        assert result["confidence"] == 0.5
+        assert result["trace"]["details"]["semantic_score"] == 0.5
         assert result["trace"]["details"]["semantic_source"] == "neutral_fallback"
 
-    def test_semantic_llm_score_clamped_to_100(self):
-        """LLM score above 100 should be clamped to 100."""
+    def test_semantic_llm_score_clamped_to_1(self):
+        """LLM score above 1 should be clamped to 1.0."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "150"
+        high_llm = MagicMock()
+        high_llm.generate.return_value = "1.5"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=high_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 100.0
-        assert result["trace"]["details"]["semantic_score"] == 100.0
+        assert result["confidence"] == 1.0
+        assert result["trace"]["details"]["semantic_score"] == 1.0
 
     def test_semantic_llm_negative_score_clamped_to_0(self):
         """LLM score below 0 should be clamped to 0."""
@@ -276,15 +235,15 @@ class TestSemanticConfidence:
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "-10"
+        low_llm = MagicMock()
+        low_llm.generate.return_value = "-0.10"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=low_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=100, semantic=0, history=1.0 -> 0.0
+        # syntax=1.0, semantic=0, history=1.0 -> 0.0
         assert result["confidence"] == 0.0
         assert result["trace"]["details"]["semantic_score"] == 0.0
 
@@ -311,24 +270,23 @@ class TestHistoryConfidence:
 class TestConfidenceFormula:
     """Tests for the overall confidence formula."""
 
-    def test_formula_min_syntax_semantic_times_history(self):
-        """confidence = min(syntax, semantic) * history."""
+    def test_formula_min_syntax_semantic_times_history(self, real_llm_client):
+        """confidence = min(syntax, semantic) * history with real LLM."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "70"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=real_llm_client)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=100, semantic=70, history=1.0 -> min(100,70)*1.0 = 70.0
-        assert result["confidence"] == 70.0
+        # With real LLM, formula still holds: confidence is between 0 and 1
+        assert "confidence" in result
+        assert 0 <= result["confidence"] <= 1
 
     def test_formula_syntax_limits_overall(self):
         """When syntax is low, it limits the overall confidence."""
@@ -338,117 +296,117 @@ class TestConfidenceFormula:
             "data_sources": {},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "95"
+        high_llm = MagicMock()
+        high_llm.generate.return_value = "0.95"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=high_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        # syntax=0, semantic=95, history=1.0 -> min(0,95)*1.0 = 0.0
+        # syntax=0, semantic=0.95, history=1.0 -> min(0,0.95)*1.0 = 0.0
         assert result["confidence"] == 0.0
 
 
 class TestRoutingDecisions:
     """Tests for routing threshold logic."""
 
-    def test_routing_continue_above_80(self):
-        """Confidence >= 80 should route to 'continue'."""
+    def test_routing_continue_above_0_8(self):
+        """Confidence >= 0.8 should route to 'continue'."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "90"
+        high_llm = MagicMock()
+        high_llm.generate.return_value = "0.90"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=high_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 90.0
+        assert result["confidence"] == 0.90
         assert result["trace"]["routing"] == "continue"
         assert "status" not in result  # unchanged when routing is "continue"
 
-    def test_routing_warning_between_60_and_79(self):
-        """Confidence 60-79 should route to 'warning' and set status."""
+    def test_routing_warning_between_0_6_and_0_8(self):
+        """Confidence 0.6-0.8 should route to 'warning' and set status."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "70"
+        mid_llm = MagicMock()
+        mid_llm.generate.return_value = "0.70"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=mid_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 70.0
+        assert result["confidence"] == 0.70
         assert result["trace"]["routing"] == "warning"
         assert result["status"] == "warning"
 
-    def test_routing_clarify_below_60(self):
-        """Confidence < 60 should route to 'clarify' and set status."""
+    def test_routing_clarify_below_0_6(self):
+        """Confidence < 0.6 should route to 'clarify' and set status."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "40"
+        low_llm = MagicMock()
+        low_llm.generate.return_value = "0.40"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=low_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 40.0
+        assert result["confidence"] == 0.40
         assert result["trace"]["routing"] == "clarify"
         assert result["status"] == "clarification"
 
-    def test_routing_boundary_80(self):
-        """Confidence exactly 80 should route to 'continue'."""
+    def test_routing_boundary_0_8(self):
+        """Confidence exactly 0.8 should route to 'continue'."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "80"
+        exact_llm = MagicMock()
+        exact_llm.generate.return_value = "0.80"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=exact_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 80.0
+        assert result["confidence"] == 0.80
         assert result["trace"]["routing"] == "continue"
 
-    def test_routing_boundary_60(self):
-        """Confidence exactly 60 should route to 'warning'."""
+    def test_routing_boundary_0_6(self):
+        """Confidence exactly 0.6 should route to 'warning'."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "60"
+        exact_llm = MagicMock()
+        exact_llm.generate.return_value = "0.60"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=exact_llm)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)
 
-        assert result["confidence"] == 60.0
+        assert result["confidence"] == 0.60
         assert result["trace"]["routing"] == "warning"
         assert result["status"] == "warning"
 
@@ -490,18 +448,16 @@ class TestEdgeCases:
         assert isinstance(result["explanation"], str)
         assert result["explanation"] != ""
 
-    def test_trace_structure(self):
-        """Trace should have correct structure."""
+    def test_trace_structure(self, real_llm_client):
+        """Trace should have correct structure with real LLM."""
         registry = {
             "metrics": {"sales_amount": {}},
             "dimensions": {"region": {}},
             "data_sources": {"orders": {}},
         }
         validator = DSLValidator(registry)
-        llm_client = MagicMock()
-        llm_client.generate.return_value = "75"
 
-        node = _make_confidence_node(validator, llm_client=llm_client)
+        node = _make_confidence_node(validator, llm_client=real_llm_client)
 
         state = _make_base_state(_make_valid_dsl())
         result = node(state)

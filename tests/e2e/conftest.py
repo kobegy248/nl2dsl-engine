@@ -16,7 +16,11 @@ from nl2dsl.api_factory import create_app
 from nl2dsl.rag.embedder import MockEmbedder
 from nl2dsl.rag.store import MilvusLiteStore
 
-from tests.e2e.mock_data import create_mock_database, create_mock_bank_database
+from tests.e2e.mock_data import (
+    create_mock_database,
+    create_mock_bank_database,
+    create_mock_supply_chain_database,
+)
 
 
 @pytest.fixture(scope="session")
@@ -199,6 +203,73 @@ def mock_api_client(mock_engine, mock_registry_dict, mock_permissions):
         permissions=permissions,
         sensitive_columns=sensitive_columns,
         masking_rules=masking_rules,
+    )
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_api_client(mock_engine, mock_registry_dict, mock_permissions, real_llm_client):
+    """Create a TestClient with mock data and real LLM client injected."""
+    permissions, sensitive_columns, masking_rules = mock_permissions
+    app = create_app(
+        engine=mock_engine,
+        registry_dict=mock_registry_dict,
+        permissions=permissions,
+        sensitive_columns=sensitive_columns,
+        masking_rules=masking_rules,
+        llm_client=real_llm_client,
+    )
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------------
+# Supply chain domain fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def supply_chain_engine():
+    """Create a SQLite engine with supply chain mock data."""
+    engine, *_ = create_mock_supply_chain_database("sqlite:///:memory:")
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def supply_chain_registry_dict():
+    """Load test-specific supply chain semantic registry."""
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+    metrics_path = os.path.join(fixtures_dir, "supply_chain_metrics_test.yaml")
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return {
+        "metrics": data.get("metrics", {}),
+        "dimensions": data.get("dimensions", {}),
+        "data_sources": data.get("data_sources", {}),
+    }
+
+
+@pytest.fixture
+def supply_chain_permissions():
+    """Load test-specific supply chain permissions."""
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
+    perm_path = os.path.join(fixtures_dir, "supply_chain_permissions_test.yaml")
+    with open(perm_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data.get("users", {}), data.get("sensitive_columns", {}), data.get("masking_rules", {})
+
+
+@pytest.fixture
+def supply_chain_api_client(supply_chain_engine, supply_chain_registry_dict, supply_chain_permissions, real_llm_client):
+    """Create a TestClient with supply chain domain configuration."""
+    permissions, sensitive_columns, masking_rules = supply_chain_permissions
+    app = create_app(
+        engine=supply_chain_engine,
+        registry_dict=supply_chain_registry_dict,
+        permissions=permissions,
+        sensitive_columns=sensitive_columns,
+        masking_rules=masking_rules,
+        llm_client=real_llm_client,
     )
     return TestClient(app)
 

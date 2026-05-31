@@ -44,6 +44,9 @@ feedback.jsonl
 .rag_sync_state.json
 .*_rag_sync_state.json
 
+# Test results
+data/results/
+
 # Generated docs
 docs.zip
 docs/*.pdf

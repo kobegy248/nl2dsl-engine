@@ -9,7 +9,7 @@ from tests.e2e.mock_data import create_mock_database
 
 
 @pytest.fixture
-def client():
+def client(real_llm_client):
     engine, *_ = create_mock_database("sqlite:///:memory:")
 
     fixtures_dir = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -25,6 +25,7 @@ def client():
         engine=engine,
         registry_dict=registry_dict,
         enable_clarification=False,
+        llm_client=real_llm_client,
     )
     return TestClient(app)
 
@@ -159,3 +160,158 @@ def test_refresh_enums(client):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "refreshed"
+
+
+# ---------------------------------------------------------------------------
+# Error path tests
+# ---------------------------------------------------------------------------
+
+
+def test_query_execute_invalid_dsl_returns_400(client):
+    """Execute endpoint with invalid DSL fields should return 400."""
+    response = client.post("/api/v1/query/execute", json={
+        "dsl": {"data_source": "nonexistent"},  # no metrics, invalid data_source
+        "user_id": "u001",
+        "tenant_id": "t001",
+    })
+    assert response.status_code == 400
+    data = response.json()
+    assert data["status"] == "error"
+    assert "error_code" in data
+
+
+def test_get_audit_query_not_found_returns_404(client):
+    response = client.get("/api/v1/admin/audit/queries/nonexistent-query-id")
+    assert response.status_code == 404
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error_code"] == "NOT_FOUND"
+
+
+def test_list_audit_queries_limit_out_of_range(client):
+    response = client.get("/api/v1/admin/audit/queries?limit=999")
+    assert response.status_code == 400
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error_code"] == "VALIDATION_ERROR"
+
+
+def test_list_audit_queries_limit_zero(client):
+    response = client.get("/api/v1/admin/audit/queries?limit=0")
+    assert response.status_code == 400
+
+
+def test_list_audit_queries_negative_offset(client):
+    response = client.get("/api/v1/admin/audit/queries?offset=-1")
+    assert response.status_code == 400
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error_code"] == "VALIDATION_ERROR"
+
+
+# ---------------------------------------------------------------------------
+# Stream endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_stream_endpoint(client):
+    """Stream endpoint should return SSE response."""
+    response = client.post("/api/v1/query/stream", json={
+        "question": "查询销售额",
+        "user_id": "u001",
+        "tenant_id": "t001",
+    })
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+    # Read at least the done event
+    body = response.read()
+    assert b"event:" in body or b"done" in body
+
+
+# ---------------------------------------------------------------------------
+# Resume endpoint (no checkpointer → always 404 in test setup)
+# ---------------------------------------------------------------------------
+
+
+def test_resume_nonexistent_query_returns_404(client):
+    response = client.post("/api/v1/query/resume", json={
+        "query_id": "nonexistent-id",
+        "action": "approve",
+    })
+    assert response.status_code == 404
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error_code"] == "NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Audit list endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_list_audit_queries_defaults(client):
+    response = client.get("/api/v1/admin/audit/queries")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "total" in data
+    assert "items" in data
+    assert data["limit"] == 20
+    assert data["offset"] == 0
+
+
+def test_list_audit_queries_with_filters(client):
+    response = client.get("/api/v1/admin/audit/queries?user_id=u001&limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["limit"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Complex query scenarios
+# ---------------------------------------------------------------------------
+
+
+def test_query_with_join(client):
+    """Query requiring JOIN should produce SQL with JOIN clause."""
+    response = client.post("/api/v1/query", json={
+        "question": "查询各品牌的销售额",
+        "user_id": "u001",
+        "tenant_id": "t001",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "sql" in data
+    sql = data["sql"]
+    assert "JOIN" in sql.upper() or "join" in sql.lower()
+
+
+def test_query_with_multiple_filters(client):
+    """Query with multiple filter conditions."""
+    response = client.post("/api/v1/query", json={
+        "question": "查询华东地区线上渠道的销售额",
+        "user_id": "u001",
+        "tenant_id": "t001",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    sql = data["sql"]
+    assert "HD" in sql  # region_code mapped
+    assert "online" in sql  # channel_code mapped
+
+
+def test_query_with_top_n(client):
+    """Query with top-N should set LIMIT correctly."""
+    response = client.post("/api/v1/query", json={
+        "question": "查询前5的销售额",
+        "user_id": "u001",
+        "tenant_id": "t001",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    dsl = data["dsl"]
+    assert dsl["limit"] == 5

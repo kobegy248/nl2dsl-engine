@@ -92,17 +92,27 @@ def _build_explanation_prompt(question: str, plan: Plan, data: list[dict]) -> st
 请生成解释："""
 
 
-def _generate_template_explanation(question: str, plan: Plan, data: list[dict]) -> str:
+def _generate_template_explanation(
+    question: str,
+    plan: Plan,
+    data: list[dict],
+    sub_results: dict | None = None,
+) -> str:
     """Generate a template-based explanation based on intent.
 
     Args:
         question: The user's natural language question.
         plan: The execution plan containing intent and reasoning.
         data: The query result data.
+        sub_results: Optional mapping from sub_query_id to QueryResult.
+            When provided (complex path), the explainer uses the raw
+            sub-query results instead of guessing row ownership.
 
     Returns:
         A natural language explanation string.
     """
+    from nl2dsl.agent.models import QueryResult
+
     reasoning = plan.reasoning
     if reasoning and not reasoning.endswith("。"):
         reasoning += "。"
@@ -117,24 +127,67 @@ def _generate_template_explanation(question: str, plan: Plan, data: list[dict]) 
 
     elif intent == "compare":
         sub_query_summaries = []
-        for sq in plan.sub_queries:
-            # Find data rows that might match this sub-query
-            sq_data = [
-                row for row in data
-                if any(
-                    kw in str(row.values()) for kw in sq.description.split()
-                )
-            ]
-            if not sq_data:
-                sq_data = data[:1] if data else []
-            sq_summary = _format_data_summary(sq_data, max_rows=1)
-            if sq_summary:
-                sub_query_summaries.append(f"{sq.description}：{sq_summary}")
-            else:
-                sub_query_summaries.append(sq.description)
+
+        if sub_results:
+            # Complex path: use actual sub-query results
+            for sq in plan.sub_queries:
+                res = sub_results.get(sq.id)
+                if isinstance(res, QueryResult) and res.data:
+                    # Sum numeric values for a brief total
+                    total = 0.0
+                    for row in res.data:
+                        for val in row.values():
+                            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                                total += float(val)
+                                break
+                    sq_summary = _format_data_summary(res.data, max_rows=1)
+                    sub_query_summaries.append(
+                        f"{sq.description}：共{len(res.data)}个产品，"
+                        f"销售额合计约{total:,.1f}元"
+                    )
+                else:
+                    sub_query_summaries.append(f"{sq.description}：无数据")
+        else:
+            # Simple path or fallback: group rows by __sub_query_id
+            from collections import defaultdict
+            groups: dict[str, list[dict]] = defaultdict(list)
+            for row in data:
+                sq_id = row.get("__sub_query_id", "unknown")
+                groups[sq_id].append(row)
+
+            for sq in plan.sub_queries:
+                sq_data = groups.get(sq.id, [])
+                if sq_data:
+                    total = 0.0
+                    for row in sq_data:
+                        for val in row.values():
+                            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                                total += float(val)
+                                break
+                    sq_summary = _format_data_summary(sq_data, max_rows=1)
+                    sub_query_summaries.append(
+                        f"{sq.description}：共{len(sq_data)}个产品，"
+                        f"销售额合计约{total:,.1f}元"
+                    )
+                else:
+                    sub_query_summaries.append(f"{sq.description}：无数据")
+
+        # Append comparison metrics if present in data
+        comparison_text = ""
+        for row in data:
+            if "comparison" in row:
+                comp = row["comparison"]
+                diff = comp.get("diff")
+                growth = comp.get("growth_rate")
+                if diff is not None and growth is not None:
+                    comparison_text = f"对比结果：差额{diff:,.1f}元，增长率{growth}。"
+                break
 
         summaries_text = "；".join(sub_query_summaries)
-        return f"您的问题是'{question}'。{reasoning}其中，{summaries_text}。"
+        explanation = f"您的问题是'{question}'。{reasoning}其中，{summaries_text}。"
+        if comparison_text:
+            explanation += comparison_text
+        return explanation
 
     elif intent == "trend":
         trend_summary = _compute_trend_summary(data)

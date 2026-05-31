@@ -112,9 +112,9 @@ def build_validation_subgraph(
 
     builder = StateGraph(QueryState)
 
-    generate_node = _make_generate_dsl_node(llm_client, rag_retriever, semantic_validator)
+    generate_node = _make_generate_dsl_node(llm_client, rag_retriever, semantic_validator, "", registry_dict)
     validate_node = _make_validate_dsl_node(validator)
-    correct_node = _make_correct_dsl_node(llm_client, rag_retriever, registry_dict, semantic_validator)
+    correct_node = _make_correct_dsl_node(llm_client, rag_retriever, registry_dict, semantic_validator, "")
 
     builder.add_node("generate_dsl", generate_node)
     builder.add_node("validate_dsl", validate_node)
@@ -135,8 +135,22 @@ def build_validation_subgraph(
         },
     )
 
-    # Route from generate_dsl to validate_dsl
-    builder.add_edge("generate_dsl", "validate_dsl")
+    # Route from generate_dsl:
+    #   - on success -> validate_dsl
+    #   - on error -> END (no fallback)
+    def _route_after_generate_dsl(state: QueryState) -> str:
+        if state.get("status") == "error":
+            return "end"
+        return "continue"
+
+    builder.add_conditional_edges(
+        "generate_dsl",
+        _route_after_generate_dsl,
+        {
+            "end": END,
+            "continue": "validate_dsl",
+        },
+    )
 
     # Conditional routing after validation
     builder.add_conditional_edges(

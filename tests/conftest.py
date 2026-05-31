@@ -1,7 +1,29 @@
 """Pytest fixtures for NL2DSL."""
 
+import os
+
 import pytest
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime
+
+
+@pytest.fixture(scope="session")
+def real_llm_client():
+    """Create a real LLM client from environment variables.
+
+    Tests using this fixture are skipped if NL2DSL_LLM_API_KEY is not set.
+    """
+    api_key = os.environ.get("NL2DSL_LLM_API_KEY", "")
+    if not api_key:
+        pytest.skip("NL2DSL_LLM_API_KEY not set, skipping test that requires real LLM")
+
+    from nl2dsl.llm.client import LLMClient
+    from nl2dsl.config import settings
+
+    return LLMClient(
+        api_key=api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+    )
 
 
 @pytest.fixture

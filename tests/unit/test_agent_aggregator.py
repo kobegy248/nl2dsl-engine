@@ -55,7 +55,13 @@ def test_single_query_pass_through():
         "sq-1": QueryResult(sub_query_id="sq-1", data=[{"a": 1}, {"a": 2}]),
     }
     out = agg.run(results, intent="single_query")
-    assert out["rows"] == [{"a": 1}, {"a": 2}]
+    rows = out["rows"]
+    assert len(rows) == 2
+    assert rows[0]["a"] == 1
+    assert rows[1]["a"] == 2
+    # Rows are annotated with __sub_query_id for provenance tracking
+    assert rows[0]["__sub_query_id"] == "sq-1"
+    assert rows[1]["__sub_query_id"] == "sq-1"
     assert "comparison" not in out
     assert "trend" not in out
     assert "correlation" not in out
@@ -75,7 +81,10 @@ def test_single_query_unknown_intent_defaults():
         "sq-1": QueryResult(sub_query_id="sq-1", data=[{"x": 1}]),
     }
     out = agg.run(results, intent="unknown_intent")
-    assert out["rows"] == [{"x": 1}]
+    rows = out["rows"]
+    assert len(rows) == 1
+    assert rows[0]["x"] == 1
+    assert rows[0]["__sub_query_id"] == "sq-1"
 
 
 # ---------------------------------------------------------------------------
@@ -119,25 +128,33 @@ def test_compare_first_result_zero():
 
 
 def test_compare_only_one_result():
+    """With only one sub-query there is nothing to compare against."""
     agg = Aggregate()
     results = {
         "sq-1": QueryResult(sub_query_id="sq-1", data=[{"sales": 100}]),
     }
     out = agg.run(results, intent="compare")
     assert len(out["rows"]) == 1
-    assert out["comparison"]["diff"] == 0
+    # One group → no diff can be computed
+    assert out["comparison"]["diff"] is None
     assert out["comparison"]["growth_rate"] == "N/A"
+    # Per-group total is still reported
+    assert out["comparison"]["totals"]["sq-1"] == 100.0
 
 
 def test_compare_no_numeric_values():
+    """When rows have no numeric values, each group totals to 0.0."""
     agg = Aggregate()
     results = {
         "sq-1": QueryResult(sub_query_id="sq-1", data=[{"name": "A"}]),
         "sq-2": QueryResult(sub_query_id="sq-2", data=[{"name": "B"}]),
     }
     out = agg.run(results, intent="compare")
-    assert out["comparison"]["diff"] is None
+    # Two groups both sum to 0 → diff = 0.0, growth_rate = N/A (0/0)
+    assert out["comparison"]["diff"] == 0.0
     assert out["comparison"]["growth_rate"] == "N/A"
+    assert out["comparison"]["totals"]["sq-1"] == 0.0
+    assert out["comparison"]["totals"]["sq-2"] == 0.0
 
 
 def test_compare_empty_results():
@@ -420,7 +437,12 @@ def test_run_skips_error_results():
         "sq-3": QueryResult(sub_query_id="sq-3", data=[{"a": 2}], status="success"),
     }
     out = agg.run(results, intent="single_query")
-    assert out["rows"] == [{"a": 1}, {"a": 2}]
+    rows = out["rows"]
+    assert len(rows) == 2
+    assert rows[0]["a"] == 1
+    assert rows[0]["__sub_query_id"] == "sq-1"
+    assert rows[1]["a"] == 2
+    assert rows[1]["__sub_query_id"] == "sq-3"
 
 
 def test_run_all_error_results():

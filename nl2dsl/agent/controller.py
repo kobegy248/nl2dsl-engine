@@ -1,6 +1,8 @@
 """Top-level routing agent that analyzes query characteristics and decides execution path.
 
-Uses CODE-BASED rules (not LLM) for deterministic routing.
+Uses Planner-based intent classification for routing.  All queries go through
+the Planner first so that intent keywords (compare, trend, proportion, etc.)
+from ``configs/intents.yaml`` are respected.
 """
 
 from __future__ import annotations
@@ -18,24 +20,25 @@ from nl2dsl.agent.planner import Planner
 class AgentController:
     """Top-level routing agent for query execution path selection.
 
-    Analyzes extracted entities from a natural language question and routes
-    the query to the appropriate execution plan type using deterministic,
-    code-based rules (no LLM involved in routing).
+    Routes every query through :class:`Planner` for intent classification
+    first, then dispatches to the appropriate execution plan based on the
+    detected intent.
 
     Args:
         planner: Optional Planner instance. Defaults to a new Planner().
     """
 
-    def __init__(self, planner: Planner | None = None):
+    def __init__(self, planner: Planner | None = None) -> None:
         self._planner = planner or Planner()
 
     async def route(self, question: str, entities: Entities) -> ExecutionPlan:
         """Route query to appropriate execution path.
 
         Routing logic:
-        - Single metric + single dimension + no comparison: SimpleExecutionPlan
-        - Multiple metrics/dimensions or comparison markers: ComplexExecutionPlan
-        - Everything else: ExplorationPlan
+        1. Ask Planner to classify intent (using IntentRegistry keywords).
+        2. Any non-single_query intent → ComplexExecutionPlan.
+        3. single_query + at least 1 metric + at least 1 dimension → SimpleExecutionPlan.
+        4. Everything else → ExplorationPlan.
 
         Args:
             question: The user's natural language question.
@@ -44,27 +47,34 @@ class AgentController:
         Returns:
             An ExecutionPlan subclass instance appropriate for the query.
         """
-        metric_count = len(entities.metrics)
-        dimension_count = len(entities.dimensions)
-        has_comparison = entities.has_comparison_marker()
+        # ------------------------------------------------------------------
+        # Step 1: Intent classification via Planner
+        # ------------------------------------------------------------------
+        plan = await self._planner.plan(question)
+        intent = plan.intent
 
-        # Complex: multiple metrics, multiple dimensions, or comparison
-        if metric_count > 1 or dimension_count > 1 or has_comparison:
-            plan = await self._planner.plan(question)
+        # ------------------------------------------------------------------
+        # Step 2: Complex path — any non-trivial intent
+        # ------------------------------------------------------------------
+        if intent != "single_query":
             return ComplexExecutionPlan(
                 question=question,
                 entities=entities,
                 plan=plan,
             )
 
-        # Simple: exactly 1 metric + 1 dimension + no comparison
-        if metric_count == 1 and dimension_count == 1 and not has_comparison:
+        # ------------------------------------------------------------------
+        # Step 3: Simple path — single_query with explicit metric + dimension
+        # ------------------------------------------------------------------
+        if entities.metrics and entities.dimensions:
             return SimpleExecutionPlan(
                 question=question,
                 entities=entities,
             )
 
-        # Exploration: everything else (no metrics, no dimensions, etc.)
+        # ------------------------------------------------------------------
+        # Step 4: Exploration — no metrics, no dimensions, or open-ended
+        # ------------------------------------------------------------------
         return ExplorationPlan(
             question=question,
             entities=entities,

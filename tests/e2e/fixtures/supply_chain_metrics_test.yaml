@@ -1,0 +1,213 @@
+metrics:
+  purchase_amount:
+    expr: SUM(order_amount)
+    description: "采购金额"
+  purchase_qty:
+    expr: SUM(quantity)
+    description: "采购数量"
+  avg_unit_price:
+    expr: AVG(unit_price)
+    description: "平均单价"
+  purchase_order_count:
+    expr: COUNT(purchase_id)
+    description: "采购订单数"
+  inventory_qty:
+    expr: SUM(stock_quantity)
+    description: "库存数量"
+  inventory_amount:
+    expr: SUM(stock_amount)
+    description: "库存金额"
+  avg_inventory_days:
+    expr: AVG(days_of_supply)
+    description: "平均库存周转天数"
+  shipment_qty:
+    expr: SUM(ship_quantity)
+    description: "发货数量"
+  shipment_cost:
+    expr: SUM(shipping_cost)
+    description: "运输成本"
+  avg_lead_time:
+    expr: AVG(lead_time_days)
+    description: "平均交货周期（天）"
+  on_time_order_count:
+    expr: SUM(CASE WHEN on_time = 1 THEN 1 ELSE 0 END)
+    description: "准时交付订单数"
+  on_time_rate:
+    expr: "SUM(CASE WHEN on_time = 1 THEN 1 ELSE 0 END) * 1.0 / COUNT(*)"
+    description: "准时交付率"
+  total_receipt_qty:
+    expr: SUM(received_qty)
+    description: "实际收货数量"
+  shortage_qty:
+    expr: SUM(quantity - received_qty)
+    description: "短缺数量"
+  avg_shipping_cost_per_unit:
+    expr: AVG(shipping_cost / NULLIF(ship_quantity, 0))
+    description: "单位运输成本"
+  order_count:
+    expr: COUNT(purchase_id)
+    description: "订单数"
+  exception_count:
+    expr: SUM(CASE WHEN delivery_status = '异常' THEN 1 ELSE 0 END)
+    description: "异常订单数"
+  shipment_count:
+    expr: COUNT(shipment_id)
+    description: "运输单数"
+  total_ordered:
+    expr: SUM(quantity)
+    description: "订购总量"
+  total_received:
+    expr: SUM(received_qty)
+    description: "收货总量"
+
+dimensions:
+  supplier_name:
+    column: supplier_name
+    description: "供应商名称"
+  supplier_type:
+    column: supplier_type
+    description: "供应商类型"
+    value_map:
+      "原材料": "raw_material"
+      "零部件": "component"
+      "成品": "finished_goods"
+      "包装": "packaging"
+  material_name:
+    column: material_name
+    description: "物料名称"
+  material_category:
+    column: material_category
+    description: "物料类别"
+    value_map:
+      "电子": "electronics"
+      "机械": "mechanical"
+      "化工": "chemical"
+      "包装": "packaging"
+      "五金": "hardware"
+  warehouse_name:
+    column: warehouse_name
+    description: "仓库名称"
+  warehouse_type:
+    column: warehouse_type
+    description: "仓库类型"
+    value_map:
+      "中心仓": "central"
+      "区域仓": "regional"
+      "前置仓": "front"
+  carrier_name:
+    column: carrier_name
+    description: "承运商名称"
+  transport_mode:
+    column: transport_mode
+    description: "运输方式"
+    value_map:
+      "公路": "road"
+      "铁路": "rail"
+      "航空": "air"
+      "海运": "sea"
+  region_name:
+    column: region_name
+    description: "区域名称"
+    value_map:
+      "华东": "HD"
+      "华南": "HN"
+      "华北": "HB"
+      "西南": "XN"
+      "东北": "DB"
+      "西北": "XB"
+      "华中": "HZ"
+  order_status:
+    column: order_status
+    description: "订单状态"
+    value_map:
+      "待确认": "pending"
+      "已发货": "shipped"
+      "在途": "in_transit"
+      "已入库": "received"
+      "已取消": "cancelled"
+  delivery_status:
+    column: delivery_status
+    description: "配送状态"
+    value_map:
+      "待发货": "pending_ship"
+      "运输中": "shipping"
+      "已签收": "delivered"
+      "异常": "exception"
+  purchase_date:
+    column: purchase_date
+    description: "采购日期"
+  ship_date:
+    column: ship_date
+    description: "发货日期"
+  from_warehouse_name:
+    column: from_warehouse_name
+    description: "发货仓库"
+  to_warehouse_name:
+    column: to_warehouse_name
+    description: "收货仓库"
+  credit_rating:
+    column: credit_rating
+    description: "信用等级"
+
+data_sources:
+  purchase:
+    table: purchase_fact
+    metrics: [purchase_amount, purchase_qty, avg_unit_price, purchase_order_count, total_receipt_qty, shortage_qty, on_time_order_count, on_time_rate, order_count, total_ordered, total_received]
+    dimensions: [supplier_name, supplier_type, material_name, material_category, warehouse_name, warehouse_type, region_name, order_status, purchase_date, credit_rating, delivery_status]
+    time_field: purchase_date
+    joins:
+      supplier_dim:
+        on: supplier_id
+        type: left
+        alias: s
+      material_dim:
+        on: material_id
+        type: left
+        alias: m
+      warehouse_dim:
+        on: warehouse_id
+        type: left
+        alias: w
+      region_dim:
+        on: region_code
+        type: left
+        alias: r
+      date_dim:
+        on: date_id
+        type: left
+        alias: d
+  inventory:
+    table: inventory_fact
+    metrics: [inventory_qty, inventory_amount, avg_inventory_days]
+    dimensions: [material_name, material_category, warehouse_name, warehouse_type, region_name]
+    joins:
+      material_dim:
+        on: material_id
+        type: left
+        alias: m
+      warehouse_dim:
+        on: warehouse_id
+        type: left
+        alias: w
+      region_dim:
+        on: region_code
+        type: left
+        alias: r
+  shipment:
+    table: shipment_fact
+    metrics: [shipment_qty, shipment_cost, avg_lead_time, avg_shipping_cost_per_unit, exception_count, shipment_count]
+    dimensions: [carrier_name, transport_mode, from_warehouse_name, to_warehouse_name, region_name, delivery_status, ship_date, material_name]
+    time_field: ship_date
+    joins:
+      carrier_dim:
+        on: carrier_id
+        type: left
+        alias: c
+      material_dim:
+        on: material_id
+        type: left
+        alias: m
+      region_dim:
+        on: region_code
+        type: left
+        alias: r

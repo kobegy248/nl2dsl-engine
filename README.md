@@ -3,7 +3,7 @@
 > 让业务人员用自然语言查数，让数据团队掌控一切。
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-469%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-732%20passed-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **NL2DSL 是企业级自然语言到 DSL 的智能问数引擎。** 它不替代你的数据治理体系，而是消费已有的治理定义（指标、维度、权限），给业务人员一个自然语言的查询入口。
@@ -50,14 +50,22 @@
 {
   "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
   "dimensions": ["product_name", "region"],
-  "filters": [
-    {"field": "region", "operator": "=", "value": "华东"}
-  ],
+  "filters": {
+    "op": "and",
+    "children": [
+      {"field": "region", "operator": "=", "value": "华东"},
+      {"field": "order_date", "operator": "between", "value": ["2024-01-01", "2024-12-31"]}
+    ]
+  },
   "order_by": [{"field": "sales_amount", "direction": "desc"}],
   "limit": 10,
-  "data_source": "orders"
+  "data_source": "orders",
+  "time_field": "order_date",
+  "time_range": ["2024-01-01", "2024-12-31"]
 }
 ```
+
+`filters` 支持**条件树**（`and`/`or`/`not` 嵌套），同时兼容旧版 flat list。支持操作符：`=`, `!=`, `>`, `<`, `>=`, `<=`, `between`, `in`, `like`, `is_null`。
 
 ### 执行的安全保障
 
@@ -237,6 +245,103 @@ configs/
 
 ---
 
+### 7. Agent 智能编排（复杂查询自动拆解）
+
+对于多意图的复杂问题，AgentOrchestrator 自动编排完整的执行流程：
+
+```
+用户输入: "对比华东和华南地区今年销售额趋势"
+  → Planner 意图识别 → "compare + trend"
+  → 任务分解 → 子查询1（华东今年销售额）+ 子查询2（华南今年销售额）
+  → Dispatcher 并行执行 → 两个子查询同时跑 LangGraph 管道
+  → Aggregator 聚合 → diff + growth_rate + 趋势方向
+  → Explainer 生成解释 → "华东销售额 1200 万，华南 950 万，华东高出 26%..."
+  → 返回结构化结果
+```
+
+**效果**：业务人员用自然语言问复杂问题，系统自动拆解、并行执行、智能聚合，无需人工分步查询。
+
+---
+
+### 8. 意图识别与任务分解
+
+Planner 节点自动识别七种查询意图并做相应分解，新增意图只需修改 `configs/intents.yaml`：
+
+| 意图 | 识别关键词 | 分解策略 | 聚合策略 |
+|------|-----------|---------|---------|
+| **对比** (compare) | 对比、比较、同比、环比、VS | 按对比对象拆分为多个子查询 | diff + growth_rate |
+| **趋势** (trend) | 趋势、走势、变化、增长、下降 | 按时间维度拆分为时间序列子查询 | trend_direction |
+| **相关性** (correlation) | 关联、影响、相关、关系 | 拆取相关指标做交叉分析 | pearson |
+| **占比** (proportion) | 占比、构成、贡献度 | 总计 + 分组拆分 | proportion |
+| **顺序** (sequential) | 先查、然后、再查、接着 | 按依赖顺序串行执行 | sequential_filter |
+| **排名** (ranking) | 排名、Top、第几 | 排序 + 取 Top-N | ranking |
+| **单查询** (single_query) | 默认兜底 | 直接通过 LangGraph 管道执行 | 透传 |
+
+**效果**：系统知道用户在问什么，而不是盲目生成 SQL。配置驱动，新增意图零代码改动。
+
+---
+
+### 9. 置信度评估与路由决策
+
+Confidence 节点在 DSL 生成后做三层质量评估：
+
+| 维度 | 评估方式 | 取值范围 |
+|------|---------|---------|
+| **语法置信度** | DSL 校验器验证 | 1.0（通过）/ 0.0（失败） |
+| **语义置信度** | LLM 判断 DSL 是否回答了用户问题 | 0.0 - 1.0 连续值 |
+| **历史置信度** | 历史查询匹配（MVP 预留）| 默认 1.0 |
+
+路由决策：
+- `>= 0.8` → **继续执行** — DSL 质量高，直接进入下一步
+- `0.6 - 0.79` → **警告执行** — 标记警告但继续，结果附带风险提示
+- `< 0.6` → **路由到澄清** — DSL 质量不足，主动追问用户
+
+**效果**：不拿低质量 DSL 去执行，在生成阶段就拦截问题。
+
+---
+
+### 10. SSE 流式响应
+
+复杂查询通过 Agent 编排时，前端可实时看到执行进度：
+
+```
+event: planning
+data: {"intent": "compare", "sub_queries": 2}
+
+event: executing
+data: {"sub_query_id": "q1", "status": "running"}
+
+event: executing
+data: {"sub_query_id": "q2", "status": "running"}
+
+event: aggregating
+data: {"strategy": "compare"}
+
+event: explaining
+data: {"explanation": "..."}
+
+event: done
+data: {}
+```
+
+**效果**：用户不用对着空白页面等待，每步进展实时可见。复杂查询（多子查询并行）体验显著提升。
+
+---
+
+### 11. 反馈驱动的持续优化
+
+Feedback Processor 定期消费用户反馈，提取高频纠错模式：
+
+```
+用户纠正记录 × 5："流水" → 实际想要 "GMV"
+Feedback Processor 提取模式 → metric_alias: "流水" → "gmv"（频率 5）
+→ 触发告警，建议数据团队将 "流水" 加入 terms.yaml
+```
+
+**效果**：系统越用越准，高频问题自动暴露，数据团队有据可依地优化治理配置。
+
+---
+
 ## 前置条件（必读）
 
 NL2DSL **不是数据治理工具**，它消费治理成果。部署前必须确保：
@@ -329,21 +434,41 @@ curl -X POST http://localhost:8000/api/v1/query \
 
 ```
 nl2dsl/
-  engine.py          # 引擎入口：多域发现、组件组装
-  api.py / api_factory.py   # FastAPI 路由
-  config.py          # 环境配置
-  plugin.py          # 插件框架
-  dsl/               # DSL 模型与校验
-  graph/             # LangGraph 查询管道
-  llm/               # LLM 客户端
-  rag/               # 向量检索（BGE + Milvus Lite）
-  semantic/          # 语义注册中心
-  sql_engine/        # SQL 构建 + 安全扫描 + 沙箱
-  permission/        # 行级/列级权限
-  audit/             # 审计日志
-  feedback/          # 纠错反馈
+  engine.py                  # 引擎入口：多域发现、组件组装
+  api.py / api_factory.py    # FastAPI 路由（api_factory 已集成 Agent 层）
+  config.py                  # 环境配置
+  plugin.py                  # 插件框架
+  domain_context.py          # 领域上下文（每个域的独立运行时）
+  agent/                     # Agent 智能编排层
+    orchestrator.py          # 顶层编排器
+    controller.py            # 路由控制器（Simple/Complex/Exploration）
+    planner.py               # 意图识别 + 任务分解（LLM + 规则 fallback）
+    dispatcher.py            # 子查询并行/串行分发（max=3 并发）
+    aggregator.py            # 意图驱动的结果聚合
+    explainer.py             # 自然语言解释生成
+    confidence.py            # 三维度置信度评估
+    resolver.py              # 实体解析器
+    strategies.py            # 意图策略注册表
+    feedback_processor.py    # 高频纠错模式提取
+    models.py                # Agent 数据模型
+  dsl/                       # DSL 模型与校验
+    models.py                # DSL / FilterTreeNode / Having 等
+    validator.py             # DSL 校验器
+    semantic_validator.py    # 语义验证器
+  graph/                     # LangGraph 查询管道
+  llm/                       # LLM 客户端 + Prompt 模板
+  rag/                       # 向量检索（BGE + Milvus Lite）
+  semantic/                  # 语义注册中心
+  sql_engine/                # SQL 构建 + 安全扫描 + 沙箱 + 执行
+  permission/                # 行级/列级权限 + 脱敏
+  query/                     # 歧义检测 + 查询改写 + 后处理
+  audit/                     # 审计日志
+  feedback/                  # 纠错反馈
+  planner/                   # 传统查询规划器
+  utils/                     # 日志工具
 
 configs/
+  intents.yaml       # 意图配置（7 种意图，新增无需改代码）
   metrics.yaml       # 指标/维度/数据源
   terms.yaml         # 业务术语
   history.yaml       # 历史示例
@@ -356,41 +481,58 @@ configs/
 
 ```mermaid
 flowchart TB
-    Start([用户输入]) --> Clarify["歧义检测<br/>clarification"]
+    Start([用户输入]) --> AgentPlan["Agent 编排层<br/>AgentOrchestrator"]
 
-    Clarify -->|"有歧义"| Ask["追问用户"]
-    Ask --> Clarify
-    Clarify -->|"无歧义"| Decompose["查询改写<br/>decompose"]
+    subgraph Agent["Agent 智能编排"]
+        direction TB
+        Plan["意图识别 + 任务分解<br/>planner"]
+        Dispatch["子查询分发<br/>dispatcher"]
+        Agg["结果聚合<br/>aggregator"]
+        Explain["解释生成<br/>explainer"]
+    end
 
-    Decompose --> RAG["RAG 语义检索<br/>BGE + Milvus"]
-    RAG --> LLM["LLM 生成 DSL<br/>结构化 JSON"]
-    LLM --> Validate["DSL 校验<br/>Schema 验证"]
+    subgraph Pipeline["单个子查询的 LangGraph 管道"]
+        direction TB
+        Clarify["歧义检测<br/>clarification"]
+        Clarify -->|"有歧义"| Ask["追问用户"]
+        Ask --> Clarify
+        Clarify -->|"无歧义"| Decompose["查询改写<br/>decompose"]
+        Decompose --> RAG["RAG 语义检索<br/>BGE + Milvus"]
+        RAG --> LLM["LLM 生成 DSL<br/>结构化 JSON"]
+        LLM --> Validate["DSL 校验<br/>Schema 验证"]
+        Validate -->|"校验失败"| Correct["自动修正<br/>correct_dsl"]
+        Correct --> RAG
+        Validate -->|"校验通过"| Confidence["置信度评估<br/>confidence"]
+        Confidence -->|"< 0.6"| Clarify
+        Confidence -->|">= 0.6"| Permission["权限注入<br/>row + col level"]
+        Permission --> Resolve["语义解析<br/>指标→SQL 表达式"]
+        Resolve --> Build["SQL 构建<br/>精确 JOIN"]
+        Build --> Scan["SQL 安全扫描<br/>禁止操作检测"]
+        Scan -->|"危险"| Reject["拒绝执行"]
+        Scan -->|"安全"| Sandbox["沙箱预检<br/>EXPLAIN + LIMIT"]
+        Sandbox -->|"扫描量过大"| HumanReview["人工审核<br/>human_review"]
+        HumanReview -->|"批准"| Execute
+        HumanReview -->|"拒绝"| Reject
+        Sandbox -->|"正常"| Execute["执行 SQL"]
+        Execute -->|"失败"| Simplify["简化 DSL 重试"]
+        Simplify --> Execute
+        Execute --> Verify["结果验证<br/>verify_dsl"]
+    end
 
-    Validate -->|"校验失败"| Correct["自动修正<br/>correct_dsl"]
-    Correct --> RAG
-    Validate -->|"校验通过"| Permission["权限注入<br/>row + col level"]
-
-    Permission --> Resolve["语义解析<br/>指标→SQL 表达式"]
-    Resolve --> Build["SQL 构建<br/>精确 JOIN"]
-
-    Build --> Scan["SQL 安全扫描<br/>禁止操作检测"]
-    Scan -->|"危险"| Reject["拒绝执行"]
-    Scan -->|"安全"| Sandbox["沙箱预检<br/>EXPLAIN + LIMIT"]
-
-    Sandbox -->|"扫描量过大"| HumanReview["人工审核<br/>human_review"]
-    HumanReview -->|"批准"| Execute
-    HumanReview -->|"拒绝"| Reject
-    Sandbox -->|"正常"| Execute["执行 SQL"]
-
-    Execute -->|"失败"| Simplify["简化 DSL 重试"]
-    Simplify --> Execute
-    Execute --> Verify["结果验证<br/>verify_dsl"]
-    Verify --> Result(["返回结果"])
+    AgentPlan --> Plan
+    Plan --> Dispatch
+    Dispatch -->|"子查询 1"| Pipeline
+    Dispatch -->|"子查询 2"| Pipeline
+    Pipeline --> Agg
+    Agg --> Explain
+    Explain --> Result(["返回结果 + 解释"])
     Reject --> Result
 ```
 
 **流程说明**：
-- **菱形条件分支**：系统在每个检查点做出路由决策（歧义/无歧义、校验失败/通过、危险/安全、扫描量过大/正常）
+- **Agent 编排层**：复杂查询自动识别意图 → 分解为子查询 → 并行分发 → 聚合 → 解释
+- **单查询**：意图为 `single_query` 时直接走 LangGraph 管道，不经过 Agent 编排
+- **置信度节点**：DSL 校验通过后评估质量，`>=0.8` 继续执行，`0.6-0.79` 警告执行，`<0.6` 路由到澄清
 - **循环修正**：DSL 校验失败 → 自动修正 → 重新 RAG → 重新生成，最多循环 3 次
 - **安全闸门**：SQL 安全扫描（拦截 DELETE/UNION/注释注入）和沙箱预检（全表扫描告警）两道防线
 - **人工审核**：仅当沙箱判定扫描量超过阈值时触发，审批后可放行或拒绝
@@ -402,8 +544,8 @@ flowchart TB
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/v1/query` | 自然语言查询（完整管道） |
+| POST | `/api/v1/query/stream` | **流式查询（SSE）— Agent 编排实时进度** |
 | POST | `/api/v1/query/execute` | 直接执行 DSL |
-| POST | `/api/v1/query/stream` | 流式查询（SSE） |
 | GET | `/api/v1/schema?domain=` | 获取语义层 Schema |
 | GET | `/api/v1/metrics?domain=` | 获取指标列表 |
 | GET | `/api/v1/debug/rag?q=` | 调试 RAG 检索内容 |

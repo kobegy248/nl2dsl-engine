@@ -1,15 +1,15 @@
 """Confidence node: evaluates DSL quality on three dimensions.
 
-1. Syntax confidence (rule-based): validator.validate(dsl) -> 100.0 or 0.0
-2. Semantic confidence (LLM-based): LLM judges if DSL answers the question (0-100)
+1. Syntax confidence (rule-based): validator.validate(dsl) -> 1.0 or 0.0
+2. Semantic confidence (LLM-based): LLM judges if DSL answers the question (0-1)
 3. History confidence: MVP always returns 1.0 (no historical tracking yet)
 
 Formula: confidence = min(syntax, semantic) * history
 
 Routing decisions:
-- >= 80: "continue" — proceed with execution
-- 60-79: "warning" — proceed with warning flag
-- < 60: "clarify" — route to clarification
+- >= 0.8: "continue" — proceed with execution
+- 0.6-0.79: "warning" — proceed with warning flag
+- < 0.6: "clarify" — route to clarification
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ logger = get_logger("agent.confidence")
 def _evaluate_syntax(validator: DSLValidator, dsl) -> float:
     """Evaluate syntax confidence via validator.
 
-    Returns 100.0 if validation passes, 0.0 if it fails.
+    Returns 1.0 if validation passes, 0.0 if it fails.
     """
     try:
         validator.validate(dsl)
-        return 100.0
+        return 1.0
     except ValidationError:
         return 0.0
 
@@ -41,11 +41,11 @@ def _evaluate_semantic(dsl, question: str, llm_client) -> tuple[float, str]:
     """Evaluate semantic confidence via LLM.
 
     Ask the LLM to judge if the DSL answers the user's question.
-    Returns (score, source) where source is "llm", "neutral_no_llm",
+    Returns (score_0_1, source) where source is "llm", "neutral_no_llm",
     or "neutral_fallback".
     """
     if llm_client is None:
-        return 50.0, "neutral_no_llm"
+        return 0.5, "neutral_no_llm"
 
     # Serialize DSL safely for the prompt
     try:
@@ -64,31 +64,31 @@ def _evaluate_semantic(dsl, question: str, llm_client) -> tuple[float, str]:
 {dsl_json}
 
 【评分标准】
-- 100 分：DSL 完全正确地回答了用户问题
-- 80-99 分：DSL 基本正确，但可能有 minor 问题
-- 60-79 分：DSL 部分正确，但缺少某些条件或维度
-- 40-59 分：DSL 有较大偏差
-- 0-39 分：DSL 完全错误，无法回答用户问题
+- 1.0：DSL 完全正确地回答了用户问题
+- 0.8-0.99：DSL 基本正确，但可能有 minor 问题
+- 0.6-0.79：DSL 部分正确，但缺少某些条件或维度
+- 0.4-0.59：DSL 有较大偏差
+- 0-0.39：DSL 完全错误，无法回答用户问题
 
 【输出要求】
-只输出一个 0-100 的整数分数，不要任何解释文字。"""
+只输出一个 0-1 的小数分数，不要任何解释文字。"""
 
     try:
-        raw = llm_client.generate(prompt, "你是一个简洁的 DSL 质量评估助手。只输出数字分数。")
+        raw = llm_client.generate(prompt, "你是一个简洁的 DSL 质量评估助手。只输出 0-1 之间的小数分数。")
         if not raw:
-            return 50.0, "neutral_fallback"
+            return 0.5, "neutral_fallback"
 
-        # Extract first number (including negative) from response
+        # Extract first number (including decimal) from response
         text = raw.strip()
-        match = re.search(r"(-?\d+)", text)
+        match = re.search(r"(-?\d+\.?\d*)", text)
         if match:
-            score = int(match.group(1))
-            score = max(0.0, min(100.0, float(score)))
+            score = float(match.group(1))
+            score = max(0.0, min(1.0, score))
             return score, "llm"
-        return 50.0, "neutral_fallback"
+        return 0.5, "neutral_fallback"
     except Exception as exc:
         logger.warning("[confidence] LLM semantic evaluation failed: %s", exc)
-        return 50.0, "neutral_fallback"
+        return 0.5, "neutral_fallback"
 
 
 def _evaluate_history(_dsl, _question: str, _user_id: str) -> float:
@@ -103,13 +103,13 @@ def _compute_routing(confidence: float, semantic_source: str = "") -> str:
     """Determine routing decision based on confidence score.
 
     Returns:
-        "continue" if confidence >= 80
-        "warning" if 60 <= confidence < 80
-        "clarify" if confidence < 60 (but not when semantic_source is neutral)
+        "continue" if confidence >= 0.8
+        "warning" if 0.6 <= confidence < 0.8
+        "clarify" if confidence < 0.6 (but not when semantic_source is neutral)
     """
-    if confidence >= 80.0:
+    if confidence >= 0.8:
         return "continue"
-    if confidence >= 60.0:
+    if confidence >= 0.6:
         return "warning"
     # When no LLM is available or LLM call failed, semantic score is neutral;
     # don't block execution since we can't meaningfully evaluate semantics
@@ -127,10 +127,10 @@ def _build_explanation(
 ) -> str:
     """Build a natural language explanation of the confidence score."""
     parts = [
-        f"DSL 质量评分: {confidence:.1f}/100",
-        f"语法正确性: {syntax_score:.1f}/100",
-        f"语义匹配度: {semantic_score:.1f}/100",
-        f"历史可信度: {history_score:.1f}",
+        f"DSL 质量评分: {confidence * 100:.0f}%",
+        f"语法正确性: {syntax_score * 100:.0f}%",
+        f"语义匹配度: {semantic_score * 100:.0f}%",
+        f"历史可信度: {history_score:.2f}",
     ]
 
     if routing == "continue":
@@ -180,10 +180,21 @@ def _make_confidence_node(
         # Routing decision
         routing = _compute_routing(confidence, semantic_source)
 
+        # Sub-query downgrade: when this query is a sub-query dispatched by
+        # AgentOrchestrator (pre-built plan exists), downgrade "clarify" to
+        # "warning" so the sub-query still executes instead of silently failing.
+        # This applies to all intent types (single_query, compare, ranking, etc.).
+        existing_plan = state.get("plan")
+        if routing == "clarify" and existing_plan is not None:
+            routing = "warning"
+            explanation_suffix = "（子查询模式：置信度不足但继续执行）"
+        else:
+            explanation_suffix = ""
+
         # Build explanation
         explanation = _build_explanation(
             confidence, syntax_score, semantic_score, history_score, routing
-        )
+        ) + explanation_suffix
 
         # Build result dict
         result: dict = {

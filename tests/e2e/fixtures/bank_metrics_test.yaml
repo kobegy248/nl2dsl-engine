@@ -162,7 +162,7 @@ data_sources:
   customer_accounts:
     table: t_acct_main
     metrics: [total_balance, available_balance, frozen_amount, account_count, avg_balance]
-    dimensions: [account_type, currency, account_status, open_date, maturity_date, org_code, org_name, org_level]
+    dimensions: [account_type, currency, account_status, open_date, maturity_date, org_code, org_name, org_level, customer_name, customer_status, customer_type, risk_level, register_date, manager_employee_no]
     joins:
       t_cif_base:
         on: cif_no

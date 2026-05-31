@@ -88,33 +88,76 @@ def with_error_handler(node_name: str):
 # ---------------------------------------------------------------------------
 
 
-def _build_fallback_prompt(question: str) -> str:
-    """Build a fallback prompt without RAG context."""
+def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> str:
+    """Build a fallback prompt without RAG context, dynamically from registry."""
+    if registry_dict is None:
+        registry_dict = {}
+
+    data_sources = registry_dict.get("data_sources", {})
+    metrics = registry_dict.get("metrics", {})
+    dimensions = registry_dict.get("dimensions", {})
+
+    # Build data sources section
+    ds_lines = []
+    for ds_name, ds_cfg in data_sources.items():
+        table = ds_cfg.get("table", ds_name)
+        ds_metrics = ds_cfg.get("metrics", [])
+        ds_dims = ds_cfg.get("dimensions", [])
+        ds_lines.append(f'- 数据源: {ds_name} (对应表 {table}), 可用指标: {ds_metrics}, 可用维度: {ds_dims}')
+
+    # Build metrics section
+    metric_lines = []
+    for m_name, m_cfg in metrics.items():
+        expr = m_cfg.get("expr", "")
+        desc = m_cfg.get("description", "")
+        metric_lines.append(f'- {m_name}: {expr}, {desc}')
+
+    # Build dimensions section
+    dim_lines = []
+    for d_name, d_cfg in dimensions.items():
+        desc = d_cfg.get("description", "")
+        dim_lines.append(f'- {d_name}: {desc}')
+
+    # Build data_source options
+    ds_names = list(data_sources.keys())
+    default_ds = ds_names[0] if ds_names else "orders"
+    ds_options = ", ".join([f'"{n}"' for n in ds_names])
+
+    # Build joins section from data_sources
+    join_lines = []
+    for ds_name, ds_cfg in data_sources.items():
+        joins = ds_cfg.get("joins", {})
+        for join_table, join_cfg in joins.items():
+            on_field = join_cfg.get("on", "id")
+            join_type = join_cfg.get("type", "left")
+            alias = join_cfg.get("alias", join_table[0])
+            join_lines.append(f'- {ds_name} 可以 {join_type.upper()} JOIN {join_table} ON {on_field}, alias={alias}')
+
+    ds_section = "\n".join(ds_lines) if ds_lines else '- (无数据源配置)'
+    metric_section = "\n".join(metric_lines) if metric_lines else '- (无指标配置)'
+    dim_section = "\n".join(dim_lines) if dim_lines else '- (无维度配置)'
+    join_section = "\n".join(join_lines) if join_lines else '- (无 JOIN 配置)'
+
     return f"""【表结构】
-- 数据源: orders (对应表 order_fact), 字段: id, product_id, product_name, brand, category, region, channel, customer_id, customer_type, order_amount, discount_amount, pay_amount, quantity, order_date, tenant_id
-- 数据源: products (对应表 product_dim), 字段: product_id, product_name, brand, category, price
-- 数据源: customers (对应表 customer_dim), 字段: customer_id, customer_name, customer_type, register_date, region
+{ds_section}
 
 【表关联关系】
-- orders (order_fact) 可以 INNER JOIN product_dim ON product_id, alias=p
-- orders (order_fact) 可以 LEFT JOIN customer_dim ON customer_id, alias=c
-- 当用户问题涉及非主表字段（如客户名、品牌、单价）时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义
+{join_section}
+- 当用户问题涉及非主表字段时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义
 
 【可用指标】
-- sales_amount: SUM(pay_amount), 销售额（实付金额合计）
-- gmv: SUM(order_amount), 成交总额
-- order_count: COUNT(id), 订单数量
-- avg_order_value: AVG(pay_amount), 客单价
-- total_discount: SUM(discount_amount), 优惠总额
+{metric_section}
 
 【可用维度】
-- product_name, brand, category, region, channel, customer_type, order_date, customer_name
+{dim_section}
 
 【重要规则】
-1. data_source 必须是 "orders"，不要写表名
-2. metrics 的 alias 必须是已注册的指标名（如 sales_amount, gmv 等）
-3. 涉及客户维度（customer_name, customer_type 等）时 joins 中必须包含 customer_dim; 涉及产品维度（brand, category, price 等）时 joins 中必须包含 product_dim
-4. 不要输出任何解释文字，只输出 JSON
+1. data_source 必须是以下之一: {ds_options}；默认使用 "{default_ds}"
+2. metrics 的 alias 必须是已注册的指标名，且必须在对应数据源的可用指标列表中
+3. dimensions 必须是已注册的维度名，且必须在对应数据源的可用维度列表中（不要选其他数据源独有的维度）
+4. filters 中的 field 必须是**维度名**，直接使用维度名称，不要加数据源前缀（如用 "channel_code" 而非 "transactions.channel_code"）
+5. 涉及关联表维度时 joins 中必须包含对应的 JOIN 定义
+6. 不要输出任何解释文字，只输出 JSON
 
 【用户问题】
 {question}
@@ -151,7 +194,7 @@ def _parse_llm_output(raw: str) -> dict:
     return json.loads(text)
 
 
-# Hard-coded metric mapping for LLM format recovery
+# Hard-coded metric mapping for LLM format recovery (fallback when registry unavailable)
 _METRIC_MAP = {
     "sales_amount": ("sum", "order_amount"),
     "gmv": ("sum", "order_amount"),
@@ -164,17 +207,38 @@ _METRIC_MAP = {
 }
 
 
-def _fix_metric_format(m: dict) -> dict:
-    """Fix LLM-generated metric dict to ensure func/field/alias exist."""
+def _parse_metric_expr(expr: str) -> tuple[str, str] | None:
+    """Parse a metric expression like 'SUM(order_amount)' into (func, field)."""
+    expr = expr.strip()
+    match = re.match(r"^([A-Z]+)\(\s*(?:DISTINCT\s+)?(.+?)\s*\)$", expr, re.IGNORECASE)
+    if match:
+        return match.group(1).lower(), match.group(2)
+    return None
+
+
+def _fix_metric_format(m: dict, metrics_config: dict | None = None) -> dict:
+    """Fix LLM-generated metric dict to ensure func/field/alias exist.
+
+    Uses domain-specific metric config (from registry) when available,
+    falling back to the global _METRIC_MAP for backward compatibility.
+    """
     # LLM may use 'name' or 'metric' instead of 'alias'
     alias = m.get("alias") or m.get("name") or m.get("metric")
     if alias:
         alias = alias.strip().lower().replace(" ", "_")
-        mapped = _METRIC_MAP.get(alias)
-        if mapped:
-            m.setdefault("func", mapped[0])
-            m.setdefault("field", mapped[1])
-            m.setdefault("alias", alias)
+        # 1. Try domain-specific mapping from registry first
+        parsed = None
+        if metrics_config and alias in metrics_config:
+            expr = metrics_config[alias].get("expr", "")
+            if expr:
+                parsed = _parse_metric_expr(expr)
+        # 2. Fall back to hard-coded global map
+        if not parsed:
+            parsed = _METRIC_MAP.get(alias)
+        if parsed:
+            m.setdefault("func", parsed[0])
+            m.setdefault("field", parsed[1])
+            m["alias"] = alias  # overwrite with normalized alias
     # Ensure required fields exist
     if not m.get("func"):
         m["func"] = "sum"
@@ -206,7 +270,7 @@ def _extract_top_n(question: str, default: int = 10) -> int:
     return default
 
 
-def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
+def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None, registry_dict: dict | None = None) -> dict:
     """Fix DSL semantics based on keywords in the user's question.
 
     Agentic 改造：当 llm_client 可用时，让 LLM 自己识别问题中的过滤条件；
@@ -222,6 +286,26 @@ def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
         filters = []
     existing_fields = {f.get("field") for f in filters if isinstance(f, dict)}
 
+    # Build dynamic available fields from registry, with hardcoded defaults for backward compatibility
+    _DEFAULT_DIMENSIONS = {
+        "region": {"column": "region_code", "description": "地区", "value_map": {"华东": "HD", "华南": "HN", "华北": "HB", "华西": "HX"}},
+        "channel": {"column": "channel_code", "description": "销售渠道", "value_map": {"线上": "online", "线下": "offline", "分销": "distribute"}},
+        "customer_type": {"column": "customer_type", "description": "客户类型"},
+    }
+    dimensions = (registry_dict or {}).get("dimensions", {}) if registry_dict else _DEFAULT_DIMENSIONS
+    dim_names = list(dimensions.keys())
+    # Build value_map summaries for enum-like dimensions
+    field_hints = []
+    for d_name, d_cfg in dimensions.items():
+        desc = d_cfg.get("description", "")
+        value_map = d_cfg.get("value_map")
+        if value_map and isinstance(value_map, dict):
+            values = ", ".join([f"{k}({v})" for k, v in list(value_map.items())[:8]])
+            field_hints.append(f"- {d_name}: {desc}（取值: {values}）")
+        else:
+            field_hints.append(f"- {d_name}: {desc}")
+    fields_section = "\n".join(field_hints) if field_hints else "- (无维度配置)"
+
     # ------------------------------------------------------------------
     # Agentic path (preferred when llm_client is available)
     # ------------------------------------------------------------------
@@ -236,12 +320,7 @@ def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
 {json.dumps(filters, ensure_ascii=False, indent=2)}
 
 【可用字段】
-- region: 地区（华东、华南、华北、西南、东北、西北）
-- channel: 渠道（线上、线下、分销）
-- customer_type: 客户类型（VIP、新客、老客）
-- order_date: 订单日期（支持年份如 2023、2024，或相对时间如"今年"、"去年"、"本月"）
-- brand: 品牌
-- category: 品类
+{fields_section}
 
 【任务】
 判断用户问题中是否包含上述字段的过滤条件，但当前 DSL 的 filters 中还没有体现。
@@ -290,34 +369,63 @@ def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
 
             dsl_dict["filters"] = filters if filters else None
             dsl_dict["limit"] = _extract_top_n(question, default=dsl_dict.get("limit", 10))
+            # Apply negation detection even on agentic success path
+            _apply_negation_fixes(dsl_dict, question)
             return dsl_dict
         except Exception as exc:
             logger.warning("[semantic_fix] agentic failed, falling back to hardcoded: %s", exc)
             # 继续执行下面的硬编码兜底逻辑
 
     # ------------------------------------------------------------------
-    # Fallback: hardcoded filter detection
+    # Fallback: keyword-based filter detection + value correction using registry
     # ------------------------------------------------------------------
-    region_map = {"华东": "华东", "华南": "华南", "华北": "华北", "西南": "西南", "东北": "东北", "西北": "西北"}
-    for name, value in region_map.items():
-        if name in question and "region" not in existing_fields:
-            filters.append({"field": "region", "operator": "=", "value": value})
-            existing_fields.add("region")
-            break
+    # Step A: Correct existing filter values using dimension value_map
+    for f in filters:
+        if not isinstance(f, dict):
+            continue
+        field_name = f.get("field")
+        val = f.get("value")
+        if field_name and val and isinstance(val, str):
+            d_cfg = dimensions.get(field_name)
+            if d_cfg:
+                vm = d_cfg.get("value_map")
+                if vm and isinstance(vm, dict):
+                    # If value is a Chinese name in value_map, replace with code
+                    if val in vm:
+                        f["value"] = vm[val]
+                    # Also handle partial matches (e.g. "线上渠道" -> "线上" -> "online")
+                    for cn_name, code in vm.items():
+                        if cn_name in val and val != code:
+                            f["value"] = code
+                            break
 
-    if "线上" in question and "channel" not in existing_fields:
-        filters.append({"field": "channel", "operator": "=", "value": "线上"})
-    elif "线下" in question and "channel" not in existing_fields:
-        filters.append({"field": "channel", "operator": "=", "value": "线下"})
-    elif "分销" in question and "channel" not in existing_fields:
-        filters.append({"field": "channel", "operator": "=", "value": "分销"})
+    # Step B: Add missing filters from value_map keywords
+    # Use the Chinese name as value; SemanticResolver will map it to code later
+    for d_name, d_cfg in dimensions.items():
+        value_map = d_cfg.get("value_map")
+        if value_map and isinstance(value_map, dict):
+            for cn_name, code in value_map.items():
+                if cn_name in question and d_name not in existing_fields:
+                    filters.append({"field": d_name, "operator": "=", "value": cn_name})
+                    existing_fields.add(d_name)
+                    break
 
-    if "VIP" in question.upper() and "customer_type" not in existing_fields:
-        filters.append({"field": "customer_type", "operator": "=", "value": "VIP"})
-    elif ("新客" in question or "新客户" in question) and "customer_type" not in existing_fields:
-        filters.append({"field": "customer_type", "operator": "=", "value": "新客"})
-    elif ("老客" in question or "老客户" in question) and "customer_type" not in existing_fields:
-        filters.append({"field": "customer_type", "operator": "=", "value": "老客"})
+    # Step C: Generic keyword detection for common filter fields
+    _FILTER_KEYWORDS = {
+        "线上": ("channel", "线上"),
+        "线下": ("channel", "线下"),
+        "分销": ("channel", "分销"),
+        "VIP": ("customer_type", "VIP"),
+        "新客": ("customer_type", "新客"),
+        "老客户": ("customer_type", "老客"),
+    }
+    for keyword, (field, value) in _FILTER_KEYWORDS.items():
+        if keyword in question and field in dimensions and field not in existing_fields:
+            filters.append({"field": field, "operator": "=", "value": value})
+            existing_fields.add(field)
+
+    # Step D: Negation detection (also run in fallback)
+    _apply_negation_fixes(dsl_dict, question)
 
     dsl_dict["filters"] = filters if filters else None
 
@@ -327,11 +435,60 @@ def _semantic_fix_dsl(dsl_dict: dict, question: str, llm_client=None) -> dict:
     return dsl_dict
 
 
-def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> dict:
+def _apply_negation_fixes(dsl_dict: dict, question: str) -> None:
+    """Convert '=' to '!=' when question contains negation for the filter value."""
+    filters = dsl_dict.get("filters")
+    if not filters:
+        return
+
+    negation_prefixes = ("非", "不是", "排除", "除外", "不包含")
+
+    def _fix_node(node):
+        if isinstance(node, dict) and node.get("op") in {"and", "or", "not"}:
+            for child in node.get("children", []):
+                _fix_node(child)
+        elif isinstance(node, dict) and node.get("operator") == "=":
+            val = str(node.get("value", ""))
+            for neg in negation_prefixes:
+                # Check direct pattern: "非手机"
+                if neg + val in question:
+                    node["operator"] = "!="
+                    return
+                # Check pattern with suffix: "非手机品类"
+                if neg in question and val in question:
+                    # Ensure negation appears before value in question
+                    neg_idx = question.find(neg)
+                    val_idx = question.find(val)
+                    if 0 <= neg_idx < val_idx <= neg_idx + len(neg) + len(val) + 2:
+                        node["operator"] = "!="
+                        return
+
+    if isinstance(filters, dict) and filters.get("op") in {"and", "or", "not"}:
+        _fix_node(filters)
+    elif isinstance(filters, list):
+        for f in filters:
+            _fix_node(f)
+
+
+def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid_data_sources: list[str] | None = None, data_sources_config: dict | None = None, metrics_config: dict | None = None) -> dict:
     """Post-process and fix common LLM-generated DSL issues."""
+    valid_ds = valid_data_sources or ["orders", "products", "customers"]
+    ds_cfg = data_sources_config or {}
+    # Build data_source_name -> actual_table mapping
+    ds_to_table = {ds_name: ds_info.get("table", ds_name) for ds_name, ds_info in ds_cfg.items()}
+
+    # 0. Infer correct data_source from metrics + dimensions if current one is mismatched
+    _auto_fix_data_source(dsl_dict, ds_cfg)
+
     # 1. Ensure data_source is valid
-    if "data_source" not in dsl_dict or dsl_dict["data_source"] not in ["orders", "products", "customers"]:
+    if "data_source" not in dsl_dict or dsl_dict["data_source"] not in valid_ds:
         dsl_dict["data_source"] = default_data_source
+
+    # 1b. Fix filter fields: strip data_source prefix (e.g. "purchase.region_id" -> "region_id")
+    current_ds = dsl_dict.get("data_source")
+    filters = dsl_dict.get("filters")
+    if filters:
+        _fix_filter_fields(filters, current_ds, valid_ds)
 
     # 2. Ensure metrics is a list of dicts
     metrics = dsl_dict.get("metrics")
@@ -340,7 +497,7 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
         metrics = [{"alias": metrics}]
     if not metrics or not isinstance(metrics, list):
         metrics = [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}]
-    dsl_dict["metrics"] = [_fix_metric_format(m if isinstance(m, dict) else {"alias": str(m)}) for m in metrics]
+    dsl_dict["metrics"] = [_fix_metric_format(m if isinstance(m, dict) else {"alias": str(m)}, metrics_config) for m in metrics]
 
     # 3. Normalize metric fields: strip SUM/AVG/COUNT/MAX/MIN wrappers
     for m in dsl_dict.get("metrics", []):
@@ -370,8 +527,16 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
     if "offset" not in dsl_dict:
         dsl_dict["offset"] = 0
 
-    # 7. Ensure order_by exists when metrics exist
+    # 7. Ensure order_by exists when metrics exist, normalize direction to lowercase
     order_by = dsl_dict.get("order_by")
+    if isinstance(order_by, list):
+        for ob in order_by:
+            if isinstance(ob, dict):
+                # LLM may use "alias" instead of "field"
+                if "alias" in ob and "field" not in ob:
+                    ob["field"] = ob.pop("alias")
+                if ob.get("direction"):
+                    ob["direction"] = str(ob["direction"]).lower()
     metrics_list = dsl_dict.get("metrics", [])
     if not order_by and metrics_list:
         first_alias = metrics_list[0].get("alias") or metrics_list[0].get("field")
@@ -401,7 +566,102 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders") -> di
                     if op not in valid_ops:
                         f["operator"] = "="
 
+    # 9. Fix joins format: LLM may use "type" instead of "join_type" or miss "on_field"
+    # Also fix table name if LLM used data_source name instead of actual table name
+    _TABLE_JOIN_FIELD_MAP = {
+        "product_dim": "product_id",
+        "customer_dim": "customer_id",
+        "supplier_dim": "supplier_id",
+        "region_dim": "region_code",
+        "date_dim": "date_id",
+        "warehouse_dim": "warehouse_id",
+    }
+    joins = dsl_dict.get("joins")
+    if joins and isinstance(joins, list):
+        fixed_joins = []
+        for j in joins:
+            if not isinstance(j, dict):
+                continue
+            # Fix table name: if table is a data_source name, use actual table name
+            table_name = j.get("table", "")
+            if table_name in ds_to_table and table_name != ds_to_table[table_name]:
+                j["table"] = ds_to_table[table_name]
+            # Normalize field names
+            if "type" in j and "join_type" not in j:
+                j["join_type"] = j.pop("type")
+            if "on" in j and "on_field" not in j:
+                j["on_field"] = j.pop("on")
+            # Infer on_field from table name if still missing
+            if not j.get("on_field"):
+                table = j.get("table", "")
+                j["on_field"] = _TABLE_JOIN_FIELD_MAP.get(table, "id")
+            # LLM may output full join condition like "product_id = p.product_id"
+            on_field = j.get("on_field", "")
+            if isinstance(on_field, str) and "=" in on_field:
+                j["on_field"] = on_field.split("=")[0].strip()
+            # Ensure join_type is valid
+            if j.get("join_type") not in {"inner", "left", "right"}:
+                j["join_type"] = "inner"
+            fixed_joins.append(j)
+        dsl_dict["joins"] = fixed_joins
+
     return dsl_dict
+
+
+def _auto_fix_data_source(dsl_dict: dict, ds_cfg: dict) -> None:
+    """Automatically infer and fix data_source based on metrics + dimensions coverage."""
+    current_ds = dsl_dict.get("data_source")
+    if not current_ds or not ds_cfg:
+        return
+
+    metrics = dsl_dict.get("metrics", [])
+    dims = dsl_dict.get("dimensions", [])
+    metric_aliases = {m.get("alias") for m in metrics if isinstance(m, dict) and m.get("alias")}
+    dim_names = set(dims) if isinstance(dims, list) else set()
+
+    # Score each data_source by how many metrics/dimensions it covers
+    best_ds = current_ds
+    best_score = 0
+    for ds_name, ds_info in ds_cfg.items():
+        ds_metrics = set(ds_info.get("metrics", []))
+        ds_dims = set(ds_info.get("dimensions", []))
+        score = len(metric_aliases & ds_metrics) + len(dim_names & ds_dims)
+        if score > best_score:
+            best_score = score
+            best_ds = ds_name
+
+    # Only switch if current ds has zero coverage and best ds has positive coverage
+    current_info = ds_cfg.get(current_ds, {})
+    current_metrics = set(current_info.get("metrics", []))
+    current_dims = set(current_info.get("dimensions", []))
+    current_score = len(metric_aliases & current_metrics) + len(dim_names & current_dims)
+
+    if current_score == 0 and best_score > 0 and best_ds != current_ds:
+        logger.info("[post_process] auto-switch data_source: %s -> %s (score: %d)", current_ds, best_ds, best_score)
+        dsl_dict["data_source"] = best_ds
+
+
+def _fix_filter_fields(filters, current_ds: str | None, valid_ds: list[str]) -> None:
+    """Strip data_source prefix from filter fields (e.g. 'purchase.region_id' -> 'region_id')."""
+    def _fix_node(node):
+        if isinstance(node, dict) and node.get("op") in {"and", "or", "not"}:
+            for child in node.get("children", []):
+                _fix_node(child)
+        elif isinstance(node, dict) and "field" in node:
+            field = node.get("field", "")
+            if isinstance(field, str) and "." in field:
+                parts = field.split(".", 1)
+                if parts[0] in valid_ds:
+                    node["field"] = parts[1]
+
+    if isinstance(filters, dict) and filters.get("op") in {"and", "or", "not"}:
+        _fix_node(filters)
+    elif isinstance(filters, list):
+        for f in filters:
+            _fix_node(f)
+    elif isinstance(filters, dict) and "field" in filters:
+        # Single filter dict (not in a list, not a tree node)
+        _fix_node(filters)
 
 
 def _run_semantic_validation(dsl, semantic_validator) -> None:
@@ -547,9 +807,14 @@ def _make_validate_dsl_node(validator: DSLValidator):
 
 
 def _make_generate_dsl_node(
-    llm_client, rag_retriever, semantic_validator=None, llm_system_prompt: str = ""
+    llm_client, rag_retriever, semantic_validator=None, llm_system_prompt: str = "", registry_dict: dict | None = None
 ):
     """Create a generate_dsl node with injected LLM and RAG dependencies."""
+
+    data_sources = (registry_dict or {}).get("data_sources", {})
+    ds_names = list(data_sources.keys())
+    default_ds = ds_names[0] if ds_names else "orders"
+    valid_ds = ds_names if ds_names else ["orders", "products", "customers"]
 
     @with_error_handler("generate_dsl")
     def generate_dsl_node(state: QueryState) -> dict:
@@ -562,7 +827,7 @@ def _make_generate_dsl_node(
         if rag_retriever is not None:
             prompt = rag_retriever.build_prompt(question)
         else:
-            prompt = _build_fallback_prompt(question)
+            prompt = _build_fallback_prompt(question, registry_dict)
 
         raw = llm_client.generate(prompt, llm_system_prompt)
         if not raw:
@@ -570,8 +835,10 @@ def _make_generate_dsl_node(
         logger.info("[generate_dsl] LLM raw output (len=%d): %s", len(raw), raw)
 
         dsl_dict = _parse_llm_output(raw)
-        dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-        dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
+        ds_config = (registry_dict or {}).get("data_sources", {})
+        metrics_config = (registry_dict or {}).get("metrics", {})
+        dsl_dict = _post_process_dsl(dsl_dict, data_source or default_ds, valid_ds, ds_config, metrics_config)
+        dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client, registry_dict)
         dsl = DSL.model_validate(dsl_dict)
 
         _run_semantic_validation(dsl, semantic_validator)
@@ -598,6 +865,11 @@ def _make_correct_dsl_node(
     semantic_validator=None,
     llm_system_prompt: str = "",
 ):
+    """Create an agentic correct_dsl node."""
+    data_sources = registry_dict.get("data_sources", {})
+    ds_names = list(data_sources.keys())
+    default_ds = ds_names[0] if ds_names else "orders"
+    valid_ds = ds_names if ds_names else ["orders", "products", "customers"]
     """Create an agentic correct_dsl node.
 
     Unlike the previous "stuff error into prompt and retry" approach, this node
@@ -682,8 +954,10 @@ def _make_correct_dsl_node(
             raw = llm_client.generate(feedback, llm_system_prompt)
             if raw:
                 dsl_dict = _parse_llm_output(raw)
-                dsl_dict = _post_process_dsl(dsl_dict, data_source or "orders")
-                dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client)
+                ds_config = registry_dict.get("data_sources", {})
+                metrics_config = registry_dict.get("metrics", {})
+                dsl_dict = _post_process_dsl(dsl_dict, data_source or default_ds, valid_ds, ds_config, metrics_config)
+                dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client, registry_dict)
                 dsl = DSL.model_validate(dsl_dict)
 
                 _run_semantic_validation(dsl, semantic_validator)
@@ -955,6 +1229,7 @@ def create_node_functions(
     sandbox: QuerySandbox,
     executor: SQLExecutor,
     clarification_detector: ClarificationDetector,
+    registry_dict: dict | None = None,
     semantic_validator=None,
     llm_system_prompt: str = "",
 ) -> dict[str, Callable[[QueryState], dict]]:
@@ -996,7 +1271,7 @@ def create_node_functions(
     # generate_dsl_node — delegate to standalone factory for DRY
     # -----------------------------------------------------------------------
     generate_dsl_node = _make_generate_dsl_node(
-        llm_client, rag_retriever, semantic_validator, llm_system_prompt
+        llm_client, rag_retriever, semantic_validator, llm_system_prompt, registry_dict
     )
 
     # -----------------------------------------------------------------------
@@ -1011,7 +1286,7 @@ def create_node_functions(
     # can still look it up by name.
     # -----------------------------------------------------------------------
     correct_dsl_node = _make_correct_dsl_node(
-        llm_client, rag_retriever, {}, semantic_validator, llm_system_prompt
+        llm_client, rag_retriever, registry_dict or {}, semantic_validator, llm_system_prompt
     )
 
     # -----------------------------------------------------------------------

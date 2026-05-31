@@ -34,7 +34,13 @@ class TestAgentControllerRoute:
 
     @pytest.mark.asyncio
     async def test_routes_simple_query(self, controller_with_mock, mock_planner):
-        """1 metric, 1 dimension, no comparison -> SimpleExecutionPlan."""
+        """single_query intent + metric + dimension -> SimpleExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="single_query",
+            sub_queries=[SubQuery(id="sq-1", description="revenue by region")],
+            reasoning="Simple query",
+        )
+
         entities = Entities(
             metrics=["revenue"],
             dimensions=["region"],
@@ -47,116 +53,158 @@ class TestAgentControllerRoute:
         assert result.question == "What is the revenue by region?"
         assert result.entities.metrics == ["revenue"]
         assert result.entities.dimensions == ["region"]
-        # Planner should NOT be called for simple queries
-        mock_planner.plan.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_routes_complex_query_multiple_metrics(
-        self, controller_with_mock, mock_planner
-    ):
-        """Multiple metrics -> ComplexExecutionPlan."""
-        mock_plan = Plan(
-            intent="aggregate",
-            sub_queries=[SubQuery(id="sq-1", description="Get metrics")],
-            reasoning="Multiple metrics",
-        )
-        mock_planner.plan.return_value = mock_plan
-
-        entities = Entities(
-            metrics=["revenue", "profit", "cost"],
-            dimensions=["region"],
-        )
-        result = await controller_with_mock.route(
-            "What are revenue, profit and cost by region?",
-            entities,
-        )
-        assert isinstance(result, ComplexExecutionPlan)
-        assert result.question == "What are revenue, profit and cost by region?"
-        assert result.entities.metrics == ["revenue", "profit", "cost"]
-        assert result.plan == mock_plan
         mock_planner.plan.assert_awaited_once_with(
-            "What are revenue, profit and cost by region?"
+            "What is the revenue by region?"
         )
 
     @pytest.mark.asyncio
-    async def test_routes_complex_query_multiple_dimensions(
-        self, controller_with_mock, mock_planner
-    ):
-        """Multiple dimensions -> ComplexExecutionPlan."""
-        mock_plan = Plan(
-            intent="aggregate",
-            sub_queries=[SubQuery(id="sq-1", description="Get by dims")],
-            reasoning="Multiple dimensions",
-        )
-        mock_planner.plan.return_value = mock_plan
-
-        entities = Entities(
-            metrics=["revenue"],
-            dimensions=["region", "quarter"],
-        )
-        result = await controller_with_mock.route(
-            "What is revenue by region and quarter?",
-            entities,
-        )
-        assert isinstance(result, ComplexExecutionPlan)
-        assert result.entities.dimensions == ["region", "quarter"]
-        assert result.plan == mock_plan
-        mock_planner.plan.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_routes_comparison_query(self, controller_with_mock, mock_planner):
-        """Has comparison marker (YoY) -> ComplexExecutionPlan."""
-        mock_plan = Plan(
-            intent="compare",
+    async def test_routes_proportion_intent(self, controller_with_mock, mock_planner):
+        """proportion intent (e.g. '占比') -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="proportion",
             sub_queries=[
-                SubQuery(id="sq-1", description="Current period"),
-                SubQuery(id="sq-2", description="Previous period"),
+                SubQuery(id="sq-1", description="total sales"),
+                SubQuery(id="sq-2", description="sales by category"),
             ],
-            reasoning="Year-over-year comparison",
+            reasoning="Break down into total and groups",
         )
-        mock_planner.plan.return_value = mock_plan
-
-        entities = Entities(
-            metrics=["revenue"],
-            dimensions=["region"],
-            time_range="YoY 2023 vs 2024",
-        )
-        result = await controller_with_mock.route(
-            "What is revenue by region YoY?",
-            entities,
-        )
-        assert isinstance(result, ComplexExecutionPlan)
-        assert result.entities.has_comparison_marker() is True
-        assert result.plan == mock_plan
-        mock_planner.plan.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_routes_comparison_query_mom(self, controller_with_mock, mock_planner):
-        """Has comparison marker (MoM) -> ComplexExecutionPlan."""
-        mock_plan = Plan(
-            intent="compare",
-            sub_queries=[SubQuery(id="sq-1", description="Compare")],
-            reasoning="Month-over-month",
-        )
-        mock_planner.plan.return_value = mock_plan
 
         entities = Entities(
             metrics=["sales"],
-            dimensions=["channel"],
-            time_range="MoM",
+            dimensions=["category"],
         )
         result = await controller_with_mock.route(
-            "Compare sales by channel MoM",
+            "各品类销售额占比",
             entities,
         )
         assert isinstance(result, ComplexExecutionPlan)
-        mock_planner.plan.assert_awaited_once()
+        assert result.question == "各品类销售额占比"
+        assert result.plan.intent == "proportion"
+        mock_planner.plan.assert_awaited_once_with("各品类销售额占比")
 
     @pytest.mark.asyncio
-    async def test_routes_exploration_query_no_metrics(
-        self, controller_with_mock, mock_planner
-    ):
-        """No metrics -> ExplorationPlan."""
+    async def test_routes_trend_intent(self, controller_with_mock, mock_planner):
+        """trend intent (e.g. '趋势') -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="trend",
+            sub_queries=[SubQuery(id="sq-1", description="sales trend")],
+            reasoning="Time-series trend analysis",
+        )
+
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=[],
+        )
+        result = await controller_with_mock.route(
+            "销售额趋势",
+            entities,
+        )
+        assert isinstance(result, ComplexExecutionPlan)
+        assert result.plan.intent == "trend"
+        mock_planner.plan.assert_awaited_once_with("销售额趋势")
+
+    @pytest.mark.asyncio
+    async def test_routes_ranking_intent(self, controller_with_mock, mock_planner):
+        """ranking intent (e.g. '排名') -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="ranking",
+            sub_queries=[SubQuery(id="sq-1", description="top 5 sales")],
+            reasoning="Ranking query",
+        )
+
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["product"],
+        )
+        result = await controller_with_mock.route(
+            "销售额排名前5",
+            entities,
+        )
+        assert isinstance(result, ComplexExecutionPlan)
+        assert result.plan.intent == "ranking"
+        mock_planner.plan.assert_awaited_once_with("销售额排名前5")
+
+    @pytest.mark.asyncio
+    async def test_routes_compare_intent(self, controller_with_mock, mock_planner):
+        """compare intent -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="compare",
+            sub_queries=[
+                SubQuery(id="sq-1", description="East region sales"),
+                SubQuery(id="sq-2", description="South region sales"),
+            ],
+            reasoning="Region comparison",
+        )
+
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["region"],
+        )
+        result = await controller_with_mock.route(
+            "对比华东和华南的销售额",
+            entities,
+        )
+        assert isinstance(result, ComplexExecutionPlan)
+        assert result.plan.intent == "compare"
+        mock_planner.plan.assert_awaited_once_with("对比华东和华南的销售额")
+
+    @pytest.mark.asyncio
+    async def test_routes_correlation_intent(self, controller_with_mock, mock_planner):
+        """correlation intent -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="correlation",
+            sub_queries=[
+                SubQuery(id="sq-1", description="sales"),
+                SubQuery(id="sq-2", description="orders"),
+            ],
+            reasoning="Correlation analysis",
+        )
+
+        entities = Entities(
+            metrics=["sales", "orders"],
+            dimensions=[],
+        )
+        result = await controller_with_mock.route(
+            "销售额和订单量的关系",
+            entities,
+        )
+        assert isinstance(result, ComplexExecutionPlan)
+        assert result.plan.intent == "correlation"
+        mock_planner.plan.assert_awaited_once_with("销售额和订单量的关系")
+
+    @pytest.mark.asyncio
+    async def test_routes_sequential_intent(self, controller_with_mock, mock_planner):
+        """sequential intent -> ComplexExecutionPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="sequential",
+            sub_queries=[
+                SubQuery(id="sq-1", description="Query A"),
+                SubQuery(id="sq-2", description="Query B", depends_on=["sq-1"]),
+            ],
+            reasoning="Sequential execution",
+        )
+
+        entities = Entities(
+            metrics=["sales"],
+            dimensions=["region"],
+        )
+        result = await controller_with_mock.route(
+            "先查华东销售额，再查华南销售额",
+            entities,
+        )
+        assert isinstance(result, ComplexExecutionPlan)
+        assert result.plan.intent == "sequential"
+        mock_planner.plan.assert_awaited_once_with("先查华东销售额，再查华南销售额")
+
+    @pytest.mark.asyncio
+    async def test_routes_exploration_no_metrics(self, controller_with_mock, mock_planner):
+        """single_query intent but no metrics -> ExplorationPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="single_query",
+            sub_queries=[SubQuery(id="sq-1", description="Explore data")],
+            reasoning="Open-ended exploration",
+        )
+
         entities = Entities(
             metrics=[],
             dimensions=["region"],
@@ -169,13 +217,17 @@ class TestAgentControllerRoute:
         assert result.question == "Tell me about regional data"
         assert result.entities.metrics == []
         assert len(result.exploration_steps) > 0
-        mock_planner.plan.assert_not_awaited()
+        mock_planner.plan.assert_awaited_once_with("Tell me about regional data")
 
     @pytest.mark.asyncio
-    async def test_routes_exploration_query_no_dimensions(
-        self, controller_with_mock, mock_planner
-    ):
-        """No dimensions -> ExplorationPlan."""
+    async def test_routes_exploration_no_dimensions(self, controller_with_mock, mock_planner):
+        """single_query intent but no dimensions -> ExplorationPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="single_query",
+            sub_queries=[SubQuery(id="sq-1", description="Total revenue")],
+            reasoning="Simple aggregation",
+        )
+
         entities = Entities(
             metrics=["revenue"],
             dimensions=[],
@@ -187,13 +239,17 @@ class TestAgentControllerRoute:
         assert isinstance(result, ExplorationPlan)
         assert result.entities.dimensions == []
         assert len(result.exploration_steps) > 0
-        mock_planner.plan.assert_not_awaited()
+        mock_planner.plan.assert_awaited_once_with("What is the total revenue?")
 
     @pytest.mark.asyncio
-    async def test_routes_exploration_query_empty_entities(
-        self, controller_with_mock, mock_planner
-    ):
-        """No metrics, no dimensions -> ExplorationPlan."""
+    async def test_routes_exploration_empty_entities(self, controller_with_mock, mock_planner):
+        """single_query intent with empty entities -> ExplorationPlan."""
+        mock_planner.plan.return_value = Plan(
+            intent="single_query",
+            sub_queries=[SubQuery(id="sq-1", description="Explore")],
+            reasoning="Open-ended",
+        )
+
         entities = Entities(
             metrics=[],
             dimensions=[],
@@ -205,7 +261,8 @@ class TestAgentControllerRoute:
         assert isinstance(result, ExplorationPlan)
         assert result.entities.metrics == []
         assert result.entities.dimensions == []
-        mock_planner.plan.assert_not_awaited()
+        assert len(result.exploration_steps) > 0
+        mock_planner.plan.assert_awaited_once_with("What data do we have?")
 
     @pytest.mark.asyncio
     async def test_default_planner_initialization(self):

@@ -86,16 +86,24 @@ def _extract_common_suffix(question: str, parts: list[str]) -> str:
     ``parts=["华东", "华南的销售额"]``, the suffix ``"的销售额"`` is
     returned so it can be appended to ``"华东"``.
 
+    The heuristic looks for the trailing portion after the last "的"
+    (or after the last splitter if no "的" is present).
+
     Returns an empty string when no meaningful suffix is found.
     """
-    # Simple heuristic: find the substring after the last splitter
-    # that appears in the original question but not in every part.
+    # Heuristic 1: find suffix after the last "的" (e.g. "的销售额", "的关联")
+    if "的" in question:
+        idx = question.rfind("的")
+        suffix = question[idx:].strip()
+        if suffix and any(suffix not in p for p in parts):
+            return suffix
+
+    # Heuristic 2: fallback to suffix after the last splitter
     for splitter in _SPLIT_CHARS:
         if splitter in question:
             idx = question.rfind(splitter)
             if idx != -1:
                 suffix = question[idx + len(splitter):].strip()
-                # Only return if at least one part is missing it
                 if suffix and any(suffix not in p for p in parts):
                     return suffix
     return ""
@@ -147,7 +155,7 @@ def _decompose_by_intent(
 
             sub_queries = [
                 SubQuery(id=f"sq-{i+1}", description=desc, depends_on=[])
-                for i, desc in enumerate(cleaned_parts[:2])
+                for i, desc in enumerate(cleaned_parts)
             ]
         else:
             sub_queries = [SubQuery(id="sq-1", description=question, depends_on=[])]
@@ -340,8 +348,10 @@ class Planner:
     ) -> Plan:
         """Create an execution plan for the given question.
 
-        Tries LLM-based planning first (if an LLM client is available),
-        and falls back to rule-based planning on any failure.
+        Tries LLM-based planning first (if an LLM client is available).
+        When the LLM returns ``single_query``, we also run the rule-based
+        classifier as a safety net — this catches intents that the LLM may
+        miss (e.g. Chinese keywords like ``占比``, ``排名``).
 
         Args:
             question: The user's natural language question.
@@ -351,24 +361,34 @@ class Planner:
         Returns:
             A :class:`Plan` with intent, sub-queries, and reasoning.
         """
+        rule_plan = self._rule_based_plan(question)
+
         if self._llm is not None:
             try:
-                plan = await self._llm_plan(
+                llm_plan = await self._llm_plan(
                     question, registry_dict or {}
                 )
                 logger.info(
                     "[plan] LLM plan: intent=%s, sub_queries=%d",
-                    plan.intent,
-                    len(plan.sub_queries),
+                    llm_plan.intent,
+                    len(llm_plan.sub_queries),
                 )
-                return plan
+                # If the LLM says single_query but rule-based says something
+                # else, trust the rule-based result (keywords are ground truth).
+                if llm_plan.intent == "single_query" and rule_plan.intent != "single_query":
+                    logger.info(
+                        "[plan] Overriding LLM single_query with rule-based: %s",
+                        rule_plan.intent,
+                    )
+                    return rule_plan
+                return llm_plan
             except Exception as exc:
                 logger.warning(
                     "[plan] LLM call failed, falling back: %s", exc
                 )
-                return self._rule_based_plan(question)
+                return rule_plan
 
-        return self._rule_based_plan(question)
+        return rule_plan
 
 
 # ---------------------------------------------------------------------------
@@ -431,10 +451,13 @@ def _build_plan_prompt(question: str, registry_dict: dict) -> str:
 }}
 
 规则：
-- compare: 对比/比较类问题，拆分为 2+ 子查询
-- trend: 趋势/走势类问题，1 个子查询（按时间维度分组）
-- correlation: 关联/影响类问题，拆分为 2+ 子查询
-- single_query: 简单查询，1 个子查询
+- compare: 对比/比较类问题，关键词：对比、比较、vs、相比、同比、环比 → 拆分为 2+ 子查询
+- trend: 趋势/走势类问题，关键词：趋势、走势、变化、增长、下降 → 1 个子查询（按时间维度分组）
+- correlation: 关联/影响类问题，关键词：关联、影响、相关、关系 → 拆分为 2+ 子查询
+- proportion: 占比/构成类问题，关键词：占比、构成、贡献度 → 2 个子查询（总计 + 分组明细）
+- ranking: 排名类问题，关键词：排名、Top、第几 → 1 个子查询（按排序）
+- sequential: 顺序查询类问题，关键词：先查、然后、再查、接着 → 多个有依赖的子查询
+- single_query: 简单查询，无上述关键词 → 1 个子查询
 - depends_on: 如果子查询依赖其他子查询的结果，填写依赖的 id 列表
 - requires_approval: 如果涉及敏感操作（如删除数据），设为 true"""
 

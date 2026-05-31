@@ -107,10 +107,16 @@ async def _execute_sub_query(
             )
             data = [raw_data]  # type: ignore[list-item]
 
+        # Extract confidence score and explanation from graph result
+        confidence = result.get("confidence")
+        explanation = result.get("explanation")
+
         return QueryResult(
             sub_query_id=sub_query.id,
             data=data,
             status=status,
+            confidence=confidence,
+            explanation=explanation,
         )
     except Exception as exc:
         logger.error(

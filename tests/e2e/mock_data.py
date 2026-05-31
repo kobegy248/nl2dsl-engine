@@ -820,6 +820,550 @@ def create_mock_bank_database(db_url: str = "sqlite:///:memory:"):
     )
 
 
+# =============================================================================
+# Supply Chain / Logistics schema (for supply chain domain e2e tests)
+# =============================================================================
+
+SC_REGIONS = [
+    {"name": "华东", "code": "HD", "province": "浙江/江苏/上海"},
+    {"name": "华南", "code": "HN", "province": "广东/福建"},
+    {"name": "华北", "code": "HB", "province": "北京/天津/河北"},
+    {"name": "西南", "code": "XN", "province": "四川/重庆"},
+    {"name": "东北", "code": "DB", "province": "辽宁/吉林"},
+    {"name": "西北", "code": "XB", "province": "陕西/甘肃"},
+    {"name": "华中", "code": "HZ", "province": "湖北/湖南"},
+]
+
+SC_SUPPLIERS = [
+    {"id": 1, "name": "深圳精密电子有限公司", "type": "零部件", "region": "华南", "contact": "李经理", "phone": "13800138001", "bank": "6222021234567890001", "credit": "A", "years": 8},
+    {"id": 2, "name": "上海化工原料集团", "type": "原材料", "region": "华东", "contact": "王总监", "phone": "13900139002", "bank": "6222021234567890002", "credit": "A", "years": 12},
+    {"id": 3, "name": "北京机械制造股份公司", "type": "零部件", "region": "华北", "contact": "张主管", "phone": "13700137003", "bank": "6222021234567890003", "credit": "B", "years": 5},
+    {"id": 4, "name": "成都包装材料厂", "type": "包装", "region": "西南", "contact": "陈经理", "phone": "13600136004", "bank": "6222021234567890004", "credit": "B", "years": 6},
+    {"id": 5, "name": "武汉五金制品有限公司", "type": "原材料", "region": "华中", "contact": "赵总监", "phone": "13500135005", "bank": "6222021234567890005", "credit": "C", "years": 3},
+    {"id": 6, "name": "杭州电子元器件厂", "type": "零部件", "region": "华东", "contact": "孙经理", "phone": "13400134006", "bank": "6222021234567890006", "credit": "A", "years": 10},
+    {"id": 7, "name": "广州塑料制品集团", "type": "包装", "region": "华南", "contact": "周主管", "phone": "13300133007", "bank": "6222021234567890007", "credit": "B", "years": 7},
+    {"id": 8, "name": "沈阳金属材料有限公司", "type": "原材料", "region": "东北", "contact": "吴总监", "phone": "13200132008", "bank": "6222021234567890008", "credit": "C", "years": 4},
+    {"id": 9, "name": "西安半导体科技公司", "type": "零部件", "region": "西北", "contact": "郑经理", "phone": "13100131009", "bank": "6222021234567890009", "credit": "A", "years": 9},
+    {"id": 10, "name": "南京机械设备厂", "type": "零部件", "region": "华东", "contact": "钱主管", "phone": "13000130010", "bank": "6222021234567890010", "credit": "B", "years": 6},
+    {"id": 11, "name": "天津化工有限公司", "type": "原材料", "region": "华北", "contact": "冯总监", "phone": "12900129011", "bank": "6222021234567890011", "credit": "A", "years": 11},
+    {"id": 12, "name": "重庆包装材料公司", "type": "包装", "region": "西南", "contact": "何经理", "phone": "12800128012", "bank": "6222021234567890012", "credit": "C", "years": 2},
+    {"id": 13, "name": "青岛五金工具厂", "type": "原材料", "region": "华东", "contact": "林主管", "phone": "12700127013", "bank": "6222021234567890013", "credit": "B", "years": 5},
+    {"id": 14, "name": "东莞电子有限公司", "type": "零部件", "region": "华南", "contact": "黄总监", "phone": "12600126014", "bank": "6222021234567890014", "credit": "A", "years": 8},
+    {"id": 15, "name": "长沙塑料制品厂", "type": "包装", "region": "华中", "contact": "徐经理", "phone": "12500125015", "bank": "6222021234567890015", "credit": "B", "years": 4},
+    {"id": 16, "name": "大连机械制造公司", "type": "零部件", "region": "东北", "contact": "马主管", "phone": "12400124016", "bank": "6222021234567890016", "credit": "C", "years": 3},
+    {"id": 17, "name": "苏州化工材料厂", "type": "原材料", "region": "华东", "contact": "朱总监", "phone": "12300123017", "bank": "6222021234567890017", "credit": "A", "years": 9},
+    {"id": 18, "name": "昆明包装材料公司", "type": "包装", "region": "西南", "contact": "胡经理", "phone": "12200122018", "bank": "6222021234567890018", "credit": "B", "years": 5},
+    {"id": 19, "name": "合肥电子元器件厂", "type": "零部件", "region": "华中", "contact": "郭主管", "phone": "12100121019", "bank": "6222021234567890019", "credit": "A", "years": 7},
+    {"id": 20, "name": "兰州金属材料有限公司", "type": "原材料", "region": "西北", "contact": "高总监", "phone": "12000120020", "bank": "6222021234567890020", "credit": "C", "years": 4},
+]
+
+SC_MATERIALS = [
+    {"id": 1, "name": "CPU芯片i7-13700K", "category": "电子", "unit": "片", "spec": "16核24线程"},
+    {"id": 2, "name": "DDR5内存条32GB", "category": "电子", "unit": "条", "spec": "5600MHz"},
+    {"id": 3, "name": "固态硬盘1TB", "category": "电子", "unit": "个", "spec": "NVMe PCIe4.0"},
+    {"id": 4, "name": "液晶显示屏15.6寸", "category": "电子", "unit": "片", "spec": "IPS 1920x1080"},
+    {"id": 5, "name": "电源适配器120W", "category": "电子", "unit": "个", "spec": "Type-C PD"},
+    {"id": 6, "name": "铝合金型材6063", "category": "机械", "unit": "kg", "spec": "T5状态"},
+    {"id": 7, "name": "不锈钢螺丝M6", "category": "机械", "unit": "千个", "spec": "304不锈钢"},
+    {"id": 8, "name": "轴承6204", "category": "机械", "unit": "个", "spec": "深沟球轴承"},
+    {"id": 9, "name": "齿轮模组", "category": "机械", "unit": "套", "spec": "减速比1:10"},
+    {"id": 10, "name": "液压油ISO VG46", "category": "化工", "unit": "L", "spec": "抗磨液压油"},
+    {"id": 11, "name": "环氧树脂AB胶", "category": "化工", "unit": "kg", "spec": "双组分"},
+    {"id": 12, "name": "防锈润滑剂", "category": "化工", "unit": "瓶", "spec": "500ml喷雾"},
+    {"id": 13, "name": "纸箱五层瓦楞", "category": "包装", "unit": "个", "spec": "400x300x200mm"},
+    {"id": 14, "name": "PE气泡膜", "category": "包装", "unit": "卷", "spec": "宽50cm"},
+    {"id": 15, "name": "防静电袋", "category": "包装", "unit": "百个", "spec": "150x200mm"},
+    {"id": 16, "name": "铜导线BV2.5", "category": "五金", "unit": "米", "spec": "国标纯铜"},
+    {"id": 17, "name": "PVC线槽", "category": "五金", "unit": "米", "spec": "宽40x高25"},
+    {"id": 18, "name": "接线端子", "category": "五金", "unit": "百个", "spec": "UK2.5B"},
+    {"id": 19, "name": "散热片铝型材", "category": "电子", "unit": "片", "spec": "100x50x10mm"},
+    {"id": 20, "name": "连接器Type-C", "category": "电子", "unit": "百个", "spec": "USB3.2"},
+    {"id": 21, "name": "橡胶密封圈", "category": "机械", "unit": "百个", "spec": "NBR材质"},
+    {"id": 22, "name": "润滑脂", "category": "化工", "unit": "kg", "spec": "锂基脂NLGI2"},
+    {"id": 23, "name": "木托盘", "category": "包装", "unit": "个", "spec": "1200x1000mm"},
+    {"id": 24, "name": "镀锌钢板", "category": "五金", "unit": "kg", "spec": "Q235B"},
+    {"id": 25, "name": "LED灯珠", "category": "电子", "unit": "千个", "spec": "SMD2835"},
+    {"id": 26, "name": "继电器24V", "category": "电子", "unit": "个", "spec": "5A/250VAC"},
+    {"id": 27, "name": "弹簧", "category": "机械", "unit": "百个", "spec": "压缩弹簧"},
+    {"id": 28, "name": "清洗剂", "category": "化工", "unit": "L", "spec": "工业除油剂"},
+    {"id": 29, "name": "缠绕膜", "category": "包装", "unit": "卷", "spec": "宽50cmx长300m"},
+    {"id": 30, "name": "螺栓M8", "category": "五金", "unit": "千个", "spec": "8.8级镀锌"},
+    {"id": 31, "name": "电容100uF", "category": "电子", "unit": "百个", "spec": "铝电解电容"},
+    {"id": 32, "name": "电阻10K", "category": "电子", "unit": "千个", "spec": "1%精度"},
+    {"id": 33, "name": "齿轮油", "category": "化工", "unit": "L", "spec": "GL-5 80W-90"},
+    {"id": 34, "name": "泡沫板", "category": "包装", "unit": "张", "spec": "1000x1000x50mm"},
+    {"id": 35, "name": "角钢", "category": "五金", "unit": "米", "spec": "40x40x4mm"},
+    {"id": 36, "name": "PCB电路板", "category": "电子", "unit": "片", "spec": "FR4双层"},
+    {"id": 37, "name": "电机", "category": "机械", "unit": "台", "spec": "AC220V 1.5kW"},
+    {"id": 38, "name": "导热硅脂", "category": "化工", "unit": "g", "spec": "高导热系数"},
+    {"id": 39, "name": "标签纸", "category": "包装", "unit": "卷", "spec": "热敏纸80x60"},
+    {"id": 40, "name": "焊锡丝", "category": "五金", "unit": "kg", "spec": "Sn63Pb37"},
+    {"id": 41, "name": "晶振", "category": "电子", "unit": "百个", "spec": "8MHz"},
+    {"id": 42, "name": "气缸", "category": "机械", "unit": "个", "spec": "SC63x50"},
+    {"id": 43, "name": "脱模剂", "category": "化工", "unit": "L", "spec": "水性"},
+    {"id": 44, "name": "真空袋", "category": "包装", "unit": "百个", "spec": "PE材质"},
+    {"id": 45, "name": "铝箔胶带", "category": "五金", "unit": "卷", "spec": "宽50mm"},
+    {"id": 46, "name": "变压器", "category": "电子", "unit": "个", "spec": "220V/12V"},
+    {"id": 47, "name": "链条", "category": "机械", "unit": "米", "spec": "08B-1"},
+    {"id": 48, "name": "稀释剂", "category": "化工", "unit": "L", "spec": "通用型"},
+    {"id": 49, "name": "打包带", "category": "包装", "unit": "卷", "spec": "PP带宽16mm"},
+    {"id": 50, "name": "钢丝", "category": "五金", "unit": "kg", "spec": "304不锈钢"},
+]
+
+SC_WAREHOUSES = [
+    {"id": 1, "name": "上海中心仓", "type": "中心仓", "region": "华东", "region_code": "HD", "capacity": 100000},
+    {"id": 2, "name": "广州中心仓", "type": "中心仓", "region": "华南", "region_code": "HN", "capacity": 90000},
+    {"id": 3, "name": "北京中心仓", "type": "中心仓", "region": "华北", "region_code": "HB", "capacity": 80000},
+    {"id": 4, "name": "成都中心仓", "type": "中心仓", "region": "西南", "region_code": "XN", "capacity": 70000},
+    {"id": 5, "name": "武汉中心仓", "type": "中心仓", "region": "华中", "region_code": "HZ", "capacity": 60000},
+    {"id": 6, "name": "沈阳中心仓", "type": "中心仓", "region": "东北", "region_code": "DB", "capacity": 50000},
+    {"id": 7, "name": "西安中心仓", "type": "中心仓", "region": "西北", "region_code": "XB", "capacity": 45000},
+    {"id": 8, "name": "杭州区域仓", "type": "区域仓", "region": "华东", "region_code": "HD", "capacity": 30000},
+    {"id": 9, "name": "深圳区域仓", "type": "区域仓", "region": "华南", "region_code": "HN", "capacity": 25000},
+    {"id": 10, "name": "天津区域仓", "type": "区域仓", "region": "华北", "region_code": "HB", "capacity": 20000},
+    {"id": 11, "name": "重庆区域仓", "type": "区域仓", "region": "西南", "region_code": "XN", "capacity": 18000},
+    {"id": 12, "name": "南京前置仓", "type": "前置仓", "region": "华东", "region_code": "HD", "capacity": 8000},
+    {"id": 13, "name": "东莞前置仓", "type": "前置仓", "region": "华南", "region_code": "HN", "capacity": 6000},
+    {"id": 14, "name": "青岛前置仓", "type": "前置仓", "region": "华东", "region_code": "HD", "capacity": 5000},
+    {"id": 15, "name": "郑州前置仓", "type": "前置仓", "region": "华中", "region_code": "HZ", "capacity": 4000},
+]
+
+SC_CARRIERS = [
+    {"id": 1, "name": "顺丰速运", "mode": "公路", "region": "华东"},
+    {"id": 2, "name": "中通快递", "mode": "公路", "region": "华南"},
+    {"id": 3, "name": "德邦物流", "mode": "公路", "region": "华北"},
+    {"id": 4, "name": "中国邮政", "mode": "公路", "region": "华中"},
+    {"id": 5, "name": "京东物流", "mode": "公路", "region": "华东"},
+    {"id": 6, "name": "中铁快运", "mode": "铁路", "region": "华北"},
+    {"id": 7, "name": "南方航空货运", "mode": "航空", "region": "华南"},
+    {"id": 8, "name": "中远海运", "mode": "海运", "region": "华东"},
+    {"id": 9, "name": "圆通速递", "mode": "公路", "region": "西南"},
+    {"id": 10, "name": "韵达快递", "mode": "公路", "region": "华东"},
+]
+
+SC_ORDER_STATUS = ["待确认", "已发货", "在途", "已入库", "已取消"]
+SC_DELIVERY_STATUS = ["待发货", "运输中", "已签收", "异常"]
+
+
+def create_supply_chain_schema(engine) -> tuple[Table, ...]:
+    """Create supply chain domain schema with 9 tables."""
+    metadata = MetaData()
+
+    supplier_dim = Table(
+        "supplier_dim", metadata,
+        Column("supplier_id", Integer, primary_key=True),
+        Column("supplier_name", String(100)),
+        Column("supplier_type", String(50)),
+        Column("region", String(20)),
+        Column("contact_name", String(50)),
+        Column("contact_phone", String(20)),
+        Column("bank_account", String(30)),
+        Column("credit_rating", String(10)),
+        Column("cooperation_years", Integer),
+    )
+
+    material_dim = Table(
+        "material_dim", metadata,
+        Column("material_id", Integer, primary_key=True),
+        Column("material_name", String(100)),
+        Column("material_category", String(50)),
+        Column("unit", String(20)),
+        Column("specification", String(100)),
+    )
+
+    warehouse_dim = Table(
+        "warehouse_dim", metadata,
+        Column("warehouse_id", Integer, primary_key=True),
+        Column("warehouse_name", String(100)),
+        Column("warehouse_type", String(50)),
+        Column("region", String(20)),
+        Column("region_code", String(10)),
+        Column("capacity", Integer),
+    )
+
+    carrier_dim = Table(
+        "carrier_dim", metadata,
+        Column("carrier_id", Integer, primary_key=True),
+        Column("carrier_name", String(50)),
+        Column("transport_mode", String(20)),
+        Column("region", String(20)),
+    )
+
+    region_dim = Table(
+        "region_dim", metadata,
+        Column("region_code", String(10), primary_key=True),
+        Column("region_name", String(20)),
+        Column("province", String(100)),
+    )
+
+    date_dim = Table(
+        "date_dim", metadata,
+        Column("date_id", Integer, primary_key=True),
+        Column("full_date", String(20)),
+        Column("year", Integer),
+        Column("month", Integer),
+        Column("quarter", String(10)),
+        Column("day_of_week", Integer),
+        Column("is_weekend", Integer),
+        Column("is_holiday", Integer),
+    )
+
+    purchase_fact = Table(
+        "purchase_fact", metadata,
+        Column("purchase_id", Integer, primary_key=True),
+        Column("purchase_no", String(50)),
+        Column("supplier_id", Integer),
+        Column("material_id", Integer),
+        Column("warehouse_id", Integer),
+        Column("region_code", String(10)),
+        Column("quantity", Integer),
+        Column("unit_price", Float),
+        Column("order_amount", Float),
+        Column("received_qty", Integer),
+        Column("purchase_date", String(20)),
+        Column("expected_date", String(20)),
+        Column("actual_date", String(20)),
+        Column("order_status", String(20)),
+        Column("on_time", Integer),
+        Column("lead_time_days", Integer),
+        Column("date_id", Integer),
+        Column("tenant_id", String(20)),
+    )
+
+    inventory_fact = Table(
+        "inventory_fact", metadata,
+        Column("id", Integer, primary_key=True),
+        Column("material_id", Integer),
+        Column("material_name", String(100)),
+        Column("material_category", String(50)),
+        Column("warehouse_id", Integer),
+        Column("warehouse_name", String(100)),
+        Column("warehouse_type", String(50)),
+        Column("region", String(20)),
+        Column("region_code", String(10)),
+        Column("stock_quantity", Integer),
+        Column("available_quantity", Integer),
+        Column("reserved_quantity", Integer),
+        Column("avg_daily_usage", Integer),
+        Column("days_of_supply", Integer),
+        Column("stock_amount", Float),
+        Column("date_id", Integer),
+        Column("tenant_id", String(20)),
+    )
+
+    shipment_fact = Table(
+        "shipment_fact", metadata,
+        Column("shipment_id", Integer, primary_key=True),
+        Column("purchase_id", Integer),
+        Column("carrier_id", Integer),
+        Column("material_id", Integer),
+        Column("from_warehouse_id", Integer),
+        Column("to_warehouse_id", Integer),
+        Column("from_warehouse_name", String(100)),
+        Column("to_warehouse_name", String(100)),
+        Column("from_region_code", String(10)),
+        Column("to_region_code", String(10)),
+        Column("region_code", String(10)),
+        Column("ship_quantity", Integer),
+        Column("shipping_cost", Float),
+        Column("ship_date", String(20)),
+        Column("delivery_date", String(20)),
+        Column("delivery_status", String(20)),
+        Column("transport_mode", String(20)),
+        Column("date_id", Integer),
+        Column("tenant_id", String(20)),
+    )
+
+    metadata.create_all(engine)
+    return (
+        supplier_dim, material_dim, warehouse_dim,
+        carrier_dim, region_dim, date_dim,
+        purchase_fact, inventory_fact, shipment_fact,
+    )
+
+
+def insert_sc_regions(conn, region_dim: Table) -> None:
+    records = [
+        {"region_code": r["code"], "region_name": r["name"], "province": r["province"]}
+        for r in SC_REGIONS
+    ]
+    conn.execute(insert(region_dim), records)
+    conn.commit()
+
+
+def insert_sc_dates(conn, date_dim: Table) -> None:
+    base = datetime(2024, 4, 1)
+    records = []
+    for i in range(90):  # 2024-04-01 to 2024-06-29
+        d = base + timedelta(days=i)
+        dow = d.isoweekday()
+        records.append({
+            "date_id": int(d.strftime("%Y%m%d")),
+            "full_date": d.strftime("%Y-%m-%d"),
+            "year": 2024,
+            "month": d.month,
+            "quarter": f"Q{(d.month - 1) // 3 + 1}",
+            "day_of_week": dow,
+            "is_weekend": 1 if dow in (6, 7) else 0,
+            "is_holiday": 1 if d.strftime("%Y-%m-%d") in ("2024-05-01", "2024-05-02", "2024-05-03", "2024-06-10") else 0,
+        })
+    conn.execute(insert(date_dim), records)
+    conn.commit()
+
+
+def insert_sc_suppliers(conn, supplier_dim: Table) -> None:
+    records = [
+        {
+            "supplier_id": s["id"],
+            "supplier_name": s["name"],
+            "supplier_type": s["type"],
+            "region": s["region"],
+            "contact_name": s["contact"],
+            "contact_phone": s["phone"],
+            "bank_account": s["bank"],
+            "credit_rating": s["credit"],
+            "cooperation_years": s["years"],
+        }
+        for s in SC_SUPPLIERS
+    ]
+    conn.execute(insert(supplier_dim), records)
+    conn.commit()
+
+
+def insert_sc_materials(conn, material_dim: Table) -> None:
+    records = [
+        {
+            "material_id": m["id"],
+            "material_name": m["name"],
+            "material_category": m["category"],
+            "unit": m["unit"],
+            "specification": m["spec"],
+        }
+        for m in SC_MATERIALS
+    ]
+    conn.execute(insert(material_dim), records)
+    conn.commit()
+
+
+def insert_sc_warehouses(conn, warehouse_dim: Table) -> None:
+    records = [
+        {
+            "warehouse_id": w["id"],
+            "warehouse_name": w["name"],
+            "warehouse_type": w["type"],
+            "region": w["region"],
+            "region_code": w["region_code"],
+            "capacity": w["capacity"],
+        }
+        for w in SC_WAREHOUSES
+    ]
+    conn.execute(insert(warehouse_dim), records)
+    conn.commit()
+
+
+def insert_sc_carriers(conn, carrier_dim: Table) -> None:
+    records = [
+        {
+            "carrier_id": c["id"],
+            "carrier_name": c["name"],
+            "transport_mode": c["mode"],
+            "region": c["region"],
+        }
+        for c in SC_CARRIERS
+    ]
+    conn.execute(insert(carrier_dim), records)
+    conn.commit()
+
+
+def insert_sc_purchase(conn, purchase_fact: Table, num_records: int = 200) -> None:
+    """Insert purchase order fact data."""
+    records = []
+    base_date = datetime(2024, 4, 1)
+
+    for i in range(num_records):
+        supplier = random.choice(SC_SUPPLIERS)
+        material = random.choice(SC_MATERIALS)
+        warehouse = random.choice(SC_WAREHOUSES)
+
+        # 关联性：某些供应商偏好某些物料类别
+        if supplier["type"] == "电子" and material["category"] != "电子":
+            material = random.choice([m for m in SC_MATERIALS if m["category"] == "电子"])
+        elif supplier["type"] == "机械" and material["category"] != "机械":
+            material = random.choice([m for m in SC_MATERIALS if m["category"] == "机械"])
+
+        quantity = random.randint(10, 1000)
+        unit_price = round(random.uniform(1.0, 5000.0), 2)
+        order_amount = round(quantity * unit_price, 2)
+
+        day_offset = random.randint(0, 89)
+        purchase_date = base_date + timedelta(days=day_offset)
+        expected_days = random.randint(3, 15)
+        expected_date = purchase_date + timedelta(days=expected_days)
+        actual_delay = random.randint(-2, 5)  # -2 = early, 5 = late
+        actual_date = expected_date + timedelta(days=actual_delay)
+
+        on_time = 1 if actual_delay <= 0 else 0
+        lead_time = (actual_date - purchase_date).days
+        order_status = random.choice(SC_ORDER_STATUS)
+        received_qty = quantity if order_status == "已入库" else random.randint(0, quantity)
+
+        tenant_id = "t001" if random.random() < 0.7 else "t002"
+
+        records.append({
+            "purchase_id": i + 1,
+            "purchase_no": f"PO{20240401 + i:010d}",
+            "supplier_id": supplier["id"],
+            "material_id": material["id"],
+            "warehouse_id": warehouse["id"],
+            "region_code": warehouse["region_code"],
+            "quantity": quantity,
+            "unit_price": unit_price,
+            "order_amount": order_amount,
+            "received_qty": received_qty,
+            "purchase_date": purchase_date.strftime("%Y-%m-%d"),
+            "expected_date": expected_date.strftime("%Y-%m-%d"),
+            "actual_date": actual_date.strftime("%Y-%m-%d"),
+            "order_status": order_status,
+            "on_time": on_time,
+            "lead_time_days": lead_time,
+            "date_id": int(purchase_date.strftime("%Y%m%d")),
+            "tenant_id": tenant_id,
+        })
+
+    conn.execute(insert(purchase_fact), records)
+    conn.commit()
+
+
+def insert_sc_inventory(conn, inventory_fact: Table) -> None:
+    """Insert inventory fact data: 50 materials x 15 warehouses = 750 rows."""
+    records = []
+    date_id = 20240630
+
+    for w_idx, wh in enumerate(SC_WAREHOUSES):
+        for m_idx, mat in enumerate(SC_MATERIALS):
+            stock = random.randint(50, 5000)
+            reserved = random.randint(0, min(200, stock))
+            available = stock - reserved
+            avg_daily = random.randint(1, 50)
+            dos = stock // avg_daily if avg_daily > 0 else 0
+            unit_price = round(random.uniform(1.0, 5000.0), 2)
+            stock_amount = round(stock * unit_price, 2)
+
+            records.append({
+                "id": w_idx * len(SC_MATERIALS) + m_idx + 1,
+                "material_id": mat["id"],
+                "material_name": mat["name"],
+                "material_category": mat["category"],
+                "warehouse_id": wh["id"],
+                "warehouse_name": wh["name"],
+                "warehouse_type": wh["type"],
+                "region": wh["region"],
+                "region_code": wh["region_code"],
+                "stock_quantity": stock,
+                "available_quantity": available,
+                "reserved_quantity": reserved,
+                "avg_daily_usage": avg_daily,
+                "days_of_supply": dos,
+                "stock_amount": stock_amount,
+                "date_id": date_id,
+                "tenant_id": "t001" if random.random() < 0.7 else "t002",
+            })
+
+    conn.execute(insert(inventory_fact), records)
+    conn.commit()
+
+
+def insert_sc_shipment(conn, shipment_fact: Table, num_records: int = 180) -> None:
+    """Insert shipment fact data."""
+    records = []
+    base_date = datetime(2024, 4, 1)
+
+    for i in range(num_records):
+        purchase_id = (i % 200) + 1
+        carrier = random.choice(SC_CARRIERS)
+        material = random.choice(SC_MATERIALS)
+
+        from_wh = random.choice(SC_WAREHOUSES)
+        to_wh = random.choice([w for w in SC_WAREHOUSES if w["id"] != from_wh["id"]])
+
+        ship_qty = random.randint(10, 500)
+        shipping_cost = round(ship_qty * random.uniform(0.5, 5.0), 2)
+
+        day_offset = random.randint(0, 89)
+        ship_date = base_date + timedelta(days=day_offset)
+        transit_days = random.randint(1, 10)
+        delivery_date = ship_date + timedelta(days=transit_days)
+
+        delivery_status = random.choice(SC_DELIVERY_STATUS)
+        tenant_id = "t001" if random.random() < 0.7 else "t002"
+
+        records.append({
+            "shipment_id": i + 1,
+            "purchase_id": purchase_id,
+            "carrier_id": carrier["id"],
+            "material_id": material["id"],
+            "from_warehouse_id": from_wh["id"],
+            "to_warehouse_id": to_wh["id"],
+            "from_warehouse_name": from_wh["name"],
+            "to_warehouse_name": to_wh["name"],
+            "from_region_code": from_wh["region_code"],
+            "to_region_code": to_wh["region_code"],
+            "region_code": from_wh["region_code"],
+            "ship_quantity": ship_qty,
+            "shipping_cost": shipping_cost,
+            "ship_date": ship_date.strftime("%Y-%m-%d"),
+            "delivery_date": delivery_date.strftime("%Y-%m-%d"),
+            "delivery_status": delivery_status,
+            "transport_mode": carrier["mode"],
+            "date_id": int(ship_date.strftime("%Y%m%d")),
+            "tenant_id": tenant_id,
+        })
+
+    conn.execute(insert(shipment_fact), records)
+    conn.commit()
+
+
+def create_mock_supply_chain_database(db_url: str = "sqlite:///:memory:"):
+    """Create a complete supply chain mock database with full schema and data.
+
+    Returns:
+        (engine, supplier_dim_sc, material_dim, warehouse_dim_sc,
+         carrier_dim, region_dim_sc, date_dim_sc,
+         purchase_fact, inventory_fact_sc, shipment_fact)
+    """
+    if db_url == "sqlite:///:memory:":
+        engine = create_engine(
+            db_url,
+            poolclass=StaticPool,
+            connect_args={"check_same_thread": False},
+        )
+    else:
+        engine = create_engine(db_url)
+
+    (
+        supplier_dim, material_dim, warehouse_dim,
+        carrier_dim, region_dim, date_dim,
+        purchase_fact, inventory_fact, shipment_fact,
+    ) = create_supply_chain_schema(engine)
+
+    with engine.connect() as conn:
+        insert_sc_regions(conn, region_dim)
+        insert_sc_dates(conn, date_dim)
+        insert_sc_suppliers(conn, supplier_dim)
+        insert_sc_materials(conn, material_dim)
+        insert_sc_warehouses(conn, warehouse_dim)
+        insert_sc_carriers(conn, carrier_dim)
+        insert_sc_purchase(conn, purchase_fact, num_records=200)
+        insert_sc_inventory(conn, inventory_fact)
+        insert_sc_shipment(conn, shipment_fact, num_records=180)
+
+    return (
+        engine, supplier_dim, material_dim, warehouse_dim,
+        carrier_dim, region_dim, date_dim,
+        purchase_fact, inventory_fact, shipment_fact,
+    )
+
+
 if __name__ == "__main__":
     (
         engine, order_fact, product_dim, customer_dim,

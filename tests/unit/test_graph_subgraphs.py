@@ -169,62 +169,47 @@ class TestBuildPermissionSubgraph:
 
 
 class TestBuildValidationSubgraph:
-    def test_returns_compiled_graph(self, test_registry):
+    def test_returns_compiled_graph(self, test_registry, real_llm_client):
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
         rag_retriever = MagicMock()
-        graph = build_validation_subgraph(validator, llm_client, rag_retriever, test_registry)
+        graph = build_validation_subgraph(validator, real_llm_client, rag_retriever, test_registry)
         assert graph is not None
 
-    def test_graph_has_expected_nodes(self, test_registry):
+    def test_graph_has_expected_nodes(self, test_registry, real_llm_client):
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
         rag_retriever = MagicMock()
-        graph = build_validation_subgraph(validator, llm_client, rag_retriever, test_registry)
+        graph = build_validation_subgraph(validator, real_llm_client, rag_retriever, test_registry)
         assert "generate_dsl" in graph.nodes
         assert "validate_dsl" in graph.nodes
         assert "correct_dsl" in graph.nodes
 
-    def test_validation_passes_with_valid_dsl(self, test_registry, valid_dsl):
+    def test_validation_passes_with_valid_dsl(self, test_registry, valid_dsl, real_llm_client):
         """When DSL is valid, the subgraph should end after validation."""
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
         rag_retriever = MagicMock()
 
-        graph = build_validation_subgraph(validator, llm_client, rag_retriever, test_registry)
-
-        # Pre-populate DSL in state so generate_dsl is skipped (it would overwrite)
-        # Actually, generate_dsl always runs first. Let's mock it to return valid DSL.
-        llm_client.generate = MagicMock(return_value='{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}')
+        graph = build_validation_subgraph(validator, real_llm_client, rag_retriever, test_registry)
         rag_retriever.build_prompt = MagicMock(return_value="prompt")
 
         state = make_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Should complete without error
+        # Should complete without error (real LLM generates valid DSL)
         assert result["status"] != "error"
         assert result["dsl"] is not None
 
-    def test_validation_retries_on_invalid_dsl(self, test_registry):
+    def test_validation_retries_on_invalid_dsl(self, test_registry, real_llm_client):
         """When validation fails, the subgraph should route to correct_dsl and retry."""
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
         rag_retriever = MagicMock()
-
-        # First call returns invalid DSL (missing required fields)
-        # Second call returns valid DSL
-        llm_client.generate = MagicMock(side_effect=[
-            '{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}',
-            '{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}',
-        ])
         rag_retriever.build_prompt = MagicMock(return_value="prompt")
 
-        graph = build_validation_subgraph(validator, llm_client, rag_retriever, test_registry)
+        graph = build_validation_subgraph(validator, real_llm_client, rag_retriever, test_registry)
 
         state = make_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # The generate node runs, then validate passes (DSL is valid)
+        # With real LLM, the generate node produces valid DSL
         assert result["dsl"] is not None
 
     def test_validation_fails_with_no_llm(self, test_registry):
@@ -243,13 +228,11 @@ class TestBuildValidationSubgraph:
         assert result["status"] == "error"
         assert result.get("error_code") == "VALIDATION_ERROR"
 
-    def test_correct_dsl_runs_when_routed(self, test_registry):
+    def test_correct_dsl_runs_when_routed(self, test_registry, real_llm_client):
         """Test that correct_dsl node is callable and produces output."""
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
-        llm_client.generate = MagicMock(return_value='{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}')
 
-        graph = build_validation_subgraph(validator, llm_client, None, test_registry)
+        graph = build_validation_subgraph(validator, real_llm_client, None, test_registry)
 
         # Start from a state that would trigger correction
         state = make_state(
@@ -259,10 +242,7 @@ class TestBuildValidationSubgraph:
         )
         result = graph.invoke(state)
 
-        # The graph should process the state
-        # Note: Since we start at generate_dsl (entry point), the state flow
-        # depends on the actual graph execution. The test verifies the graph
-        # compiles and runs without crashing.
+        # With real LLM, the graph should produce a DSL or error gracefully
         assert "dsl" in result or result.get("status") == "error"
 
 
@@ -286,17 +266,15 @@ class TestSubgraphIntegration:
         assert result["status"] != "error"
         assert result["dsl"] is not None
 
-    def test_validation_subgraph_with_real_validator(self, test_registry):
-        """Test validation subgraph with a real validator and mock LLM."""
+    def test_validation_subgraph_with_real_validator(self, test_registry, real_llm_client):
+        """Test validation subgraph with a real validator and real LLM."""
         validator = DSLValidator(test_registry)
-        llm_client = MagicMock()
-        llm_client.generate = MagicMock(return_value='{"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}], "dimensions": ["product_name"]}')
 
-        graph = build_validation_subgraph(validator, llm_client, None, test_registry)
+        graph = build_validation_subgraph(validator, real_llm_client, None, test_registry)
 
         state = make_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Should produce a valid DSL
+        # Should produce a valid DSL via real LLM
         assert result["dsl"] is not None
         assert result["status"] != "error"

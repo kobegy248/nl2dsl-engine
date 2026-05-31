@@ -46,9 +46,11 @@ class AgentOrchestrator:
         domains: Mapping from domain name to ``DomainContext``.
     """
 
-    def __init__(self, domains: dict[str, "DomainContext"]) -> None:
+    def __init__(self, domains: dict[str, "DomainContext"], llm_client=None) -> None:
         self._domains = domains
-        self._controller = AgentController()
+        from nl2dsl.agent.planner import Planner
+        planner = Planner(llm_client=llm_client) if llm_client else None
+        self._controller = AgentController(planner=planner)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -544,7 +546,9 @@ class AgentOrchestrator:
         clarification or warning sub-queries.
         """
         try:
-            explanation = _generate_template_explanation(question, plan, data)
+            explanation = _generate_template_explanation(
+                question, plan, data, sub_results=sub_results
+            )
         except Exception as exc:
             logger.warning("[orchestrator] Explanation generation failed: %s", exc)
             explanation = f"查询完成。共返回 {len(data)} 条数据。"

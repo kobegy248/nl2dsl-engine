@@ -86,7 +86,7 @@ class EntityResolver:
         for i, token in enumerate(tokens):
             candidates.append(token)
             if i + 1 < len(tokens):
-                candidates.append(f"{token}{tokens[i + 1]}")
+                candidates.append(f"{token} {tokens[i + 1]}")
 
         for candidate in candidates:
             metric = self.resolve_metric(candidate)

@@ -33,11 +33,212 @@ from nl2dsl.sql_engine.builder import SQLBuilder
 from nl2dsl.sql_engine.scanner import SQLScanner
 from nl2dsl.sql_engine.executor import SQLExecutor
 from nl2dsl.agent.orchestrator import AgentOrchestrator
+from nl2dsl.agent.controller import AgentController
+from nl2dsl.agent.models import ComplexExecutionPlan, ExplorationPlan, SimpleExecutionPlan
 from nl2dsl.agent.planner import classify_intent, _decompose_fallback
 from nl2dsl.domain_context import DomainContext
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.graph.state import QueryState
 from langgraph.checkpoint.memory import InMemorySaver
+
+
+# ---------------------------------------------------------------------------
+# Domain-specific system prompt builder
+# ---------------------------------------------------------------------------
+
+def _build_domain_system_prompt(registry_dict: dict | None) -> str:
+    """Build a domain-specific system prompt from registry configuration.
+
+    Replaces hardcoded metric/dimension/data_source lists with dynamic
+    content derived from the registry_dict, keeping the universal rules
+    (operator mapping, filter format, HAVING, joins, etc.) intact.
+    """
+    if registry_dict is None:
+        return ""
+
+    metrics = registry_dict.get("metrics", {})
+    dimensions = registry_dict.get("dimensions", {})
+    data_sources = registry_dict.get("data_sources", {})
+
+    # Build metric alias list
+    metric_aliases = list(metrics.keys())
+
+    # Build dimension names
+    dim_names = list(dimensions.keys())
+
+    # Build data source options
+    ds_options = list(data_sources.keys())
+    default_ds = ds_options[0] if ds_options else "orders"
+    ds_options_str = ", ".join([f'"{n}"' for n in ds_options])
+
+    # Build metric descriptions for the prompt
+    metric_lines = []
+    for m_name, m_cfg in metrics.items():
+        desc = m_cfg.get("description", "")
+        expr = m_cfg.get("expr", "")
+        metric_lines.append(f"- `{m_name}`: {desc} (表达式: {expr})")
+
+    # Build dimension descriptions
+    dim_lines = []
+    for d_name, d_cfg in dimensions.items():
+        desc = d_cfg.get("description", "")
+        value_map = d_cfg.get("value_map")
+        if value_map and isinstance(value_map, dict):
+            values = ", ".join([f"{k}({v})" for k, v in list(value_map.items())[:8]])
+            dim_lines.append(f"- `{d_name}`: {desc}（取值: {values}）")
+        else:
+            dim_lines.append(f"- `{d_name}`: {desc}")
+
+    # Build data source descriptions
+    ds_lines = []
+    for ds_name, ds_cfg in data_sources.items():
+        table = ds_cfg.get("table", ds_name)
+        ds_metrics = ds_cfg.get("metrics", [])
+        ds_dims = ds_cfg.get("dimensions", [])
+        time_field = ds_cfg.get("time_field", "")
+        joins = ds_cfg.get("joins", {})
+        join_desc = ""
+        if joins:
+            join_parts = []
+            for j_table, j_cfg in joins.items():
+                on_field = j_cfg.get("on", "id")
+                j_type = j_cfg.get("type", "left")
+                alias = j_cfg.get("alias", j_table[0])
+                join_parts.append(f"{j_type.upper()} JOIN {j_table} ON {on_field}, alias={alias}")
+            join_desc = "; JOINs: " + "; ".join(join_parts)
+        tf_desc = f"; time_field={time_field}" if time_field else ""
+        ds_lines.append(
+            f'- `{ds_name}` (主表: `{table}`): 可用指标: {ds_metrics}; 可用维度: {ds_dims}{tf_desc}{join_desc}'
+        )
+
+    metric_section = "\n".join(metric_lines) if metric_lines else "(无)"
+    dim_section = "\n".join(dim_lines) if dim_lines else "(无)"
+    ds_section = "\n".join(ds_lines) if ds_lines else "(无)"
+
+    return f"""你是一个数据查询助手。请根据提供的信息将用户问题转换为 DSL（JSON 格式）。
+
+你必须遵循以下规则，不要参考任何示例，只根据规则理解用户意图。
+
+## 思维链检查步骤（执行这9步后再输出JSON）
+
+1. **识别指标**：用户问的是哪个数值？ → 映射到 metrics
+2. **识别维度**：用户说"按XX统计"？ → 映射到 dimensions
+3. **识别过滤条件**：用户提到的所有具体限制条件 → 映射到 filters
+4. **识别时间条件**：是否有年份、月份、最近N天等？ → 映射到 time_field + time_range
+5. **识别排序**：是否有"最高""最低""前N"？ → 映射到 order_by + limit
+6. **识别隐含JOIN**：是否涉及非主表字段？ → 映射到 joins
+7. **识别聚合后过滤**：是否有对聚合结果的过滤？ → 映射到 having
+8. **识别否定**：是否有"非""不是""排除"？ → 用 not 操作符
+9. **遗漏检查**：重新读用户问题，确认没有遗漏任何条件
+
+## 可用数据源
+{ds_section}
+
+## 可用指标
+{metric_section}
+
+## 可用维度
+{dim_section}
+
+## 过滤条件规则（核心）
+
+### 操作符映射表
+| 用户表达 | operator | value 格式 |
+|---------|----------|-----------|
+| 等于 / 是 | `=` | 字符串或数字 |
+| 不等于 / 非 / 不是 / 排除 | `!=` | 字符串或数字 |
+| 大于 / 超过 | `>` | 数字 |
+| 小于 / 低于 | `<` | 数字 |
+| 大于等于 | `>=` | 数字 |
+| 小于等于 | `<=` | 数字 |
+| 在...之间 / 从...到 | `between` | `[min, max]` 数组 |
+| 在...之中 / 包含于 | `in` | `["a", "b"]` 数组 |
+| 包含 / 像 | `like` | 字符串（自动加 % 通配符） |
+| 为空 / NULL | `is_null` | 省略 value 字段 |
+
+### 复合条件树结构
+当用户问题包含多个条件时，必须用条件树（tree）格式：
+```json
+{{
+  "op": "and",
+  "children": [
+    {{"field": "region", "operator": "=", "value": "华东"}},
+    {{"field": "channel", "operator": "=", "value": "线上"}}
+  ]
+}}
+```
+支持 `and`（全部满足）、`or`（任一满足）、`not`（取反）。
+
+### filter 字段格式规则（重要）
+- `field` 必须是**维度名**，直接使用维度名称，**不要加数据源前缀**
+- ❌ 错误: `{{"field": "transactions.channel_code", ...}}`
+- ✅ 正确: `{{"field": "channel_code", ...}}`
+
+### 数值处理规则
+- "金额大于5000" → `{{"field": "pay_amount", "operator": ">", "value": 5000}}`
+- "价格在5000到20000之间" → `{{"field": "pay_amount", "operator": "between", "value": [5000, 20000]}}`
+- 数值不要加引号
+
+### 否定处理规则（重要，常见错误）
+- **"非""不是""排除""除外" → 必须使用 `!=` 或 `not` 条件树**
+- "非手机品类" → `{{"field": "category", "operator": "!=", "value": "手机"}}`
+- "排除华东地区" → `{{"field": "region", "operator": "!=", "value": "华东"}}`
+- 当否定与其他条件并存时，必须用条件树包裹：
+  ```json
+  {{
+    "op": "and",
+    "children": [
+      {{"field": "category", "operator": "!=", "value": "手机"}},
+      {{"field": "pay_amount", "operator": ">", "value": 3000}}
+    ]
+  }}
+  ```
+- **注意**: "非" 不要用 `=`，必须用 `!=` 或 `not` 条件树
+
+### 时间处理规则
+- 可以用 time_field + time_range，也可以直接用 filters 中的 between
+
+### HAVING 使用规则
+当用户问题包含对聚合结果的过滤时，用 having（不是 filters）：
+- having 的 field 必须是 metrics 中的某个 alias
+- having 必须与 metrics 同时出现
+
+## 字段格式要求
+
+### metrics（指标，必填）
+- 必须是数组，每个元素包含：
+  - `func`: 聚合函数，只能是 "sum" | "avg" | "count" | "min" | "max"
+  - `field`: 原始字段名（不要带 SUM/AVG/COUNT 等函数前缀）
+  - `alias`: 指标别名，**必须是已注册的指标名**
+
+### dimensions（维度，必填）
+- 必须是字符串数组，不能为空数组 []
+- **用户说"按XX统计"，dimensions 就必须包含 XX 对应的维度名**
+- 如果用户没有指定分组维度，默认使用第一个可用维度
+
+### filters（过滤条件，可选但重要）
+- 可以是条件树（dict with op+children），也可以是旧格式的数组
+- **用户提到的任何具体条件都必须出现在这里**
+- 不要自己添加 tenant_id 过滤，系统会自动注入
+
+### data_source（数据源，必填）
+- 必须是以下之一: {ds_options_str}
+- 默认使用 `"{default_ds}"`
+
+### joins（多表关联，可选）
+- 只有当查询涉及非主表字段时才需要
+- 格式: `{{"table": "dim_name", "on_field": "join_key", "join_type": "left", "alias": "x"}}`
+
+### limit（返回条数，必填）
+- 必须是整数，默认 10，最多 100
+
+## 输出规则
+1. 只输出 JSON，不要输出任何解释文字
+2. 不要输出 markdown 代码块标记
+3. 所有字符串值用双引号
+4. 数值不要用引号包裹
+5. 确保所有用户提到的条件都在 DSL 中体现
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +379,7 @@ def create_app(
     sensitive_columns: dict | None = None,
     masking_rules: dict | None = None,
     enable_clarification: bool = False,
+    llm_client=None,
 ) -> FastAPI:
     """Create a FastAPI app with custom configuration.
 
@@ -255,7 +457,7 @@ def create_app(
     _executor = SQLExecutor(_db_engine)
 
     query_graph = build_graph(
-        llm_client=None,
+        llm_client=llm_client,
         rag_retriever=None,
         validator=_validator,
         row_security=_row_security,
@@ -267,7 +469,7 @@ def create_app(
         executor=_executor,
         clarification_detector=clarification_detector,
         registry_dict=registry_dict or {},
-        llm_system_prompt="",
+        llm_system_prompt=_build_domain_system_prompt(registry_dict),
         checkpointer=None,
     )
 
@@ -434,15 +636,17 @@ def create_app(
                         execution_time_ms=int((time.time() - start) * 1000),
                     )
 
-            # Step 1: Plan / intent classification
-            intent = classify_intent(req.question)
-            plan = _decompose_fallback(req.question, intent)
+            # Step 1: Route via AgentController (intent classification + routing)
+            controller = AgentController()
+            from nl2dsl.agent.orchestrator import AgentOrchestrator
+            entities = AgentOrchestrator._extract_entities(req.question)
+            execution_plan = await controller.route(req.question, entities)
 
-            # Step 2: Route based on intent
-            if plan.intent != "single_query":
+            # Step 2: Dispatch based on execution plan type
+            if isinstance(execution_plan, ComplexExecutionPlan):
                 # Complex query: use AgentOrchestrator
                 domains = _build_domains_dict()
-                orchestrator = AgentOrchestrator(domains=domains)
+                orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
 
                 agent_result = await orchestrator.run(
                     question=req.question,
@@ -463,7 +667,7 @@ def create_app(
                     status=agent_result.status,
                     execution_time_ms=elapsed,
                     rows_returned=len(agent_result.data) if agent_result.data else 0,
-                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": plan.intent}],
+                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": execution_plan.plan.intent}],
                     error_code=None,
                     error_message=agent_result.error,
                 )
@@ -482,7 +686,8 @@ def create_app(
                 )
 
             # Simple query: continue with existing graph flow
-            # Pass the pre-computed plan to avoid double-planning in graph.
+            # Build a single-query plan for the graph.
+            plan = _decompose_fallback(req.question, "single_query")
             state = QueryState(
                 question=req.question,
                 user_id=req.user_id,
@@ -603,14 +808,16 @@ def create_app(
         query_id = str(uuid.uuid4())
         import json
 
-        # Step 1: Plan / intent classification
-        intent = classify_intent(req.question)
-        plan = _decompose_fallback(req.question, intent)
+        # Step 1: Route via AgentController (intent classification + routing)
+        controller = AgentController()
+        from nl2dsl.agent.orchestrator import AgentOrchestrator
+        entities = AgentOrchestrator._extract_entities(req.question)
+        execution_plan = await controller.route(req.question, entities)
 
-        if plan.intent != "single_query":
+        if isinstance(execution_plan, ComplexExecutionPlan):
             # Complex query: use AgentOrchestrator with real-time SSE streaming
             domains = _build_domains_dict()
-            orchestrator = AgentOrchestrator(domains=domains)
+            orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
 
             async def agent_event_generator():
                 import asyncio
@@ -700,7 +907,12 @@ def create_app(
         config = {"configurable": {"thread_id": req.query_id}}
 
         # Get current state
-        current_state = await query_graph.aget_state(config)
+        try:
+            current_state = await query_graph.aget_state(config)
+        except ValueError as exc:
+            if "No checkpointer set" in str(exc):
+                raise NotFoundError(f"Query not found: query_id={req.query_id}")
+            raise
         if current_state is None:
             raise NotFoundError(f"Query not found: query_id={req.query_id}")
 
