@@ -1,24 +1,45 @@
-# NL2DSL Engine
+# NL2DSL — 自然语言语义查询层
 
-> 让业务人员用自然语言查数，让数据团队掌控一切。
+> 让业务人员用自然语言直接查数，系统自动理解语义、校验口径、保障安全。
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-732%20passed-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**NL2DSL 是企业级自然语言到 DSL 的智能问数引擎。** 它不替代你的数据治理体系，而是消费已有的治理定义（指标、维度、权限），给业务人员一个自然语言的查询入口。
+---
+
+## 一句话定位
+
+**NL2DSL 是一个面向数据治理的自然语言语义查询层。**
+
+它不替代你的数据仓库或 BI 工具，而是在业务人员和数据库之间建立一个**语义层**：业务说"华东销售额"，系统自动理解成 `SUM(pay_amount) WHERE region_code='HD'`——同时保证口径一致、权限受控、全程可审计。
 
 ---
 
-## 为谁而建
+## 为什么需要语义查询层
 
-你的数据团队已经做了这些工作：
-- 指标口径统一（"销售额" = `SUM(pay_amount)`）
-- 维度标准编码（"华东" = `HD`）
-- 数据权限分级（谁能看到哪些行/列）
-- 敏感数据脱敏（手机号显示为 `138****8888`）
+企业的数据架构通常长这样：
 
-但业务人员 still 写 SQL 或找数据团队提需求？NL2DSL 把治理成果转化为自然语言查询能力。
+```
+业务人员 ──→ 提需求 ──→ 数据团队写 SQL ──→ 数据库
+              ↑                              ↑
+         排队等排期                      物理字段：pay_amt, region_cd
+```
+
+业务看不懂数据库里的 `pay_amt`、`region_cd`，数据团队疲于应付各种"帮我拉个数"。
+
+NL2DSL 在这之间插入一个**语义层**：
+
+```
+业务人员 ──→ "查华东销售额" ──→ 语义层 ──→ 数据库
+                                   ↑
+                              销售额 = SUM(pay_amt)
+                              华东 = region_cd='HD'
+                              权限：只能看华东
+                              审计：谁在查、查了什么
+```
+
+语义层的核心资产是**治理定义**——指标口径、维度编码、权限策略。NL2DSL 消费这些定义，把自然语言翻译成安全、可控的查询。
 
 ---
 
@@ -34,7 +55,7 @@
 
 ```
 自然语言
-  → RAG 检索（找到 "华东"→region、"销售额"→sales_amount 等映射）
+  → RAG 语义检索（"销售额"→sales_amount 指标，"华东"→region 维度）
   → LLM 生成 DSL（结构化 JSON，可校验）
   → 系统校验（sales_amount 是否注册？region 维度是否存在？）
   → 权限注入（用户 u001 只能看华东数据）
