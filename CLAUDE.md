@@ -1,28 +1,198 @@
-# NL2DSL - 自然语言到 DSL 智能问数系统
+# NL2DSL — 项目导航中心 (Knowledge Hub)
 
-## 项目概述
+> **定位**: Why / What / Where 的入口。不负责 How。
+> 详细设计请查阅 `docs/` 目录对应文档。
 
-NL2DSL 是一个企业级智能问数系统。核心思想：**AI 负责语义理解，系统负责执行治理**。
+---
 
-与传统 NL2SQL 不同，本系统采用分层架构：
+## 1. Project Philosophy
+
+NL2DSL 不是 NL2SQL 项目。它是一个 **Governance-Aware Semantic Query Engine**。
+
+- **SQL 是实现细节**，DSL 是语义契约
+- **Governance 是数据源真理**，不是事后补丁
+- LLM 只负责语义理解，系统负责执行治理
+
+### 五条核心原则
+
+| 原则 | 含义 |
+|------|------|
+| **Governance First** | 所有查询必须经过权限注入、敏感字段脱敏、审计日志记录。安全不是可选项 |
+| **Semantic First** | 指标、维度、术语必须语义层注册。禁止自由文本字段名，禁止发明未定义的指标 |
+| **DSL First** | LLM 只生成结构化 DSL，不生成 SQL。DSL 可校验、可修正、可做权限控制 |
+| **Explainability First** | 每个查询必须可解释：用了什么指标、什么过滤条件、为什么这样聚合 |
+| **Security First** | SQL 执行前必须经过扫描。禁止 DELETE/UPDATE/DROP/UNION/注释注入/多语句 |
+
+---
+
+## 2. Project Architecture Overview
+
+高层架构：
 
 ```
-自然语言 → Agent 编排层（意图识别 + 任务分解）
-  → 简单查询 → LangGraph StateGraph（单查询 DSL→SQL→执行）
-  → 复杂查询 → Dispatcher（多子查询并行/串行调度）
-    → Aggregator（结果聚合）→ Explainer（自然语言解释）
+Natural Language
+       ↓
+Intent Recognition（意图识别）
+       ↓
+Query Planner（查询规划）
+       ↓
+DSL（领域特定语言）← 语义契约
+       ↓
+Validation（校验与修正）
+       ↓
+SQL Generation（SQL 构建）
+       ↓
+Execution（执行与扫描）
+       ↓
+Explanation（结果解释）
 ```
 
-这样做的好处：SQL 可校验、权限可控、查询可优化、多数据库方言可适配；复杂查询自动拆解，多子查询并行执行，结果智能聚合。
+双层解耦：
+- **Agent 层**（宏观编排）：意图识别 → 任务分解 → 子查询调度 → 结果聚合 → 自然语言解释
+- **Graph 层**（微观执行）：单查询 DSL → 校验 → 权限注入 → SQL 构建 → 扫描 → 执行
 
-- **技术栈**: FastAPI + LangGraph + SQLAlchemy + sqlglot + Milvus Lite + BGE Embedder
-- **部署形态**: 后端 FastAPI + 前端 React/Vite/AntD
-- **LLM 接入**: 智谱 GLM-4.5-Air（默认）/ 通义千问 / Ollama 本地，所有 OpenAI 兼容接口
-- **向量模型**: BGE-base-zh-v1.5（768 维，本地推理）
-- **插件框架**: 组件可插拔（Registry）+ 节点可扩展（Pipeline 钩子）
-- **多域支持**: 自动发现 `configs/` 下多个业务域，每个域独立 DB + Milvus + RAG
+详细架构 → [`docs/architecture/02-system-architecture.md`](docs/architecture/02-system-architecture.md)
+LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31-langgraph-workflow.md)
 
-## 快速开始
+---
+
+## 3. Documentation Navigation
+
+> 以下按主题组织。每个文档附一句职责说明。
+> 接到任务时，先定位主题，再读对应文档，最后读代码。
+
+### Architecture（架构设计）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/architecture/01-overview.md`](docs/architecture/01-overview.md) | 项目背景、设计目标（可校验/可优化/可治理/可扩展）、技术选型总览 |
+| [`docs/architecture/02-system-architecture.md`](docs/architecture/02-system-architecture.md) | 整体架构图、数据流、模块边界 |
+| [`docs/architecture/03-sql-engine.md`](docs/architecture/03-sql-engine.md) | SQLAlchemy Core 构建、sqlglot 方言转换、Query Planner |
+| [`docs/architecture/04-deployment.md`](docs/architecture/04-deployment.md) | Docker Compose 部署、环境变量、性能调优 |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 面向开发者的完整架构文档，含与传统 NL2SQL 区别、API 参考 |
+
+### DSL & API（语义契约与接口）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/api/20-dsl-spec.md`](docs/api/20-dsl-spec.md) | DSL Schema 定义：metrics/dimensions/filters/order_by/limit 字段规范 |
+| [`docs/api/21-api-contract.md`](docs/api/21-api-contract.md) | HTTP API 接口定义：/query /query/dsl /query/execute 请求/响应格式 |
+| [`docs/api/22-error-handling.md`](docs/api/22-error-handling.md) | 错误分类、HTTP 状态码、歧义响应格式 |
+| [`docs/business/11-dsl-validation.md`](docs/business/11-dsl-validation.md) | DSL 校验规则、风险控制层级、SQL 执行前正则扫描 |
+
+### Business Layer（业务语义层）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/business/10-semantic-layer.md`](docs/business/10-semantic-layer.md) | YAML 指标/维度注册、value_map 枚举映射、数据血缘与 Join 推导 |
+| [`docs/business/12-permission.md`](docs/business/12-permission.md) | 行级权限注入规则、列级敏感字段黑名单、数据脱敏策略 |
+| [`docs/business/13-business-rules.md`](docs/business/13-business-rules.md) | 术语表映射、Prompt 显式注入、歧义反问机制、时间语义处理 |
+
+### Agent & LangGraph（智能编排与执行管道）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/agent/30-rag-design.md`](docs/agent/30-rag-design.md) | 向量检索：4 集合设计、混合检索策略、Milvus 集合结构 |
+| [`docs/agent/31-langgraph-workflow.md`](docs/agent/31-langgraph-workflow.md) | StateGraph 完整节点流程图、条件分支、自检重试、链路追踪 |
+| [`docs/agent/32-metadata-sync.md`](docs/agent/32-metadata-sync.md) | 元数据提取、向量库同步、增量更新策略 |
+| [`docs/agent/33-testing.md`](docs/agent/33-testing.md) | 单元/集成/E2E 三层测试策略概览 |
+| [`docs/agent/34-llm-risks.md`](docs/agent/34-llm-risks.md) | LLM 成本/延迟/幻觉/安全风险及缓解方案 |
+
+### Evaluation（评测框架）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/evaluation-design.md`](docs/evaluation-design.md) | 4 大类 12 维度量化评估框架：Semantic / Planning / Execution / Governance |
+
+### Specs & Reports（专项设计与过程报告）
+
+| 文档 | 职责说明 |
+|------|---------|
+| [`docs/specs/2026-05-19-failover-system-design.md`](docs/specs/2026-05-19-failover-system-design.md) | 生产级兜底：Retry Chain、Query Sandbox、Clarification 机制 |
+| [`docs/reports/e2e_report.md`](docs/reports/e2e_report.md) | 253 个 E2E 测试通过报告，含查询链路 Trace 分析 |
+| [`docs/reports/complex_nl_query_analysis.md`](docs/reports/complex_nl_query_analysis.md) | 22 个复杂查询语义分析，17 个语义丢失案例根因 |
+| [`docs/reports/code_review_report.md`](docs/reports/code_review_report.md) | feat/agent-capabilities 分支代码审查，5 个 P0 Bug |
+| [`docs/reports/nl2dsl_design_answers.md`](docs/reports/nl2dsl_design_answers.md) | 6 个核心设计问题 Q&A（意图识别、DSL 校验、权限注入等） |
+
+### Superpowers（开发计划与规格 — 按日期归档）
+
+| 日期 | 设计文档 | 实施计划 |
+|------|---------|---------|
+| 05-16 | [`superpowers/specs/2026-05-16-NL2DSL-design.md`](docs/superpowers/specs/2026-05-16-NL2DSL-design.md) — 文档索引与阅读指南 | — |
+| 05-17 | [`superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md`](docs/superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md) — 审计日志 HTTP 查询接口 | [`plans/2026-05-17-audit-trace-query-endpoint.md`](docs/superpowers/plans/2026-05-17-audit-trace-query-endpoint.md) |
+| 05-21 | [`superpowers/specs/2026-05-21-nl2dsl-langgraph-rewrite-design.md`](docs/superpowers/specs/2026-05-21-nl2dsl-langgraph-rewrite-design.md) — Python 顺序调用 → LangGraph | [`plans/2026-05-21-nl2dsl-langgraph-rewrite.md`](docs/superpowers/plans/2026-05-21-nl2dsl-langgraph-rewrite.md) |
+| 05-22 | [`superpowers/specs/2026-05-22-插件框架设计.md`](docs/superpowers/specs/2026-05-22-插件框架设计.md) — 组件可插拔 + 节点可扩展 | [`plans/2026-05-22-插件框架.md`](docs/superpowers/plans/2026-05-22-插件框架.md) |
+| 05-23 | [`superpowers/specs/2026-05-23-web-frontend-design.md`](docs/superpowers/specs/2026-05-23-web-frontend-design.md) — React + TypeScript 前端 | [`plans/2026-05-23-web-frontend.md`](docs/superpowers/plans/2026-05-23-web-frontend.md) |
+| 05-27 | [`superpowers/specs/2026-05-27-multi-domain-design.md`](docs/superpowers/specs/2026-05-27-multi-domain-design.md) — 多领域架构 | [`plans/2026-05-27-multi-domain.md`](docs/superpowers/plans/2026-05-27-multi-domain.md) |
+| 05-28 | — | [`plans/2026-05-28-rerank-integration.md`](docs/superpowers/plans/2026-05-28-rerank-integration.md) — Cross-Encoder 精排 |
+| 05-29 | [`superpowers/specs/2026-05-29-agent-capabilities-design.md`](docs/superpowers/specs/2026-05-29-agent-capabilities-design.md) — Agent 编排层增强 | [`plans/2026-05-29-agent-capabilities.md`](docs/superpowers/plans/2026-05-29-agent-capabilities.md) |
+| 05-30 | [`superpowers/specs/2026-05-30-agent-driven-pipeline-design.md`](docs/superpowers/specs/2026-05-30-agent-driven-pipeline-design.md) — Agent 决策中枢 | [`plans/2026-05-30-agent-core-layer.md`](docs/superpowers/plans/2026-05-30-agent-core-layer.md) |
+| 05-31 | [`superpowers/specs/2026-05-31-complex-query-semantic-understanding.md`](docs/superpowers/specs/2026-05-31-complex-query-semantic-understanding.md) — 复杂查询语义增强 | [`plans/2026-05-31-complex-query-semantic-understanding.md`](docs/superpowers/plans/2026-05-31-complex-query-semantic-understanding.md) |
+| 05-31 | [`superpowers/specs/2026-05-31-supply-chain-domain-mock-data.md`](docs/superpowers/specs/2026-05-31-supply-chain-domain-mock-data.md) — 供应链 Mock 数据 | — |
+
+---
+
+## 4. Task Routing Rules
+
+> 接到任务时，先根据主题定位文档，再读代码。**不要直接读代码猜设计。**
+
+| 如果任务涉及... | 先读这些文档 |
+|----------------|------------|
+| **DSL 生成 / 校验 / 修正** | `docs/api/20-dsl-spec.md` → `docs/business/11-dsl-validation.md` → `docs/agent/31-langgraph-workflow.md` |
+| **RAG 检索 / 向量库 / 元数据同步** | `docs/agent/30-rag-design.md` → `docs/agent/32-metadata-sync.md` |
+| **权限 / 安全 / 脱敏** | `docs/business/12-permission.md` → `docs/business/11-dsl-validation.md` → `docs/specs/2026-05-19-failover-system-design.md` |
+| **Agent 编排 / 意图识别 / 复杂查询拆解** | `docs/agent/31-langgraph-workflow.md` → `docs/business/13-business-rules.md` → `docs/reports/complex_nl_query_analysis.md` |
+| **SQL 构建 / 方言转换 / 执行优化** | `docs/architecture/03-sql-engine.md` → `docs/business/10-semantic-layer.md` |
+| **语义层 / 指标注册 / 枚举映射** | `docs/business/10-semantic-layer.md` → `docs/business/13-business-rules.md` |
+| **API 接口 / 错误处理 / 流式响应** | `docs/api/21-api-contract.md` → `docs/api/22-error-handling.md` |
+| **部署 / 配置 / 性能调优** | `docs/architecture/04-deployment.md` → `docs/architecture/01-overview.md` |
+| **测试 / 评估 / 质量报告** | `docs/agent/33-testing.md` → `docs/evaluation-design.md` → `docs/reports/e2e_report.md` |
+| **插件扩展 / 自定义节点** | `docs/superpowers/specs/2026-05-22-插件框架设计.md` |
+| **多领域支持 / 域切换** | `docs/superpowers/specs/2026-05-27-multi-domain-design.md` |
+| **前端 / Web UI** | `docs/superpowers/specs/2026-05-23-web-frontend-design.md` |
+| **审计日志 / 链路追踪** | `docs/agent/31-langgraph-workflow.md` → `docs/superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md` |
+
+---
+
+## 5. Engineering Rules
+
+不可违反的架构底线：
+
+1. **Do not bypass DSL** — LLM 只生成结构化 DSL，不生成 SQL。DSL 是唯一的语义契约。
+2. **Do not generate SQL directly from NL** — SQL 由系统从 DSL 构建，确保可校验、可优化、可审计。
+3. **Do not invent metrics** — 所有指标必须在 `configs/metrics.yaml` 中注册，禁止自由文本指标名。
+4. **Do not invent dimensions** — 所有维度必须在 `configs/metrics.yaml` 中注册，禁止自由文本字段名。
+5. **Governance is authoritative** — 权限策略（`configs/permissions.yaml`）是数据源真理，不是事后补丁。
+6. **All new features require evaluation** — 新增功能必须添加评测用例，确保语义准确性不下降。
+
+---
+
+## 6. Development Workflow
+
+```
+1. Read CLAUDE.md          ← 你在这里。了解项目定位、找到相关文档主题
+2. Locate relevant docs    ← 按 Task Routing Rules 定位设计文档
+3. Read design documents   ← 理解设计意图和约束
+4. Create implementation plan
+5. Implement
+6. Add tests
+7. Update docs             ← 更新 docs/ 中对应文档（不是 CLAUDE.md）
+```
+
+---
+
+## 7. Anti-Patterns
+
+❌ **NL → SQL Directly** — 跳过 DSL 直接生成 SQL，丧失校验、权限控制、可解释性  
+❌ **Hardcoded Metrics** — 在代码里写死指标定义，而非从语义层注册表读取  
+❌ **Hardcoded Permissions** — 在代码里写死权限规则，而非从配置文件注入  
+❌ **Business Logic In API Layer** — 把业务逻辑写在 API 路由里，而非下沉到 Agent/Graph 层  
+❌ **Duplicate Definitions Between Docs** — 同一份设计在多个文档中重复描述，造成维护负担  
+❌ **Modifying Architecture Without Updating Docs** — 改了架构但不更新对应的设计文档
+
+---
+
+## 附录 A：Quick Start
 
 ```bash
 # 安装依赖
@@ -44,262 +214,9 @@ pytest tests/unit/        # 只跑单元测试
 pytest --cov=nl2dsl --cov-report=html  # 带覆盖率
 ```
 
-## 核心概念
+## 附录 B：环境变量
 
-### DSL（领域特定语言）
-
-DSL 是 LLM 和系统之间的契约。LLM **只负责生成 DSL（JSON）**，不直接生成 SQL。
-
-```json
-{
-  "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
-  "dimensions": ["product_name", "brand"],
-  "filters": {
-    "op": "and",
-    "children": [
-      {"field": "region", "operator": "=", "value": "华东"},
-      {"field": "order_date", "operator": "between", "value": ["2024-01-01", "2024-12-31"]}
-    ]
-  },
-  "having": [{"field": "sales_amount", "operator": ">", "value": 10000}],
-  "order_by": [{"field": "sales_amount", "direction": "desc"}],
-  "limit": 10,
-  "data_source": "orders",
-  "time_field": "order_date",
-  "time_range": ["2024-01-01", "2024-12-31"]
-}
-```
-
-关键约束：
-- `field` 必须是语义层已注册的维度名；`metric` 必须是语义层已注册的指标名
-- `filters` 支持**条件树**（`and`/`or`/`not` 嵌套），同时兼容旧版 flat list
-- 支持的操作符：`=`、`!=`、`>`、`<`、`>=`、`<=`、`between`、`in`、`like`、`is_null`
-- 支持 `having`（对聚合结果过滤）、`time_field` + `time_range`（时间范围查询）
-- 无 `limit` 时默认注入 `limit: 100`，最多 10000；禁止 SELECT *
-
-### RAG 4 集合检索
-
-| 集合 | 来源 YAML | 内容 | 检索策略 |
-|------|---------|------|---------|
-| `schema` | metrics.yaml | 维度 + 指标定义 | jieba 切词，向量近邻 |
-| `metrics` | metrics.yaml | 指标计算式 | jieba 切词，向量近邻 |
-| `terms` | terms.yaml | 业务术语 + 别名 | jieba 切词，向量近邻 |
-| `history` | history.yaml | 问题→DSL 示例 | 整句语义检索 |
-
-### 意图系统
-
-`configs/intents.yaml` 定义了 7 种查询意图，新增意图无需改代码：
-
-| 意图 | 关键词 | 分解策略 | 聚合策略 |
-|------|--------|---------|---------|
-| `compare` | 对比、比较、同比、环比 | 按对比对象拆分 | diff + growth_rate |
-| `trend` | 趋势、走势、增长、下降 | 按时间维度分组 | trend_direction |
-| `correlation` | 关联、影响、相关 | 按指标拆分 | pearson |
-| `proportion` | 占比、构成、贡献度 | 总计 + 分组 | proportion |
-| `sequential` | 先查、然后、再查 | 顺序执行 | sequential_filter |
-| `ranking` | 排名、Top、第几 | 排序 + 取 Top | ranking |
-| `single_query` | （默认兜底）| 透传 | 透传 |
-
-### Agent 编排层
-
-Agent 层负责复杂查询的宏观编排，Graph 层负责单查询的微观执行。
-
-```
-AgentOrchestrator.run()
-  → _extract_entities()          提取指标、维度、时间范围
-  → AgentController.route()      路由决策
-      → SimpleExecutionPlan      单查询 → 直接走 LangGraph
-      → ComplexExecutionPlan     多子查询 → Dispatcher → Aggregator → Explainer
-      → ExplorationPlan          探索式（MVP 委托给 Simple）
-  → _generate_explanation()      生成自然语言解释
-```
-
-**Dispatcher**：管理子查询依赖关系，独立子查询并行执行（最多 3 个并发），依赖子查询串行执行。每个子查询通过 `domain_context.graph.ainvoke()` 进入 LangGraph 流水线。
-
-**Aggregator**：按意图类型聚合结果——`compare` 计算 diff 和 growth_rate，`trend` 检测方向，`correlation` 计算 Pearson 相关系数。
-
-### 插件框架
-
-Engine 提供**组件可插拔**和**节点可扩展**能力：
-
-- **Registry** — 组件注册表（LLM、SQLBuilder、Validator 等）
-- **Pipeline** — 节点链路 + 钩子映射（before/after/replace/add_node）
-- **Plugin** — 扩展入口，通过 `register(engine)` 注册自定义逻辑
-
-## 查询链路（双层架构）
-
-### 完整流程
-
-```
-用户请求 → API 层
-  → AgentOrchestrator
-    → 实体提取（metrics / dimensions / time_range）
-    → AgentController 路由
-      ├── SimpleExecutionPlan ──→ 构建单查询 Plan
-      │                           → domain_context.graph.ainvoke()
-      │                           → LangGraph 单查询管道（见下）
-      │                           → 返回 AgentResult
-      │
-      ├── ComplexExecutionPlan ─→ Planner 分解为多个 SubQuery
-      │                           → Dispatcher 调度（并行/串行 + 依赖管理）
-      │                           → 每个子查询走 LangGraph 单查询管道
-      │                           → Aggregator 按意图聚合结果
-      │                           → Explainer 生成自然语言解释
-      │                           → 返回 AgentResult
-      │
-      └── ExplorationPlan ──────→ MVP：委托给 SimpleExecutionPlan
-```
-
-### LangGraph 单查询管道
-
-```
-START
-  │
-  ▼
-clarification（歧义检测）──[需要澄清]──> END
-  │[继续]
-  ▼
-plan（意图分类）──[非 single_query]──> 出图给 AgentOrchestrator
-  │[single_query]
-  ▼
-decompose（复杂查询改写）
-  │
-  ▼
-validation 子图（RAG → LLM 生成 DSL → 校验 → 失败自动修正）
-  │
-  ▼
-permission_check 子图（行级权限 + 列级权限）
-  │
-  ▼
-resolve_semantic（指标名 → SQL 表达式）
-  │
-  ▼
-confidence（置信度评估）──[< 0.6]──> 路由到澄清
-  │[≥ 0.6]
-  ▼
-build_sql（SQLAlchemy Core 构建）
-  │
-  ▼
-scan_sql（安全扫描）
-  │
-  ▼
-sandbox_check（沙箱预检）
-  → 不通过 → human_review（人工确认）
-  │[通过]
-  ▼
-execute_sql（数据库执行）
-  → 失败 → simplify_dsl → 重试
-  │
-  ▼
-verify_dsl（执行后自检）
-  │
-  ▼
-explain（自然语言解释）
-  │
-  ▼
-END
-```
-
-## 目录结构
-
-```
-nl2dsl/
-├── api.py                  # FastAPI 应用入口
-├── api_factory.py          # FastAPI App 工厂（含 Agent 层集成）
-├── config.py               # 配置管理（Pydantic Settings）
-├── domain_context.py       # 领域上下文（每个域的独立运行时）
-├── engine.py               # 引擎入口：插件加载、StateGraph 编译、RAG 自检
-├── plugin.py               # 插件框架：Registry + Pipeline + Plugin ABC
-├── protocols.py            # 组件 Protocol 定义
-├── exceptions.py           # 自定义异常体系
-├── agent/                  # Agent 智能编排层
-│   ├── orchestrator.py     # 顶层编排器：plan → dispatch → aggregate → explain
-│   ├── controller.py       # 路由控制器：Simple / Complex / Exploration
-│   ├── planner.py          # 意图识别 + 任务分解（LLM + 规则 fallback）
-│   ├── dispatcher.py       # 子查询调度器：并行(max=3) / 串行 / 依赖管理
-│   ├── aggregator.py       # 结果聚合器：compare / trend / correlation
-│   ├── explainer.py        # 自然语言解释生成（LLM + 模板 fallback）
-│   ├── confidence.py       # 三维度置信度评估（syntax / semantic / history）
-│   ├── resolver.py         # 实体解析器：自然语言 → 标准标识符
-│   ├── strategies.py       # 意图策略注册表（从 intents.yaml 加载）
-│   ├── feedback_processor.py  # 用户反馈处理器
-│   └── models.py           # Agent 数据模型（SubQuery / Plan / AgentResult 等）
-├── dsl/                    # DSL Schema、校验器、构建工具
-│   ├── models.py           # DSL / Filter / FilterTreeNode / Having 等模型
-│   ├── validator.py        # DSL 校验器
-│   ├── semantic_validator.py  # 语义验证器
-│   ├── builder.py          # DSL 构建工具
-│   └── generator.py        # DSL 生成辅助
-├── graph/                  # LangGraph StateGraph 查询管道
-│   ├── state.py            # QueryState TypedDict
-│   ├── nodes.py            # 节点函数工厂
-│   ├── edges.py            # 条件路由
-│   ├── subgraphs.py        # 权限检查子图 + 验证子图
-│   └── builder.py          # StateGraph 组装
-├── llm/                    # Prompt 模板 + LLM 客户端
-│   ├── client.py
-│   └── prompts.py
-├── rag/                    # 向量存储 + Embedder + 检索器 + 同步
-│   ├── base.py
-│   ├── embedder.py
-│   ├── retriever.py
-│   ├── reranker.py
-│   ├── store.py
-│   └── sync.py
-├── permission/             # 行级权限 + 列级权限 + 脱敏
-│   ├── row_level.py
-│   ├── column_level.py
-│   └── models.py
-├── query/                  # 歧义检测 + 查询改写 + 沙箱 + 后处理
-│   ├── clarification.py
-│   ├── sandbox.py
-│   └── post_processor.py
-├── semantic/               # 语义层注册中心 + 解析器
-│   ├── registry.py
-│   └── resolver.py
-├── sql_engine/             # SQLAlchemy 构建 + 扫描 + 执行 + 方言转换
-│   ├── builder.py
-│   ├── scanner.py
-│   ├── executor.py
-│   └── dialect.py
-├── audit/                  # 审计日志
-│   └── logger.py
-├── feedback/               # 用户纠错反馈
-│   └── collector.py
-├── planner/                # 传统查询规划器（保留，部分逻辑迁移至 agent/planner.py）
-│   ├── optimizer.py
-│   └── router.py
-└── utils/                  # 日志工具
-    └── logger.py
-
-configs/                    # YAML 配置
-├── intents.yaml            # 意图配置（7 种意图，新增无需改代码）
-├── metrics.yaml            # 指标 / 维度 / 数据源定义
-├── terms.yaml              # 业务术语 + 别名映射
-├── history.yaml            # 历史 few-shot 示例
-├── permissions.yaml        # 权限策略
-└── *_metrics.yaml          # 多域配置（自动发现）
-
-web/                        # React + Vite 前端
-scripts/                    # 工具脚本
-tests/                      # 单元 / 集成 / E2E 测试
-data/                       # SQLite 数据 + Milvus 向量库 + 测试结果
-logs/                       # 日志文件
-```
-
-## 开发规范
-
-- **格式化**: `ruff format .`
-- **Lint**: `ruff check .`
-- **类型检查**: `mypy --strict`
-- **行长度**: 100
-- LLM 调用在测试中**必须 Mock**（避免 API 费用）
-- 数据库测试使用 SQLite 内存库
-- RAG 测试使用 `MockEmbedder`
-
-## 配置说明
-
-环境变量前缀 `NL2DSL_`：
+前缀 `NL2DSL_`：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -311,58 +228,45 @@ logs/                       # 日志文件
 | `NL2DSL_MAX_LIMIT` | 否 | 单次最大返回行数，默认 10000 |
 | `NL2DSL_QUERY_TIMEOUT` | 否 | 查询超时（秒），默认 30 |
 
-## 常用开发任务
+## 附录 C：技术决策要点（10条 ADR）
 
-### 添加新指标
+1. **LLM 只生成 DSL 不生成 SQL** — DSL 可校验、可修正、可做权限控制
+2. **RAG 分 4 集合不同策略** — 短词用关键词检索，问句用语义检索
+3. **启动自检同步** — 改 YAML 重启即生效，增量同步避免重复加载模型
+4. **SQLAlchemy Core 而非 ORM** — 表达式树级别控制，适合动态 SQL 构建
+5. **LangGraph StateGraph** — 条件分支、可观测性、检查点恢复、流式输出
+6. **SQLite 默认数据库** — 零部署成本，生产环境可切换 MySQL/PostgreSQL
+7. **LLM 输出三层兜底** — 正则提取 JSON → 字段补全 → 硬约束修正
+8. **双层架构（Agent + Graph）** — Agent 负责宏观编排，Graph 负责微观执行
+9. **配置驱动意图** — 新增意图无需改代码，修改 `configs/intents.yaml` 即可
+10. **置信度评估不阻断** — syntax + semantic + history 三维度评分，低于阈值路由到澄清
 
-1. 编辑 `configs/metrics.yaml` 添加指标定义
-2. 编辑 `configs/terms.yaml` 添加口语别名
-3. 编辑 `configs/history.yaml` 添加示例问题
-4. 重启后端（自动同步到向量库）
+## 附录 D：目录结构速查
 
-### 添加新意图
+```
+nl2dsl/
+├── api.py / api_factory.py   # FastAPI 入口
+├── config.py                 # 配置管理
+├── domain_context.py         # 领域上下文（每域独立运行时）
+├── engine.py                 # 引擎入口：插件加载、StateGraph 编译
+├── plugin.py / protocols.py  # 插件框架 + 组件协议
+├── agent/                    # Agent 智能编排层
+├── dsl/                      # DSL Schema、校验器、构建工具
+├── graph/                    # LangGraph StateGraph 查询管道
+├── llm/                      # Prompt 模板 + LLM 客户端
+├── rag/                      # 向量存储 + Embedder + 检索器
+├── permission/               # 行级权限 + 列级权限 + 脱敏
+├── query/                    # 歧义检测 + 查询改写 + 沙箱
+├── semantic/                 # 语义层注册中心 + 解析器
+├── sql_engine/               # SQLAlchemy 构建 + 扫描 + 执行
+├── audit/                    # 审计日志
+├── feedback/                 # 用户纠错反馈
+├── planner/                  # 传统查询规划器
+└── utils/                    # 日志工具
 
-1. 编辑 `configs/intents.yaml`，新增意图节点：
-   ```yaml
-   my_intent:
-     keywords: ["关键词1", "关键词2"]
-     decomposition: split_by_objects    # 或 single_with_time_grouping / total_plus_groups 等
-     aggregation: diff                  # 或 trend_direction / pearson / proportion 等
-     description: "意图描述"
-   ```
-2. 如需新聚合策略，在 `nl2dsl/agent/aggregator.py` 中扩展 `Aggregate.run()`
-3. 如需新分解策略，在 `nl2dsl/agent/planner.py` 中扩展 `Planner.plan()`
-4. 添加单元测试 `tests/unit/test_agent_planner.py`
-
-### 调试 DSL 生成问题
-
-1. 调 `/api/v1/debug/rag?q=...` 看 RAG context
-2. 检查日志：`grep "LLM raw output" logs/nl2dsl.log`
-3. 检查 `_parse_llm_output` / `_post_process_dsl` / `_semantic_fix_dsl`
-
-### 添加 StateGraph 节点
-
-1. `nl2dsl/graph/nodes.py` 创建工厂函数（`@with_error_handler`）
-2. `nl2dsl/graph/edges.py` 添加路由函数
-3. `nl2dsl/graph/builder.py` 注册节点和边
-4. 添加单元测试
-
-### 调试 Agent 编排问题
-
-1. 检查 `AgentOrchestrator.run()` 日志，确认实体提取和路由决策
-2. 检查 `AgentController.route()` 返回的 ExecutionPlan 类型
-3. 复杂查询检查 `Dispatcher` 日志，确认子查询分解和依赖关系
-4. 调 `/api/v1/query/stream` 看 SSE 事件流
-
-## 技术决策要点
-
-1. **LLM 只生成 DSL 不生成 SQL**：DSL 可校验、可修正、可做权限控制
-2. **RAG 分 4 集合不同策略**：短词用关键词检索，问句用语义检索
-3. **启动自检同步**：改 YAML 重启即生效，增量同步避免重复加载模型
-4. **SQLAlchemy Core 而非 ORM**：表达式树级别控制，适合动态 SQL 构建
-5. **LangGraph StateGraph**：条件分支、可观测性、检查点恢复、流式输出
-6. **SQLite 默认数据库**：零部署成本，生产环境可切换 MySQL/PostgreSQL
-7. **LLM 输出三层兜底**：正则提取 JSON → 字段补全 → 硬约束修正
-8. **双层架构（Agent + Graph）**：Agent 负责宏观编排（意图识别、多查询调度、结果聚合），Graph 负责微观执行（单查询 DSL→SQL→数据）。分层解耦，复杂查询和简单查询走不同路径
-9. **配置驱动意图**：新增意图无需改代码，修改 `configs/intents.yaml` 即可
-10. **置信度评估不阻断**：syntax + semantic + history 三维度评分，低于阈值路由到澄清而非静默执行低质量查询
+configs/                      # YAML 配置（指标/维度/意图/术语/权限）
+web/                          # React + Vite 前端
+tests/                        # 单元 / 集成 / E2E
+data/                         # SQLite + Milvus + 测试结果
+logs/                         # 日志文件
+```
