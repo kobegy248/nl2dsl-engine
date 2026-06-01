@@ -64,17 +64,18 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 ### Architecture（架构设计）
 
 | 文档 | 职责说明 |
-|------|---------|
+|------|------|
 | [`docs/architecture/01-overview.md`](docs/architecture/01-overview.md) | 项目背景、设计目标（可校验/可优化/可治理/可扩展）、技术选型总览 |
 | [`docs/architecture/02-system-architecture.md`](docs/architecture/02-system-architecture.md) | 整体架构图、数据流、模块边界 |
 | [`docs/architecture/03-sql-engine.md`](docs/architecture/03-sql-engine.md) | SQLAlchemy Core 构建、sqlglot 方言转换、Query Planner |
 | [`docs/architecture/04-deployment.md`](docs/architecture/04-deployment.md) | Docker Compose 部署、环境变量、性能调优 |
+| [`docs/architecture/sql-execution-design.md`](docs/architecture/sql-execution-design.md) | SQL 执行层：连接池、异步执行、结果返回 |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 面向开发者的完整架构文档，含与传统 NL2SQL 区别、API 参考 |
 
 ### DSL & API（语义契约与接口）
 
 | 文档 | 职责说明 |
-|------|---------|
+|------|------|
 | [`docs/api/20-dsl-spec.md`](docs/api/20-dsl-spec.md) | DSL Schema 定义：metrics/dimensions/filters/order_by/limit 字段规范 |
 | [`docs/api/21-api-contract.md`](docs/api/21-api-contract.md) | HTTP API 接口定义：/query /query/dsl /query/execute 请求/响应格式 |
 | [`docs/api/22-error-handling.md`](docs/api/22-error-handling.md) | 错误分类、HTTP 状态码、歧义响应格式 |
@@ -83,52 +84,68 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 ### Business Layer（业务语义层）
 
 | 文档 | 职责说明 |
-|------|---------|
+|------|------|
 | [`docs/business/10-semantic-layer.md`](docs/business/10-semantic-layer.md) | YAML 指标/维度注册、value_map 枚举映射、数据血缘与 Join 推导 |
 | [`docs/business/12-permission.md`](docs/business/12-permission.md) | 行级权限注入规则、列级敏感字段黑名单、数据脱敏策略 |
 | [`docs/business/13-business-rules.md`](docs/business/13-business-rules.md) | 术语表映射、Prompt 显式注入、歧义反问机制、时间语义处理 |
 
+### Query Processing（查询处理）
+
+| 文档 | 职责说明 |
+|------|------|
+| [`docs/query/query-clarification-design.md`](docs/query/query-clarification-design.md) | 歧义检测：时间缺失、指标歧义、维度歧义、比较基准歧义 |
+| [`docs/query/query-sandbox-design.md`](docs/query/query-sandbox-design.md) | 查询沙箱：EXPLAIN 预估、LIMIT 预览、执行超时检测 |
+
 ### Agent & LangGraph（智能编排与执行管道）
 
 | 文档 | 职责说明 |
-|------|---------|
+|------|------|
 | [`docs/agent/30-rag-design.md`](docs/agent/30-rag-design.md) | 向量检索：4 集合设计、混合检索策略、Milvus 集合结构 |
 | [`docs/agent/31-langgraph-workflow.md`](docs/agent/31-langgraph-workflow.md) | StateGraph 完整节点流程图、条件分支、自检重试、链路追踪 |
 | [`docs/agent/32-metadata-sync.md`](docs/agent/32-metadata-sync.md) | 元数据提取、向量库同步、增量更新策略 |
 | [`docs/agent/33-testing.md`](docs/agent/33-testing.md) | 单元/集成/E2E 三层测试策略概览 |
 | [`docs/agent/34-llm-risks.md`](docs/agent/34-llm-risks.md) | LLM 成本/延迟/幻觉/安全风险及缓解方案 |
 
+### Planner（查询规划）
+
+| 文档 | 职责说明 |
+|------|------|
+| [`docs/planner/query-optimization-design.md`](docs/planner/query-optimization-design.md) | 查询优化器：谓词下推、投影下推、Join 重排序（预留架构） |
+
+### Audit & Feedback（审计与反馈）
+
+| 文档 | 职责说明 |
+|------|------|
+| [`docs/audit/audit-log-design.md`](docs/audit/audit-log-design.md) | 审计日志：数据模型、存储策略、查询接口、保留策略 |
+| [`docs/feedback/feedback-loop-design.md`](docs/feedback/feedback-loop-design.md) | 反馈闭环：收集机制、存储格式、用于模型改进的流程 |
+
+### Configuration（配置系统）
+
+| 文档 | 职责说明 |
+|------|------|
+| [`docs/configuration/schema-reference.md`](docs/configuration/schema-reference.md) | 配置 Schema 参考：metrics/terms/intents/permissions/history 完整字段 |
+
 ### Evaluation（评测框架）
 
 | 文档 | 职责说明 |
-|------|---------|
-| [`docs/evaluation-design.md`](docs/evaluation-design.md) | 4 大类 12 维度量化评估框架：Semantic / Planning / Execution / Governance |
+|------|------|
+| [`docs/evaluation-design.md`](docs/evaluation-design.md) | 4 大类 12 维度量化评估框架设计 |
+| [`docs/evaluation/framework-guide.md`](docs/evaluation/framework-guide.md) | 评估框架使用指南：添加用例、运行评估、解读报告、自定义权重 |
 
 ### Specs & Reports（专项设计与过程报告）
 
 | 文档 | 职责说明 |
-|------|---------|
+|------|------|
 | [`docs/specs/2026-05-19-failover-system-design.md`](docs/specs/2026-05-19-failover-system-design.md) | 生产级兜底：Retry Chain、Query Sandbox、Clarification 机制 |
 | [`docs/reports/e2e_report.md`](docs/reports/e2e_report.md) | 253 个 E2E 测试通过报告，含查询链路 Trace 分析 |
 | [`docs/reports/complex_nl_query_analysis.md`](docs/reports/complex_nl_query_analysis.md) | 22 个复杂查询语义分析，17 个语义丢失案例根因 |
 | [`docs/reports/code_review_report.md`](docs/reports/code_review_report.md) | feat/agent-capabilities 分支代码审查，5 个 P0 Bug |
 | [`docs/reports/nl2dsl_design_answers.md`](docs/reports/nl2dsl_design_answers.md) | 6 个核心设计问题 Q&A（意图识别、DSL 校验、权限注入等） |
 
-### Superpowers（开发计划与规格 — 按日期归档）
+### History（历史归档）
 
-| 日期 | 设计文档 | 实施计划 |
-|------|---------|---------|
-| 05-16 | [`superpowers/specs/2026-05-16-NL2DSL-design.md`](docs/superpowers/specs/2026-05-16-NL2DSL-design.md) — 文档索引与阅读指南 | — |
-| 05-17 | [`superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md`](docs/superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md) — 审计日志 HTTP 查询接口 | [`plans/2026-05-17-audit-trace-query-endpoint.md`](docs/superpowers/plans/2026-05-17-audit-trace-query-endpoint.md) |
-| 05-21 | [`superpowers/specs/2026-05-21-nl2dsl-langgraph-rewrite-design.md`](docs/superpowers/specs/2026-05-21-nl2dsl-langgraph-rewrite-design.md) — Python 顺序调用 → LangGraph | [`plans/2026-05-21-nl2dsl-langgraph-rewrite.md`](docs/superpowers/plans/2026-05-21-nl2dsl-langgraph-rewrite.md) |
-| 05-22 | [`superpowers/specs/2026-05-22-插件框架设计.md`](docs/superpowers/specs/2026-05-22-插件框架设计.md) — 组件可插拔 + 节点可扩展 | [`plans/2026-05-22-插件框架.md`](docs/superpowers/plans/2026-05-22-插件框架.md) |
-| 05-23 | [`superpowers/specs/2026-05-23-web-frontend-design.md`](docs/superpowers/specs/2026-05-23-web-frontend-design.md) — React + TypeScript 前端 | [`plans/2026-05-23-web-frontend.md`](docs/superpowers/plans/2026-05-23-web-frontend.md) |
-| 05-27 | [`superpowers/specs/2026-05-27-multi-domain-design.md`](docs/superpowers/specs/2026-05-27-multi-domain-design.md) — 多领域架构 | [`plans/2026-05-27-multi-domain.md`](docs/superpowers/plans/2026-05-27-multi-domain.md) |
-| 05-28 | — | [`plans/2026-05-28-rerank-integration.md`](docs/superpowers/plans/2026-05-28-rerank-integration.md) — Cross-Encoder 精排 |
-| 05-29 | [`superpowers/specs/2026-05-29-agent-capabilities-design.md`](docs/superpowers/specs/2026-05-29-agent-capabilities-design.md) — Agent 编排层增强 | [`plans/2026-05-29-agent-capabilities.md`](docs/superpowers/plans/2026-05-29-agent-capabilities.md) |
-| 05-30 | [`superpowers/specs/2026-05-30-agent-driven-pipeline-design.md`](docs/superpowers/specs/2026-05-30-agent-driven-pipeline-design.md) — Agent 决策中枢 | [`plans/2026-05-30-agent-core-layer.md`](docs/superpowers/plans/2026-05-30-agent-core-layer.md) |
-| 05-31 | [`superpowers/specs/2026-05-31-complex-query-semantic-understanding.md`](docs/superpowers/specs/2026-05-31-complex-query-semantic-understanding.md) — 复杂查询语义增强 | [`plans/2026-05-31-complex-query-semantic-understanding.md`](docs/superpowers/plans/2026-05-31-complex-query-semantic-understanding.md) |
-| 05-31 | [`superpowers/specs/2026-05-31-supply-chain-domain-mock-data.md`](docs/superpowers/specs/2026-05-31-supply-chain-domain-mock-data.md) — 供应链 Mock 数据 | — |
+> 已完成实施的设计文档和实施计划，供追溯参考。
+> 详见 [`docs/history/README.md`](docs/history/README.md)。
 
 ---
 
@@ -142,15 +159,19 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 | **RAG 检索 / 向量库 / 元数据同步** | `docs/agent/30-rag-design.md` → `docs/agent/32-metadata-sync.md` |
 | **权限 / 安全 / 脱敏** | `docs/business/12-permission.md` → `docs/business/11-dsl-validation.md` → `docs/specs/2026-05-19-failover-system-design.md` |
 | **Agent 编排 / 意图识别 / 复杂查询拆解** | `docs/agent/31-langgraph-workflow.md` → `docs/business/13-business-rules.md` → `docs/reports/complex_nl_query_analysis.md` |
-| **SQL 构建 / 方言转换 / 执行优化** | `docs/architecture/03-sql-engine.md` → `docs/business/10-semantic-layer.md` |
-| **语义层 / 指标注册 / 枚举映射** | `docs/business/10-semantic-layer.md` → `docs/business/13-business-rules.md` |
+| **SQL 构建 / 方言转换 / 执行优化** | `docs/architecture/03-sql-engine.md` → `docs/architecture/sql-execution-design.md` → `docs/business/10-semantic-layer.md` |
+| **语义层 / 指标注册 / 枚举映射** | `docs/business/10-semantic-layer.md` → `docs/configuration/schema-reference.md` → `docs/business/13-business-rules.md` |
 | **API 接口 / 错误处理 / 流式响应** | `docs/api/21-api-contract.md` → `docs/api/22-error-handling.md` |
 | **部署 / 配置 / 性能调优** | `docs/architecture/04-deployment.md` → `docs/architecture/01-overview.md` |
-| **测试 / 评估 / 质量报告** | `docs/agent/33-testing.md` → `docs/evaluation-design.md` → `docs/reports/e2e_report.md` |
-| **插件扩展 / 自定义节点** | `docs/superpowers/specs/2026-05-22-插件框架设计.md` |
-| **多领域支持 / 域切换** | `docs/superpowers/specs/2026-05-27-multi-domain-design.md` |
-| **前端 / Web UI** | `docs/superpowers/specs/2026-05-23-web-frontend-design.md` |
-| **审计日志 / 链路追踪** | `docs/agent/31-langgraph-workflow.md` → `docs/superpowers/specs/2026-05-17-audit-trace-query-endpoint-design.md` |
+| **测试 / 评估 / 质量报告** | `docs/agent/33-testing.md` → `docs/evaluation/framework-guide.md` → `docs/evaluation-design.md` → `docs/reports/e2e_report.md` |
+| **插件扩展 / 自定义节点** | `docs/history/superpowers/specs/2026-05-22-插件框架设计.md` |
+| **多领域支持 / 域切换** | `docs/history/superpowers/specs/2026-05-27-multi-domain-design.md` |
+| **前端 / Web UI** | `docs/history/superpowers/specs/2026-05-23-web-frontend-design.md` |
+| **审计日志 / 链路追踪** | `docs/audit/audit-log-design.md` → `docs/agent/31-langgraph-workflow.md` |
+| **用户反馈 / 纠错闭环** | `docs/feedback/feedback-loop-design.md` |
+| **查询歧义 / 澄清机制** | `docs/query/query-clarification-design.md` |
+| **查询沙箱 / 安全预检** | `docs/query/query-sandbox-design.md` |
+| **查询规划 / 优化器** | `docs/planner/query-optimization-design.md` |
 
 ---
 
