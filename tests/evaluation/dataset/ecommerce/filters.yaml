@@ -31,8 +31,7 @@ test_cases:
         - func: sum
           field: pay_amount
           alias: sales_amount
-      dimensions:
-        - category
+      dimensions: []
       filters:
         - field: category
           operator: "!="

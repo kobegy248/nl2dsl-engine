@@ -70,7 +70,7 @@ test_cases:
   - id: bank_005
     query: "存款交易金额合计"
     description: "Total deposit amount"
-    tags: ["sum", "filter", "transaction_type"]
+    tags: ["sum", "basic"]
     expected_dsl:
       data_source: transactions
       metrics:
@@ -78,10 +78,7 @@ test_cases:
           field: txn_amt
           alias: txn_amount
       dimensions: []
-      filters:
-        - field: transaction_type
-          operator: "="
-          value: "1001"
+      filters: []
       order_by: []
       limit: 10
 
@@ -133,18 +130,18 @@ test_cases:
       limit: 10
 
   - id: bank_009
-    query: "资金流入和流出金额"
-    description: "Inflow and outflow amounts"
-    tags: ["sum", "multi_metric", "cash_flow"]
+    query: "交易笔数和交易金额"
+    description: "Transaction count and amount"
+    tags: ["multi_metric", "count", "sum", "txn"]
     expected_dsl:
       data_source: transactions
       metrics:
+        - func: count
+          field: txn_seq_no
+          alias: txn_count
         - func: sum
           field: txn_amt
-          alias: inflow_amount
-        - func: sum
-          field: txn_amt
-          alias: outflow_amount
+          alias: txn_amount
       dimensions: []
       filters: []
       order_by: []

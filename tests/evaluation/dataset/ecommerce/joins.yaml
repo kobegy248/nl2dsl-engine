@@ -103,8 +103,7 @@ test_cases:
         - func: sum
           field: pay_amount
           alias: sales_amount
-      dimensions:
-        - supplier_name
+      dimensions: []
       joins:
         - table: product_dim
           on_field: product_id

@@ -1,4 +1,4 @@
-version: "1.0"
+﻿version: "1.0"
 domain: supply_chain
 description: "Supply chain domain basic queries"
 
@@ -8,7 +8,7 @@ test_cases:
     description: "Total purchase amount"
     tags: ["sum", "basic", "purchase"]
     expected_dsl:
-      data_source: purchase_fact
+      data_source: purchase
       metrics:
         - func: sum
           field: order_amount
@@ -23,7 +23,7 @@ test_cases:
     description: "Purchase amount by supplier"
     tags: ["sum", "dimension", "supplier"]
     expected_dsl:
-      data_source: purchase_fact
+      data_source: purchase
       metrics:
         - func: sum
           field: order_amount
@@ -39,7 +39,7 @@ test_cases:
     description: "Total inventory quantity"
     tags: ["sum", "basic", "inventory"]
     expected_dsl:
-      data_source: inventory_fact
+      data_source: inventory
       metrics:
         - func: sum
           field: stock_quantity
@@ -54,7 +54,7 @@ test_cases:
     description: "Inventory by warehouse"
     tags: ["sum", "dimension", "warehouse", "inventory"]
     expected_dsl:
-      data_source: inventory_fact
+      data_source: inventory
       metrics:
         - func: sum
           field: stock_quantity
@@ -70,7 +70,7 @@ test_cases:
     description: "On-time delivery rate"
     tags: ["avg", "delivery", "performance"]
     expected_dsl:
-      data_source: purchase_fact
+      data_source: purchase
       metrics:
         - func: avg
           field: on_time
@@ -85,7 +85,7 @@ test_cases:
     description: "Shipping cost by transport mode"
     tags: ["sum", "dimension", "shipping", "transport"]
     expected_dsl:
-      data_source: shipment_fact
+      data_source: shipment
       metrics:
         - func: sum
           field: shipping_cost
@@ -101,7 +101,7 @@ test_cases:
     description: "Inventory by material category"
     tags: ["sum", "dimension", "material", "inventory"]
     expected_dsl:
-      data_source: inventory_fact
+      data_source: inventory
       metrics:
         - func: sum
           field: stock_quantity
@@ -117,7 +117,7 @@ test_cases:
     description: "Average purchase lead time"
     tags: ["avg", "basic", "purchase", "lead_time"]
     expected_dsl:
-      data_source: purchase_fact
+      data_source: purchase
       metrics:
         - func: avg
           field: lead_time_days
@@ -132,7 +132,7 @@ test_cases:
     description: "Purchase amount by region"
     tags: ["sum", "dimension", "region", "purchase"]
     expected_dsl:
-      data_source: purchase_fact
+      data_source: purchase
       metrics:
         - func: sum
           field: order_amount
@@ -148,7 +148,7 @@ test_cases:
     description: "Lowest days of supply materials"
     tags: ["min", "top_n", "order_by", "inventory"]
     expected_dsl:
-      data_source: inventory_fact
+      data_source: inventory
       metrics:
         - func: min
           field: days_of_supply
@@ -160,3 +160,4 @@ test_cases:
         - field: min_days_of_supply
           direction: asc
       limit: 10
+
