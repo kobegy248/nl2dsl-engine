@@ -119,3 +119,64 @@ class DatasetLoader:
                 logger.error("Failed to parse test case in %s: %s", path, exc)
 
         return cases
+
+
+# --- V2 Dataset Loader ---
+
+from nl2dsl.evaluation.models import V2TestCase
+
+
+class V2DatasetLoader:
+    """从 YAML 文件加载 V2 评测数据集。"""
+
+    def __init__(self, dataset_dir: Path | str):
+        self.dataset_dir = Path(dataset_dir)
+
+    def load_all(self) -> list[V2TestCase]:
+        """加载所有 YAML 文件中的 V2 测试用例。"""
+        cases: list[V2TestCase] = []
+        if not self.dataset_dir.exists():
+            logger.warning("数据集目录未找到：%s", self.dataset_dir)
+            return cases
+
+        for yaml_file in sorted(self.dataset_dir.rglob("*.yaml")):
+            file_cases = self._load_file(yaml_file)
+            cases.extend(file_cases)
+            logger.info("从 %s 加载了 %d 条 V2 用例", yaml_file, len(file_cases))
+
+        logger.info("共加载 V2 测试用例：%d 条", len(cases))
+        return cases
+
+    def _load_file(self, path: Path) -> list[V2TestCase]:
+        """从单个 YAML 文件加载 V2 测试用例。"""
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.error("加载 %s 失败：%s", path, exc)
+            return []
+
+        if not isinstance(data, dict):
+            return []
+
+        test_cases = data.get("test_cases", [])
+        if not isinstance(test_cases, list):
+            return []
+
+        cases: list[V2TestCase] = []
+        for raw in test_cases:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                tc = V2TestCase(
+                    id=raw.get("id", ""),
+                    query=raw.get("query", ""),
+                    difficulty=raw.get("difficulty", "easy"),
+                    category=raw.get("category", "basic"),
+                    tags=raw.get("tags", []),
+                    expected=raw.get("expected", {}),
+                )
+                cases.append(tc)
+            except Exception as exc:
+                logger.error("解析 %s 中的 V2 测试用例失败：%s", path, exc)
+
+        return cases

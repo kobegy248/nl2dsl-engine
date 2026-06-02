@@ -158,3 +158,56 @@ class EvaluationReport(BaseModel):
     failed_cases: list[TestResult] = Field(default_factory=list)
     all_results: list[TestResult] = Field(default_factory=list)
     generated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# --- V2 Models (Semantic Understanding Benchmark) ---
+
+from dataclasses import dataclass, field
+
+
+@dataclass
+class CanonicalQuery:
+    """查询的规范化语义表示。"""
+
+    intent: str = ""
+    metric: str = ""
+    dimensions: list[str] = field(default_factory=list)
+    filters: list[str] = field(default_factory=list)
+    planner: dict = field(default_factory=dict)
+    clarification_required: bool = False
+    governance: dict = field(default_factory=dict)
+    error: str | None = None
+
+
+@dataclass
+class V2TestCase:
+    """V2 评测用例。"""
+
+    id: str
+    query: str
+    difficulty: str = "easy"
+    category: str = "basic"
+    tags: list[str] = field(default_factory=list)
+    expected: dict = field(default_factory=dict)
+
+
+@dataclass
+class V2ScoreBreakdown:
+    """V2 评分明细。"""
+
+    intent: float = 0.0
+    metric: float = 0.0
+    filter: float = 0.0
+    planner: float = 0.0
+    governance: float = 0.0
+    overall: float = 0.0
+
+    def compute_overall(self, weights: dict[str, float]) -> float:
+        """计算加权总分。"""
+        return (
+            self.intent * weights.get("intent", 0.0)
+            + self.metric * weights.get("metric", 0.0)
+            + self.filter * weights.get("filter", 0.0)
+            + self.planner * weights.get("planner", 0.0)
+            + self.governance * weights.get("governance", 0.0)
+        )
