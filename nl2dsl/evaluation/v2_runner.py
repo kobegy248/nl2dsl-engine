@@ -46,12 +46,17 @@ class V2BenchmarkRunner:
 
         expected = test_case.expected
         scores = V2ScoreBreakdown()
+        # 跟踪哪些维度被实际评分了（用于动态权重调整）
+        active_dimensions: set[str] = set()
 
         # 意图
         if "intent" in expected and "intent_scorer" in self.scorers:
             scores.intent = self.scorers["intent_scorer"].score(
                 expected["intent"], actual_dsl.get("intent", "")
             )
+            active_dimensions.add("intent")
+        else:
+            scores.intent = 1.0  # N/A → pass
 
         # 指标
         if "metric" in expected and "metric_scorer" in self.scorers:
@@ -64,26 +69,48 @@ class V2BenchmarkRunner:
                 )
             else:
                 scores.metric = 0.0
+            active_dimensions.add("metric")
+        else:
+            scores.metric = 1.0  # N/A → pass
 
         # 过滤条件
         if "filters" in expected and "filter_scorer" in self.scorers:
             scores.filter = self.scorers["filter_scorer"].score(
                 expected["filters"], actual_dsl.get("filters", [])
             )
+            active_dimensions.add("filter")
+        else:
+            scores.filter = 1.0  # N/A → pass
 
         # 规划器
         if "planner" in expected and "planner_scorer" in self.scorers:
             scores.planner = self.scorers["planner_scorer"].score(
                 expected["planner"], self._extract_planner(actual_dsl)
             )
+            active_dimensions.add("planner")
+        else:
+            scores.planner = 1.0  # N/A → pass
 
         # 治理
         if "governance" in expected and "governance_scorer" in self.scorers:
             scores.governance = self.scorers["governance_scorer"].score(
                 expected["governance"], actual_dsl.get("governance", {})
             )
+            active_dimensions.add("governance")
+        else:
+            scores.governance = 1.0  # N/A → pass
 
-        scores.overall = scores.compute_overall(self.weights)
+        # 动态权重：仅用参与评分的维度计算总分
+        if active_dimensions:
+            active_weights = {k: v for k, v in self.weights.items() if k in active_dimensions}
+            total_weight = sum(active_weights.values())
+            if total_weight > 0:
+                # 归一化
+                active_weights = {k: v / total_weight for k, v in active_weights.items()}
+            scores.overall = scores.compute_overall(active_weights)
+        else:
+            scores.overall = 1.0
+
         passed = scores.overall >= self.threshold
 
         elapsed = int((time.time() - start) * 1000)

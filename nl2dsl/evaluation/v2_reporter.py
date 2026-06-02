@@ -29,6 +29,27 @@ class V2Report:
 class V2Reporter:
     """生成 V2 评测报告。"""
 
+    @staticmethod
+    def _get_id(tc) -> str:
+        """兼容 dict 和 dataclass 的 test_case 访问。"""
+        if isinstance(tc, dict):
+            return tc.get("id", "")
+        return getattr(tc, "id", "")
+
+    @staticmethod
+    def _get_query(tc) -> str:
+        """兼容 dict 和 dataclass 的 test_case 访问。"""
+        if isinstance(tc, dict):
+            return tc.get("query", "")
+        return getattr(tc, "query", "")
+
+    @staticmethod
+    def _get_score_attr(scores, attr: str) -> float:
+        """兼容 dict 和 dataclass 的 scores 访问。"""
+        if isinstance(scores, dict):
+            return float(scores.get(attr, 0.0))
+        return float(getattr(scores, attr, 0.0))
+
     def generate(self, results: list[dict]) -> V2Report:
         """根据结果生成报告。"""
         total = len(results)
@@ -79,9 +100,9 @@ class V2Reporter:
             for r in report.failed_cases:
                 tc = r["test_case"]
                 lines.extend([
-                    f"用例：{tc['id']}",
-                    f"查询：{tc['query']}",
-                    f"总分：{r['scores'].overall:.1%}",
+                    f"用例：{self._get_id(tc)}",
+                    f"查询：{self._get_query(tc)}",
+                    f"总分：{self._get_score_attr(r['scores'], 'overall'):.1%}",
                     "-" * 50,
                 ])
 
@@ -117,11 +138,11 @@ class V2Reporter:
             for r in report.failed_cases:
                 tc = r["test_case"]
                 lines.extend([
-                    f"### {tc['id']}: {tc['query']}",
-                    f"- **总分**：{r['scores'].overall:.1%}",
-                    f"- **意图**：{r['scores'].intent:.1%}",
-                    f"- **指标**：{r['scores'].metric:.1%}",
-                    f"- **过滤条件**：{r['scores'].filter:.1%}",
+                    f"### {self._get_id(tc)}: {self._get_query(tc)}",
+                    f"- **总分**：{self._get_score_attr(r['scores'], 'overall'):.1%}",
+                    f"- **意图**：{self._get_score_attr(r['scores'], 'intent'):.1%}",
+                    f"- **指标**：{self._get_score_attr(r['scores'], 'metric'):.1%}",
+                    f"- **过滤条件**：{self._get_score_attr(r['scores'], 'filter'):.1%}",
                     "",
                 ])
 
