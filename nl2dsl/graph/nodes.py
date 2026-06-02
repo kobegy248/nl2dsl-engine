@@ -10,6 +10,7 @@ import functools
 import json
 import re
 import time
+from datetime import datetime, timedelta
 from typing import Callable
 
 from nl2dsl.agent.confidence import _make_confidence_node
@@ -470,7 +471,14 @@ def _apply_negation_fixes(dsl_dict: dict, question: str) -> None:
             _fix_node(f)
 
 
-def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid_data_sources: list[str] | None = None, data_sources_config: dict | None = None, metrics_config: dict | None = None) -> dict:
+def _post_process_dsl(
+    dsl_dict: dict,
+    default_data_source: str = "orders",
+    valid_data_sources: list[str] | None = None,
+    data_sources_config: dict | None = None,
+    metrics_config: dict | None = None,
+    question: str = "",
+) -> dict:
     """Post-process and fix common LLM-generated DSL issues."""
     valid_ds = valid_data_sources or ["orders", "products", "customers"]
     ds_cfg = data_sources_config or {}
@@ -507,14 +515,19 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid
             if match:
                 m["field"] = match.group(1)
 
-    # 4. Ensure dimensions is non-empty list
+    # 4. Ensure dimensions is a list (allow empty list for pure aggregation queries)
     dimensions = dsl_dict.get("dimensions")
-    if not dimensions or not isinstance(dimensions, list):
-        dsl_dict["dimensions"] = ["product_name"]
+    if dimensions is None or not isinstance(dimensions, list):
+        dsl_dict["dimensions"] = []
     # Remove non-string items
     dsl_dict["dimensions"] = [d for d in dsl_dict["dimensions"] if isinstance(d, str)]
-    if not dsl_dict["dimensions"]:
-        dsl_dict["dimensions"] = ["product_name"]
+
+    # 4b. Remove dimensions that are also filter fields
+    # e.g. "华东地区的销售额" → filter on region, not dimension on region
+    filters_list = dsl_dict.get("filters")
+    if filters_list and isinstance(filters_list, list):
+        filter_fields = {f.get("field") for f in filters_list if isinstance(f, dict) and f.get("field")}
+        dsl_dict["dimensions"] = [d for d in dsl_dict["dimensions"] if d not in filter_fields]
 
     # 5. Ensure limit is reasonable
     limit = dsl_dict.get("limit")
@@ -527,7 +540,7 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid
     if "offset" not in dsl_dict:
         dsl_dict["offset"] = 0
 
-    # 7. Ensure order_by exists when metrics exist, normalize direction to lowercase
+    # 7. Normalize order_by direction to lowercase, don't auto-add order_by
     order_by = dsl_dict.get("order_by")
     if isinstance(order_by, list):
         for ob in order_by:
@@ -537,11 +550,8 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid
                     ob["field"] = ob.pop("alias")
                 if ob.get("direction"):
                     ob["direction"] = str(ob["direction"]).lower()
-    metrics_list = dsl_dict.get("metrics", [])
-    if not order_by and metrics_list:
-        first_alias = metrics_list[0].get("alias") or metrics_list[0].get("field")
-        if first_alias:
-            dsl_dict["order_by"] = [{"field": first_alias, "direction": "desc"}]
+    # Removed: auto-add default ORDER BY when metrics exist. Pure aggregation
+    # queries without explicit sorting intent should not have order_by.
 
     # 8. Validate filters operator values (support both flat list and tree)
     valid_ops = {"=", "!=", ">", "<", ">=", "<=", "in", "like", "between", "is_null"}
@@ -605,7 +615,79 @@ def _post_process_dsl(dsl_dict: dict, default_data_source: str = "orders", valid
             fixed_joins.append(j)
         dsl_dict["joins"] = fixed_joins
 
+    # 10. Fix time-related filters with null values
+    if question:
+        _fix_time_filters(dsl_dict, question)
+
     return dsl_dict
+
+
+def _fix_time_filters(dsl_dict: dict, question: str) -> None:
+    """Parse relative time expressions and fix time-related filters with null/invalid values.
+
+    Handles: 本月, 上月, 今年, 去年, 最近7天, 最近30天, etc.
+    """
+    filters = dsl_dict.get("filters")
+    if not filters or not isinstance(filters, list):
+        return
+
+    # Time-related field names across all domains
+    time_fields = {
+        "order_date",
+        "date_str",
+        "register_date",
+        "purchase_date",
+        "ship_date",
+        "delivery_date",
+        "expected_date",
+        "actual_date",
+        "full_date",
+        "open_date",
+        "maturity_date",
+        "txn_date",
+    }
+
+    today = datetime.now()
+
+    for f in filters:
+        if not isinstance(f, dict):
+            continue
+        field = f.get("field", "")
+        if field not in time_fields and "date" not in field.lower():
+            continue
+
+        value = f.get("value")
+        op = f.get("operator", "=")
+
+        # Only fix when value is null/empty or operator suggests time range
+        if value is None or value == "" or (op == "=" and value is None):
+            if "本月" in question:
+                start = today.replace(day=1)
+                f["operator"] = ">="
+                f["value"] = start.strftime("%Y-%m-%d")
+            elif "上月" in question or "上个月" in question:
+                last_month_end = today.replace(day=1) - timedelta(days=1)
+                start = last_month_end.replace(day=1)
+                f["operator"] = ">="
+                f["value"] = start.strftime("%Y-%m-%d")
+            elif "今年" in question:
+                start = datetime(today.year, 1, 1)
+                f["operator"] = ">="
+                f["value"] = start.strftime("%Y-%m-%d")
+            elif "去年" in question:
+                start = datetime(today.year - 1, 1, 1)
+                end = datetime(today.year, 1, 1)
+                # Use between for last year
+                f["operator"] = "between"
+                f["value"] = [start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")]
+            elif "最近7天" in question or "近7天" in question or "最近一周" in question:
+                start = today - timedelta(days=7)
+                f["operator"] = ">="
+                f["value"] = start.strftime("%Y-%m-%d")
+            elif "最近30天" in question or "近30天" in question or "最近一个月" in question:
+                start = today - timedelta(days=30)
+                f["operator"] = ">="
+                f["value"] = start.strftime("%Y-%m-%d")
 
 
 def _auto_fix_data_source(dsl_dict: dict, ds_cfg: dict) -> None:
@@ -837,7 +919,7 @@ def _make_generate_dsl_node(
         dsl_dict = _parse_llm_output(raw)
         ds_config = (registry_dict or {}).get("data_sources", {})
         metrics_config = (registry_dict or {}).get("metrics", {})
-        dsl_dict = _post_process_dsl(dsl_dict, data_source or default_ds, valid_ds, ds_config, metrics_config)
+        dsl_dict = _post_process_dsl(dsl_dict, data_source or default_ds, valid_ds, ds_config, metrics_config, question)
         dsl_dict = _semantic_fix_dsl(dsl_dict, question, llm_client, registry_dict)
         dsl = DSL.model_validate(dsl_dict)
 

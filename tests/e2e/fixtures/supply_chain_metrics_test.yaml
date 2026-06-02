@@ -20,6 +20,9 @@ metrics:
   avg_inventory_days:
     expr: AVG(days_of_supply)
     description: "平均库存周转天数"
+  min_inventory_days:
+    expr: MIN(days_of_supply)
+    description: "最低库存可售天数"
   shipment_qty:
     expr: SUM(ship_quantity)
     description: "发货数量"
@@ -35,6 +38,9 @@ metrics:
   on_time_rate:
     expr: "SUM(CASE WHEN on_time = 1 THEN 1 ELSE 0 END) * 1.0 / COUNT(*)"
     description: "准时交付率"
+  on_time_delivery_rate:
+    expr: AVG(on_time)
+    description: "准时交货率（AVG版本）"
   total_receipt_qty:
     expr: SUM(received_qty)
     description: "实际收货数量"

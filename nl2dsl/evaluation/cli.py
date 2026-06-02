@@ -81,12 +81,31 @@ def _create_client_for_domain(domain: str):
 
     registry, permissions, sensitive_columns, masking_rules = _load_config_for_domain(domain)
 
+    # Initialize LLM client if API key is available
+    llm_client = None
+    try:
+        from nl2dsl.llm.client import LLMClient
+        from nl2dsl.config import settings
+
+        if settings.llm_api_key:
+            llm_client = LLMClient(
+                api_key=settings.llm_api_key,
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+            )
+            logger.info("LLM client initialized for domain=%s model=%s", domain, settings.llm_model)
+        else:
+            logger.warning("LLM API key not configured, running without LLM")
+    except Exception as exc:
+        logger.error("Failed to initialize LLM client: %s", exc)
+
     app = create_app(
         engine=engine,
         registry_dict=registry,
         permissions=permissions,
         sensitive_columns=sensitive_columns,
         masking_rules=masking_rules,
+        llm_client=llm_client,
     )
     from fastapi.testclient import TestClient
 
@@ -94,11 +113,11 @@ def _create_client_for_domain(domain: str):
 
 
 def _progress(current: int, total: int) -> None:
-    """Print progress bar."""
+    """Print progress bar (ASCII-safe for Windows terminals)."""
     pct = current / total * 100
     bar_len = 30
     filled = int(bar_len * current / total)
-    bar = "█" * filled + "░" * (bar_len - filled)
+    bar = "=" * filled + "-" * (bar_len - filled)
     print(f"\r  [{bar}] {current}/{total} ({pct:.0f}%)", end="", flush=True)
     if current == total:
         print()
@@ -106,6 +125,14 @@ def _progress(current: int, total: int) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Main CLI entry point."""
+    # Disable Windows system proxy for Python HTTP clients
+    # (avoids Connection refused when a local proxy port is configured but not running)
+    import os
+    os.environ["HTTP_PROXY"] = ""
+    os.environ["HTTPS_PROXY"] = ""
+    os.environ["ALL_PROXY"] = ""
+    os.environ["NO_PROXY"] = "*"
+
     parser = argparse.ArgumentParser(
         description="Evaluate NL2DSL pipeline accuracy",
         formatter_class=argparse.RawDescriptionHelpFormatter,

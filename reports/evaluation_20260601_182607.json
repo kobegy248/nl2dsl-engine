@@ -1,0 +1,6959 @@
+{
+  "overall_score": 0.06999999999999995,
+  "total_cases": 50,
+  "passed": 0,
+  "failed": 50,
+  "execution_time_ms": 464534,
+  "by_dimension": {
+    "intent": 0.0,
+    "metric": 0.0,
+    "dimension": 0.0,
+    "filter": 0.0,
+    "join": 0.0,
+    "limit": 0.0,
+    "order_by": 0.0,
+    "sql_success": 0.0,
+    "result_accuracy": 0.0,
+    "permission": 1.0,
+    "masking": 1.0,
+    "audit": 0.0,
+    "overall": 0.06999999999999995
+  },
+  "by_domain": {
+    "bank": {
+      "domain": "bank",
+      "total_cases": 10,
+      "passed": 0,
+      "failed": 10,
+      "average_score": 0.07000000000000002,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000002
+      }
+    },
+    "ecommerce": {
+      "domain": "ecommerce",
+      "total_cases": 30,
+      "passed": 0,
+      "failed": 30,
+      "average_score": 0.07000000000000003,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000003
+      }
+    },
+    "supply_chain": {
+      "domain": "supply_chain",
+      "total_cases": 10,
+      "passed": 0,
+      "failed": 10,
+      "average_score": 0.07000000000000002,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000002
+      }
+    }
+  },
+  "by_tag": {
+    "count": {
+      "tag": "count",
+      "total_cases": 5,
+      "passed": 0,
+      "failed": 5,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "basic": {
+      "tag": "basic",
+      "total_cases": 16,
+      "passed": 0,
+      "failed": 16,
+      "average_score": 0.07000000000000003,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000003
+      }
+    },
+    "sum": {
+      "tag": "sum",
+      "total_cases": 13,
+      "passed": 0,
+      "failed": 13,
+      "average_score": 0.07000000000000003,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000003
+      }
+    },
+    "avg": {
+      "tag": "avg",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "dimension": {
+      "tag": "dimension",
+      "total_cases": 15,
+      "passed": 0,
+      "failed": 15,
+      "average_score": 0.07000000000000003,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000003
+      }
+    },
+    "group_by": {
+      "tag": "group_by",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "top_n": {
+      "tag": "top_n",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "order_by": {
+      "tag": "order_by",
+      "total_cases": 5,
+      "passed": 0,
+      "failed": 5,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "customer": {
+      "tag": "customer",
+      "total_cases": 3,
+      "passed": 0,
+      "failed": 3,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "filter": {
+      "tag": "filter",
+      "total_cases": 18,
+      "passed": 0,
+      "failed": 18,
+      "average_score": 0.07000000000000003,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000003
+      }
+    },
+    "transaction_type": {
+      "tag": "transaction_type",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "product": {
+      "tag": "product",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "risk": {
+      "tag": "risk",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "multi_metric": {
+      "tag": "multi_metric",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "cash_flow": {
+      "tag": "cash_flow",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "channel": {
+      "tag": "channel",
+      "total_cases": 5,
+      "passed": 0,
+      "failed": 5,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "aggregation": {
+      "tag": "aggregation",
+      "total_cases": 10,
+      "passed": 0,
+      "failed": 10,
+      "average_score": 0.07000000000000002,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07000000000000002
+      }
+    },
+    "single_metric": {
+      "tag": "single_metric",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "time_filter": {
+      "tag": "time_filter",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "customer_type": {
+      "tag": "customer_type",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "brand": {
+      "tag": "brand",
+      "total_cases": 3,
+      "passed": 0,
+      "failed": 3,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "gmv": {
+      "tag": "gmv",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "equal": {
+      "tag": "equal",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "region": {
+      "tag": "region",
+      "total_cases": 6,
+      "passed": 0,
+      "failed": 6,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "semantic_resolution": {
+      "tag": "semantic_resolution",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "not_equal": {
+      "tag": "not_equal",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "category": {
+      "tag": "category",
+      "total_cases": 5,
+      "passed": 0,
+      "failed": 5,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "greater_than": {
+      "tag": "greater_than",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "numeric": {
+      "tag": "numeric",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "like": {
+      "tag": "like",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "product_name": {
+      "tag": "product_name",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "in": {
+      "tag": "in",
+      "total_cases": 2,
+      "passed": 0,
+      "failed": 2,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "multi_region": {
+      "tag": "multi_region",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "multi_filter": {
+      "tag": "multi_filter",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "semantic": {
+      "tag": "semantic",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "complex": {
+      "tag": "complex",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "comparison": {
+      "tag": "comparison",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "join": {
+      "tag": "join",
+      "total_cases": 6,
+      "passed": 0,
+      "failed": 6,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "single_join": {
+      "tag": "single_join",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "multi_join": {
+      "tag": "multi_join",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "supplier": {
+      "tag": "supplier",
+      "total_cases": 3,
+      "passed": 0,
+      "failed": 3,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "tier_level": {
+      "tag": "tier_level",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "date": {
+      "tag": "date",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "weekend": {
+      "tag": "weekend",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "credit": {
+      "tag": "credit",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "multi_dimension": {
+      "tag": "multi_dimension",
+      "total_cases": 3,
+      "passed": 0,
+      "failed": 3,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "purchase": {
+      "tag": "purchase",
+      "total_cases": 3,
+      "passed": 0,
+      "failed": 3,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "inventory": {
+      "tag": "inventory",
+      "total_cases": 4,
+      "passed": 0,
+      "failed": 4,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "warehouse": {
+      "tag": "warehouse",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "delivery": {
+      "tag": "delivery",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "performance": {
+      "tag": "performance",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "shipping": {
+      "tag": "shipping",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "transport": {
+      "tag": "transport",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "material": {
+      "tag": "material",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "lead_time": {
+      "tag": "lead_time",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    },
+    "min": {
+      "tag": "min",
+      "total_cases": 1,
+      "passed": 0,
+      "failed": 1,
+      "average_score": 0.07,
+      "dimension_scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      }
+    }
+  },
+  "failed_cases": [
+    {
+      "test_case": {
+        "id": "bank_001",
+        "query": "查询客户数量",
+        "description": "Simple customer count",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customers",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "cif_no",
+              "alias": "customer_count"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 8180
+    },
+    {
+      "test_case": {
+        "id": "bank_002",
+        "query": "查询账户总余额",
+        "description": "Total account balance",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "acct_bal",
+              "alias": "total_balance"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "bank_003",
+        "query": "各账户类型的平均余额",
+        "description": "Average balance by account type",
+        "domain": "bank",
+        "tags": [
+          "avg",
+          "dimension",
+          "group_by"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "acct_bal",
+              "alias": "avg_balance"
+            }
+          ],
+          "dimensions": [
+            "account_type"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7561
+    },
+    {
+      "test_case": {
+        "id": "bank_004",
+        "query": "交易笔数最多的客户",
+        "description": "Top customers by transaction count",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "top_n",
+          "order_by",
+          "customer"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "txn_seq_no",
+              "alias": "txn_count"
+            }
+          ],
+          "dimensions": [
+            "customer_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "txn_count",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7347
+    },
+    {
+      "test_case": {
+        "id": "bank_005",
+        "query": "存款交易金额合计",
+        "description": "Total deposit amount",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "filter",
+          "transaction_type"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "txn_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "transaction_type",
+              "operator": "=",
+              "value": "1001"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7379
+    },
+    {
+      "test_case": {
+        "id": "bank_006",
+        "query": "各产品的持有金额",
+        "description": "Product holding amounts",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "dimension",
+          "product"
+        ],
+        "expected_dsl": {
+          "data_source": "agreements",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "hold_amt",
+              "alias": "product_hold_amount"
+            }
+          ],
+          "dimensions": [
+            "product_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7412
+    },
+    {
+      "test_case": {
+        "id": "bank_007",
+        "query": "查询冻结金额",
+        "description": "Total frozen amount",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "frz_amt",
+              "alias": "frozen_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7526
+    },
+    {
+      "test_case": {
+        "id": "bank_008",
+        "query": "各风险等级的客户数量",
+        "description": "Customer count by risk level",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "dimension",
+          "risk"
+        ],
+        "expected_dsl": {
+          "data_source": "customers",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "cif_no",
+              "alias": "customer_count"
+            }
+          ],
+          "dimensions": [
+            "risk_level"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7410
+    },
+    {
+      "test_case": {
+        "id": "bank_009",
+        "query": "资金流入和流出金额",
+        "description": "Inflow and outflow amounts",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "multi_metric",
+          "cash_flow"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "inflow_amount"
+            },
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "outflow_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15316
+    },
+    {
+      "test_case": {
+        "id": "bank_010",
+        "query": "各渠道的存款金额",
+        "description": "Deposit amount by channel",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "dimension",
+          "filter",
+          "channel"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "txn_amount"
+            }
+          ],
+          "dimensions": [
+            "channel_name"
+          ],
+          "filters": [
+            {
+              "field": "transaction_type",
+              "operator": "=",
+              "value": "1001"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7502
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_001",
+        "query": "查询销售额",
+        "description": "Simple aggregation without grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "basic",
+          "single_metric"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7564
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_002",
+        "query": "查询各品类的销售额",
+        "description": "Aggregation with dimension grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "dimension",
+          "group_by",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7582
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_003",
+        "query": "查询华东地区的销售额",
+        "description": "Aggregation with region filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7559
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_004",
+        "query": "销售额最高的10个产品",
+        "description": "Top-N aggregation with ordering",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "top_n",
+          "order_by",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "product_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7613
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_005",
+        "query": "查询销售额和订单量",
+        "description": "Multiple metrics aggregation",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "multi_metric",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14937
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_006",
+        "query": "查询本月销售额",
+        "description": "Aggregation with time filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "time_filter",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "order_date",
+              "operator": ">=",
+              "value": "2026-05-01"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14927
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_007",
+        "query": "查询线上渠道销售额",
+        "description": "Aggregation with channel filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "channel",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7404
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_008",
+        "query": "查询VIP客户消费金额",
+        "description": "Aggregation with customer type filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "customer_type",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "=",
+              "value": "VIP"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7640
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_009",
+        "query": "查询苹果品牌销售额",
+        "description": "Aggregation with brand filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "brand",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "brand",
+              "operator": "=",
+              "value": "苹果"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7414
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_010",
+        "query": "查询各地区的GMV",
+        "description": "GMV aggregation with region grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "dimension",
+          "gmv",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "gmv"
+            }
+          ],
+          "dimensions": [
+            "region"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_001",
+        "query": "华东地区的销售额",
+        "description": "Equal filter with semantic value",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "equal",
+          "region",
+          "semantic_resolution"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_002",
+        "query": "非手机品类的销售额",
+        "description": "Not-equal filter",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "not_equal",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [
+            {
+              "field": "category",
+              "operator": "!=",
+              "value": "手机"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7392
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_003",
+        "query": "订单金额大于5000的销售额",
+        "description": "Greater-than filter on numeric field",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "greater_than",
+          "numeric"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "pay_amount",
+              "operator": ">",
+              "value": 5000
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_004",
+        "query": "查询iPhone相关产品的销售额",
+        "description": "Like filter for fuzzy matching",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "like",
+          "product_name"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "product_name",
+              "operator": "like",
+              "value": "iPhone"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15122
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_005",
+        "query": "华东和华南地区的销售额",
+        "description": "In-list filter for multiple regions",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "in",
+          "multi_region"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "in",
+              "value": [
+                "华东",
+                "华南"
+              ]
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15024
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_006",
+        "query": "华东地区线上渠道的销售额",
+        "description": "Multiple filters combined",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "multi_filter",
+          "region",
+          "channel"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            },
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7441
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_007",
+        "query": "高价值客户的销售额",
+        "description": "Complex semantic filter (VIP + high amount)",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "semantic",
+          "complex",
+          "customer_type"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "=",
+              "value": "VIP"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7476
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_008",
+        "query": "新客和老客的销售额对比",
+        "description": "Multiple customer type filter with grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "in",
+          "customer_type",
+          "comparison"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_type"
+          ],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "in",
+              "value": [
+                "新客",
+                "老客"
+              ]
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 22409
+    },
+    {
+      "test_case": {
+        "id": "ec_join_001",
+        "query": "按客户名称统计销售额",
+        "description": "Single join: orders → customer_dim",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "single_join",
+          "customer"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_name"
+          ],
+          "joins": [
+            {
+              "table": "customer_dim",
+              "on_field": "customer_id",
+              "join_type": "left",
+              "alias": "c"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7530
+    },
+    {
+      "test_case": {
+        "id": "ec_join_002",
+        "query": "按供应商统计销售额",
+        "description": "Two joins: orders → product_dim → supplier_dim",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "multi_join",
+          "supplier"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "joins": [
+            {
+              "table": "product_dim",
+              "on_field": "product_id",
+              "join_type": "left",
+              "alias": "p"
+            },
+            {
+              "table": "supplier_dim",
+              "on_field": "product_dim.supplier_id",
+              "join_type": "left",
+              "alias": "s"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "ec_join_003",
+        "query": "按城市等级统计销售额",
+        "description": "Join to region_dim for tier_level",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "region",
+          "tier_level"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "tier_level"
+          ],
+          "joins": [
+            {
+              "table": "region_dim",
+              "on_field": "region_code",
+              "join_type": "left",
+              "alias": "r"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7393
+    },
+    {
+      "test_case": {
+        "id": "ec_join_004",
+        "query": "周末的销售额",
+        "description": "Join to date_dim for is_weekend filter",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "date",
+          "weekend"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "joins": [
+            {
+              "table": "date_dim",
+              "on_field": "date_id",
+              "join_type": "left",
+              "alias": "d"
+            }
+          ],
+          "filters": [
+            {
+              "field": "is_weekend",
+              "operator": "=",
+              "value": 1
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7514
+    },
+    {
+      "test_case": {
+        "id": "ec_join_005",
+        "query": "信用等级为A的供应商的销售额",
+        "description": "Join with filter on joined table",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "filter",
+          "supplier",
+          "credit"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "joins": [
+            {
+              "table": "product_dim",
+              "on_field": "product_id",
+              "join_type": "left",
+              "alias": "p"
+            },
+            {
+              "table": "supplier_dim",
+              "on_field": "product_dim.supplier_id",
+              "join_type": "left",
+              "alias": "s"
+            }
+          ],
+          "filters": [
+            {
+              "field": "credit_rating",
+              "operator": "=",
+              "value": "A"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7339
+    },
+    {
+      "test_case": {
+        "id": "ec_join_006",
+        "query": "按客户名称和品类统计销售额",
+        "description": "Join with multiple dimensions",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "multi_dimension",
+          "customer",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_name",
+            "category"
+          ],
+          "joins": [
+            {
+              "table": "customer_dim",
+              "on_field": "customer_id",
+              "join_type": "left",
+              "alias": "c"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15064
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_001",
+        "query": "按地区和品类统计销售额",
+        "description": "Two dimension grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_dimension",
+          "group_by",
+          "region",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "region",
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15028
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_002",
+        "query": "各渠道各品类的订单量",
+        "description": "Two dimensions with count metric",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_dimension",
+          "group_by",
+          "channel",
+          "category",
+          "count"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "channel",
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7411
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_003",
+        "query": "按品牌统计销售额和订单量",
+        "description": "Multiple metrics with single dimension",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_metric",
+          "dimension",
+          "brand"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "brand"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14993
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_004",
+        "query": "华东地区按品类统计销售额降序",
+        "description": "Filter + dimension + order by",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "dimension",
+          "order_by",
+          "region",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7500
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_005",
+        "query": "各客户类型的平均客单价和订单量",
+        "description": "Multiple metrics + dimension",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_metric",
+          "dimension",
+          "customer_type",
+          "avg",
+          "count"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "pay_amount",
+              "alias": "avg_order_value"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "customer_type"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14784
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_006",
+        "query": "线上渠道按品牌统计销售额top5",
+        "description": "Filter + dimension + top_n + order_by",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "dimension",
+          "top_n",
+          "order_by",
+          "channel",
+          "brand"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "brand"
+          ],
+          "filters": [
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 5
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15077
+    },
+    {
+      "test_case": {
+        "id": "sc_001",
+        "query": "查询采购订单总金额",
+        "description": "Total purchase amount",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "basic",
+          "purchase"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7250
+    },
+    {
+      "test_case": {
+        "id": "sc_002",
+        "query": "各供应商的采购金额",
+        "description": "Purchase amount by supplier",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "supplier"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "sc_003",
+        "query": "总库存量",
+        "description": "Total inventory quantity",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "basic",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7378
+    },
+    {
+      "test_case": {
+        "id": "sc_004",
+        "query": "各仓库的库存量",
+        "description": "Inventory by warehouse",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "warehouse",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [
+            "warehouse_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7446
+    },
+    {
+      "test_case": {
+        "id": "sc_005",
+        "query": "准时交货率",
+        "description": "On-time delivery rate",
+        "domain": "supply_chain",
+        "tags": [
+          "avg",
+          "delivery",
+          "performance"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "on_time",
+              "alias": "on_time_delivery_rate"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7415
+    },
+    {
+      "test_case": {
+        "id": "sc_006",
+        "query": "各运输方式的运输成本",
+        "description": "Shipping cost by transport mode",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "shipping",
+          "transport"
+        ],
+        "expected_dsl": {
+          "data_source": "shipment_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "shipping_cost",
+              "alias": "total_shipping_cost"
+            }
+          ],
+          "dimensions": [
+            "transport_mode"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7357
+    },
+    {
+      "test_case": {
+        "id": "sc_007",
+        "query": "各物料类别的库存量",
+        "description": "Inventory by material category",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "material",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [
+            "material_category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7532
+    },
+    {
+      "test_case": {
+        "id": "sc_008",
+        "query": "平均采购提前期",
+        "description": "Average purchase lead time",
+        "domain": "supply_chain",
+        "tags": [
+          "avg",
+          "basic",
+          "purchase",
+          "lead_time"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "lead_time_days",
+              "alias": "avg_lead_time"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7481
+    },
+    {
+      "test_case": {
+        "id": "sc_009",
+        "query": "各地区的采购金额",
+        "description": "Purchase amount by region",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "region",
+          "purchase"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [
+            "region"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7496
+    },
+    {
+      "test_case": {
+        "id": "sc_010",
+        "query": "库存可售天数最低的物料",
+        "description": "Lowest days of supply materials",
+        "domain": "supply_chain",
+        "tags": [
+          "min",
+          "top_n",
+          "order_by",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "min",
+              "field": "days_of_supply",
+              "alias": "min_days_of_supply"
+            }
+          ],
+          "dimensions": [
+            "material_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "min_days_of_supply",
+              "direction": "asc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7502
+    }
+  ],
+  "all_results": [
+    {
+      "test_case": {
+        "id": "bank_001",
+        "query": "查询客户数量",
+        "description": "Simple customer count",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customers",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "cif_no",
+              "alias": "customer_count"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 8180
+    },
+    {
+      "test_case": {
+        "id": "bank_002",
+        "query": "查询账户总余额",
+        "description": "Total account balance",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "acct_bal",
+              "alias": "total_balance"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "bank_003",
+        "query": "各账户类型的平均余额",
+        "description": "Average balance by account type",
+        "domain": "bank",
+        "tags": [
+          "avg",
+          "dimension",
+          "group_by"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "acct_bal",
+              "alias": "avg_balance"
+            }
+          ],
+          "dimensions": [
+            "account_type"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7561
+    },
+    {
+      "test_case": {
+        "id": "bank_004",
+        "query": "交易笔数最多的客户",
+        "description": "Top customers by transaction count",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "top_n",
+          "order_by",
+          "customer"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "txn_seq_no",
+              "alias": "txn_count"
+            }
+          ],
+          "dimensions": [
+            "customer_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "txn_count",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7347
+    },
+    {
+      "test_case": {
+        "id": "bank_005",
+        "query": "存款交易金额合计",
+        "description": "Total deposit amount",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "filter",
+          "transaction_type"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "txn_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "transaction_type",
+              "operator": "=",
+              "value": "1001"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7379
+    },
+    {
+      "test_case": {
+        "id": "bank_006",
+        "query": "各产品的持有金额",
+        "description": "Product holding amounts",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "dimension",
+          "product"
+        ],
+        "expected_dsl": {
+          "data_source": "agreements",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "hold_amt",
+              "alias": "product_hold_amount"
+            }
+          ],
+          "dimensions": [
+            "product_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7412
+    },
+    {
+      "test_case": {
+        "id": "bank_007",
+        "query": "查询冻结金额",
+        "description": "Total frozen amount",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "customer_accounts",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "frz_amt",
+              "alias": "frozen_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7526
+    },
+    {
+      "test_case": {
+        "id": "bank_008",
+        "query": "各风险等级的客户数量",
+        "description": "Customer count by risk level",
+        "domain": "bank",
+        "tags": [
+          "count",
+          "dimension",
+          "risk"
+        ],
+        "expected_dsl": {
+          "data_source": "customers",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "cif_no",
+              "alias": "customer_count"
+            }
+          ],
+          "dimensions": [
+            "risk_level"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7410
+    },
+    {
+      "test_case": {
+        "id": "bank_009",
+        "query": "资金流入和流出金额",
+        "description": "Inflow and outflow amounts",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "multi_metric",
+          "cash_flow"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "inflow_amount"
+            },
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "outflow_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15316
+    },
+    {
+      "test_case": {
+        "id": "bank_010",
+        "query": "各渠道的存款金额",
+        "description": "Deposit amount by channel",
+        "domain": "bank",
+        "tags": [
+          "sum",
+          "dimension",
+          "filter",
+          "channel"
+        ],
+        "expected_dsl": {
+          "data_source": "transactions",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "txn_amt",
+              "alias": "txn_amount"
+            }
+          ],
+          "dimensions": [
+            "channel_name"
+          ],
+          "filters": [
+            {
+              "field": "transaction_type",
+              "operator": "=",
+              "value": "1001"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7502
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_001",
+        "query": "查询销售额",
+        "description": "Simple aggregation without grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "basic",
+          "single_metric"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7564
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_002",
+        "query": "查询各品类的销售额",
+        "description": "Aggregation with dimension grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "dimension",
+          "group_by",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7582
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_003",
+        "query": "查询华东地区的销售额",
+        "description": "Aggregation with region filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7559
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_004",
+        "query": "销售额最高的10个产品",
+        "description": "Top-N aggregation with ordering",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "top_n",
+          "order_by",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "product_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7613
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_005",
+        "query": "查询销售额和订单量",
+        "description": "Multiple metrics aggregation",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "multi_metric",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14937
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_006",
+        "query": "查询本月销售额",
+        "description": "Aggregation with time filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "time_filter",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "order_date",
+              "operator": ">=",
+              "value": "2026-05-01"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14927
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_007",
+        "query": "查询线上渠道销售额",
+        "description": "Aggregation with channel filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "channel",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7404
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_008",
+        "query": "查询VIP客户消费金额",
+        "description": "Aggregation with customer type filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "customer_type",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "=",
+              "value": "VIP"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7640
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_009",
+        "query": "查询苹果品牌销售额",
+        "description": "Aggregation with brand filter",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "filter",
+          "brand",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "brand",
+              "operator": "=",
+              "value": "苹果"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7414
+    },
+    {
+      "test_case": {
+        "id": "ec_basic_010",
+        "query": "查询各地区的GMV",
+        "description": "GMV aggregation with region grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "aggregation",
+          "dimension",
+          "gmv",
+          "basic"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "gmv"
+            }
+          ],
+          "dimensions": [
+            "region"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_001",
+        "query": "华东地区的销售额",
+        "description": "Equal filter with semantic value",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "equal",
+          "region",
+          "semantic_resolution"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_002",
+        "query": "非手机品类的销售额",
+        "description": "Not-equal filter",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "not_equal",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [
+            {
+              "field": "category",
+              "operator": "!=",
+              "value": "手机"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7392
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_003",
+        "query": "订单金额大于5000的销售额",
+        "description": "Greater-than filter on numeric field",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "greater_than",
+          "numeric"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "pay_amount",
+              "operator": ">",
+              "value": 5000
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_004",
+        "query": "查询iPhone相关产品的销售额",
+        "description": "Like filter for fuzzy matching",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "like",
+          "product_name"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "product_name",
+              "operator": "like",
+              "value": "iPhone"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15122
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_005",
+        "query": "华东和华南地区的销售额",
+        "description": "In-list filter for multiple regions",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "in",
+          "multi_region"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "in",
+              "value": [
+                "华东",
+                "华南"
+              ]
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15024
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_006",
+        "query": "华东地区线上渠道的销售额",
+        "description": "Multiple filters combined",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "multi_filter",
+          "region",
+          "channel"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            },
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7441
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_007",
+        "query": "高价值客户的销售额",
+        "description": "Complex semantic filter (VIP + high amount)",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "semantic",
+          "complex",
+          "customer_type"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "=",
+              "value": "VIP"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7476
+    },
+    {
+      "test_case": {
+        "id": "ec_filter_008",
+        "query": "新客和老客的销售额对比",
+        "description": "Multiple customer type filter with grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "in",
+          "customer_type",
+          "comparison"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_type"
+          ],
+          "filters": [
+            {
+              "field": "customer_type",
+              "operator": "in",
+              "value": [
+                "新客",
+                "老客"
+              ]
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 22409
+    },
+    {
+      "test_case": {
+        "id": "ec_join_001",
+        "query": "按客户名称统计销售额",
+        "description": "Single join: orders → customer_dim",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "single_join",
+          "customer"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_name"
+          ],
+          "joins": [
+            {
+              "table": "customer_dim",
+              "on_field": "customer_id",
+              "join_type": "left",
+              "alias": "c"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7530
+    },
+    {
+      "test_case": {
+        "id": "ec_join_002",
+        "query": "按供应商统计销售额",
+        "description": "Two joins: orders → product_dim → supplier_dim",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "multi_join",
+          "supplier"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "joins": [
+            {
+              "table": "product_dim",
+              "on_field": "product_id",
+              "join_type": "left",
+              "alias": "p"
+            },
+            {
+              "table": "supplier_dim",
+              "on_field": "product_dim.supplier_id",
+              "join_type": "left",
+              "alias": "s"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7506
+    },
+    {
+      "test_case": {
+        "id": "ec_join_003",
+        "query": "按城市等级统计销售额",
+        "description": "Join to region_dim for tier_level",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "region",
+          "tier_level"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "tier_level"
+          ],
+          "joins": [
+            {
+              "table": "region_dim",
+              "on_field": "region_code",
+              "join_type": "left",
+              "alias": "r"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7393
+    },
+    {
+      "test_case": {
+        "id": "ec_join_004",
+        "query": "周末的销售额",
+        "description": "Join to date_dim for is_weekend filter",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "date",
+          "weekend"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [],
+          "joins": [
+            {
+              "table": "date_dim",
+              "on_field": "date_id",
+              "join_type": "left",
+              "alias": "d"
+            }
+          ],
+          "filters": [
+            {
+              "field": "is_weekend",
+              "operator": "=",
+              "value": 1
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7514
+    },
+    {
+      "test_case": {
+        "id": "ec_join_005",
+        "query": "信用等级为A的供应商的销售额",
+        "description": "Join with filter on joined table",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "filter",
+          "supplier",
+          "credit"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "joins": [
+            {
+              "table": "product_dim",
+              "on_field": "product_id",
+              "join_type": "left",
+              "alias": "p"
+            },
+            {
+              "table": "supplier_dim",
+              "on_field": "product_dim.supplier_id",
+              "join_type": "left",
+              "alias": "s"
+            }
+          ],
+          "filters": [
+            {
+              "field": "credit_rating",
+              "operator": "=",
+              "value": "A"
+            }
+          ],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7339
+    },
+    {
+      "test_case": {
+        "id": "ec_join_006",
+        "query": "按客户名称和品类统计销售额",
+        "description": "Join with multiple dimensions",
+        "domain": "ecommerce",
+        "tags": [
+          "join",
+          "multi_dimension",
+          "customer",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "customer_name",
+            "category"
+          ],
+          "joins": [
+            {
+              "table": "customer_dim",
+              "on_field": "customer_id",
+              "join_type": "left",
+              "alias": "c"
+            }
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15064
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_001",
+        "query": "按地区和品类统计销售额",
+        "description": "Two dimension grouping",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_dimension",
+          "group_by",
+          "region",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "region",
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15028
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_002",
+        "query": "各渠道各品类的订单量",
+        "description": "Two dimensions with count metric",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_dimension",
+          "group_by",
+          "channel",
+          "category",
+          "count"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "channel",
+            "category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7411
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_003",
+        "query": "按品牌统计销售额和订单量",
+        "description": "Multiple metrics with single dimension",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_metric",
+          "dimension",
+          "brand"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "brand"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14993
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_004",
+        "query": "华东地区按品类统计销售额降序",
+        "description": "Filter + dimension + order by",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "dimension",
+          "order_by",
+          "region",
+          "category"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "category"
+          ],
+          "filters": [
+            {
+              "field": "region",
+              "operator": "=",
+              "value": "华东"
+            }
+          ],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7500
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_005",
+        "query": "各客户类型的平均客单价和订单量",
+        "description": "Multiple metrics + dimension",
+        "domain": "ecommerce",
+        "tags": [
+          "multi_metric",
+          "dimension",
+          "customer_type",
+          "avg",
+          "count"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "pay_amount",
+              "alias": "avg_order_value"
+            },
+            {
+              "func": "count",
+              "field": "id",
+              "alias": "order_count"
+            }
+          ],
+          "dimensions": [
+            "customer_type"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 14784
+    },
+    {
+      "test_case": {
+        "id": "ec_multi_006",
+        "query": "线上渠道按品牌统计销售额top5",
+        "description": "Filter + dimension + top_n + order_by",
+        "domain": "ecommerce",
+        "tags": [
+          "filter",
+          "dimension",
+          "top_n",
+          "order_by",
+          "channel",
+          "brand"
+        ],
+        "expected_dsl": {
+          "data_source": "orders",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "pay_amount",
+              "alias": "sales_amount"
+            }
+          ],
+          "dimensions": [
+            "brand"
+          ],
+          "filters": [
+            {
+              "field": "channel",
+              "operator": "=",
+              "value": "线上"
+            }
+          ],
+          "order_by": [
+            {
+              "field": "sales_amount",
+              "direction": "desc"
+            }
+          ],
+          "limit": 5
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 15077
+    },
+    {
+      "test_case": {
+        "id": "sc_001",
+        "query": "查询采购订单总金额",
+        "description": "Total purchase amount",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "basic",
+          "purchase"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7250
+    },
+    {
+      "test_case": {
+        "id": "sc_002",
+        "query": "各供应商的采购金额",
+        "description": "Purchase amount by supplier",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "supplier"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [
+            "supplier_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7463
+    },
+    {
+      "test_case": {
+        "id": "sc_003",
+        "query": "总库存量",
+        "description": "Total inventory quantity",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "basic",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7378
+    },
+    {
+      "test_case": {
+        "id": "sc_004",
+        "query": "各仓库的库存量",
+        "description": "Inventory by warehouse",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "warehouse",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [
+            "warehouse_name"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7446
+    },
+    {
+      "test_case": {
+        "id": "sc_005",
+        "query": "准时交货率",
+        "description": "On-time delivery rate",
+        "domain": "supply_chain",
+        "tags": [
+          "avg",
+          "delivery",
+          "performance"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "on_time",
+              "alias": "on_time_delivery_rate"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7415
+    },
+    {
+      "test_case": {
+        "id": "sc_006",
+        "query": "各运输方式的运输成本",
+        "description": "Shipping cost by transport mode",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "shipping",
+          "transport"
+        ],
+        "expected_dsl": {
+          "data_source": "shipment_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "shipping_cost",
+              "alias": "total_shipping_cost"
+            }
+          ],
+          "dimensions": [
+            "transport_mode"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7357
+    },
+    {
+      "test_case": {
+        "id": "sc_007",
+        "query": "各物料类别的库存量",
+        "description": "Inventory by material category",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "material",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "stock_quantity",
+              "alias": "total_stock"
+            }
+          ],
+          "dimensions": [
+            "material_category"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7532
+    },
+    {
+      "test_case": {
+        "id": "sc_008",
+        "query": "平均采购提前期",
+        "description": "Average purchase lead time",
+        "domain": "supply_chain",
+        "tags": [
+          "avg",
+          "basic",
+          "purchase",
+          "lead_time"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "avg",
+              "field": "lead_time_days",
+              "alias": "avg_lead_time"
+            }
+          ],
+          "dimensions": [],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7481
+    },
+    {
+      "test_case": {
+        "id": "sc_009",
+        "query": "各地区的采购金额",
+        "description": "Purchase amount by region",
+        "domain": "supply_chain",
+        "tags": [
+          "sum",
+          "dimension",
+          "region",
+          "purchase"
+        ],
+        "expected_dsl": {
+          "data_source": "purchase_fact",
+          "metrics": [
+            {
+              "func": "sum",
+              "field": "order_amount",
+              "alias": "total_purchase_amount"
+            }
+          ],
+          "dimensions": [
+            "region"
+          ],
+          "filters": [],
+          "order_by": [],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7496
+    },
+    {
+      "test_case": {
+        "id": "sc_010",
+        "query": "库存可售天数最低的物料",
+        "description": "Lowest days of supply materials",
+        "domain": "supply_chain",
+        "tags": [
+          "min",
+          "top_n",
+          "order_by",
+          "inventory"
+        ],
+        "expected_dsl": {
+          "data_source": "inventory_fact",
+          "metrics": [
+            {
+              "func": "min",
+              "field": "days_of_supply",
+              "alias": "min_days_of_supply"
+            }
+          ],
+          "dimensions": [
+            "material_name"
+          ],
+          "filters": [],
+          "order_by": [
+            {
+              "field": "min_days_of_supply",
+              "direction": "asc"
+            }
+          ],
+          "limit": 10
+        }
+      },
+      "passed": false,
+      "scores": {
+        "intent": 0.0,
+        "metric": 0.0,
+        "dimension": 0.0,
+        "filter": 0.0,
+        "join": 0.0,
+        "limit": 0.0,
+        "order_by": 0.0,
+        "sql_success": 0.0,
+        "result_accuracy": 0.0,
+        "permission": 1.0,
+        "masking": 1.0,
+        "audit": 0.0,
+        "overall": 0.07
+      },
+      "governance": {
+        "permission_error": false,
+        "sensitive_fields_accessed": [],
+        "masked_fields": {},
+        "audit_logged": false
+      },
+      "execution_time_ms": 7502
+    }
+  ],
+  "generated_at": "2026-06-01T18:26:07.430061"
+}

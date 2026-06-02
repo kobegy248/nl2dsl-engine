@@ -37,9 +37,13 @@ class SQLBuilder:
 
         Supports qualified references like 'table.column'.
         Falls back to first table that contains the column.
+        Also resolves semantic dimension names to physical column names.
         """
-        if "." in field:
-            table_name, col_name = field.split(".", 1)
+        # Map semantic name to physical column name
+        physical_field = self._dimension_mapping.get(field, field)
+
+        if "." in physical_field:
+            table_name, col_name = physical_field.split(".", 1)
             # Try to match by alias name first, then original table name
             for tbl in tables.values():
                 names = [tbl.name]
@@ -51,8 +55,8 @@ class SQLBuilder:
 
         # Unqualified: search all tables
         for tbl in tables.values():
-            if hasattr(tbl, "c") and field in tbl.c:
-                return tbl.c[field]
+            if hasattr(tbl, "c") and physical_field in tbl.c:
+                return tbl.c[physical_field]
         raise ValidationError(f"Column '{field}' not found in any table")
 
     def _get_table_for_column(self, tables: dict[str, object], field: str) -> object:
