@@ -1,0 +1,15 @@
+test_cases:
+  - id: RANK_001
+    query: "销售额最高的10个商品"
+    difficulty: medium
+    category: ranking
+    tags: ["ranking", "top_n"]
+    expected:
+      intent: rank
+      metric: sales_amount
+      dimensions: [product_name]
+      planner:
+        order_by:
+          field: sales_amount
+          direction: desc
+        limit: 10

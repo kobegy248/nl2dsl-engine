@@ -1,0 +1,44 @@
+test_cases:
+  - id: BASIC_001
+    query: "查询销售额"
+    difficulty: easy
+    category: basic
+    tags: ["aggregation"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: []
+      filters: []
+
+  - id: BASIC_002
+    query: "查询订单量"
+    difficulty: easy
+    category: basic
+    tags: ["aggregation"]
+    expected:
+      intent: aggregate
+      metric: order_count
+      dimensions: []
+      filters: []
+
+  - id: BASIC_003
+    query: "按品牌统计销售额"
+    difficulty: easy
+    category: basic
+    tags: ["aggregation", "dimension"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [brand]
+      filters: []
+
+  - id: BASIC_004
+    query: "查询客单价"
+    difficulty: easy
+    category: basic
+    tags: ["aggregation"]
+    expected:
+      intent: aggregate
+      metric: avg_order_value
+      dimensions: []
+      filters: []

@@ -1,0 +1,29 @@
+test_cases:
+  - id: FILTER_001
+    query: "查询华东销售额"
+    difficulty: easy
+    category: filter
+    tags: ["filter", "region"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      filters:
+        - field: region
+          operator: "="
+          value: "华东"
+
+  - id: FILTER_002
+    query: "销售额大于10万的商品"
+    difficulty: medium
+    category: filter
+    tags: ["filter", "having"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [product_name]
+      filters: []
+      planner:
+        having:
+          - field: sales_amount
+            operator: ">"
+            value: 100000
