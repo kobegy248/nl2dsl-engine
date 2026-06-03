@@ -51,3 +51,42 @@ class TestI001UnknownDataSource:
         rule = I001_UnknownDataSource()
         result = rule.check({"data_source": "fake_db"}, context)
         assert result.location == "data_source"
+
+
+class TestI002DataSourceOnlyMetric:
+    @pytest.fixture
+    def i002_config(self):
+        return SemanticConfig(
+            metrics={
+                "sales_amount": {"expr": "SUM(pay_amount)"},
+                "gmv": {"expr": "SUM(pay_amount)"},
+            },
+            data_sources={
+                "orders": {"table": "order_fact", "metrics": ["sales_amount", "gmv"], "dimensions": []},
+                "products": {"table": "product_dim", "metrics": [], "dimensions": []},
+            },
+        )
+
+    def test_triggers_when_all_metrics_in_different_source(self, i002_config):
+        from nl2dsl.optimizer.rules.intent import I002_DataSourceOnlyMetric
+        ctx = RuleContext(semantic_config=i002_config)
+        rule = I002_DataSourceOnlyMetric()
+        dsl = {"data_source": "products", "metrics": [{"func": "sum", "field": "pay_amount", "alias": "gmv"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.after["data_source"] == "orders"
+
+    def test_does_not_trigger_when_source_matches(self, i002_config):
+        from nl2dsl.optimizer.rules.intent import I002_DataSourceOnlyMetric
+        ctx = RuleContext(semantic_config=i002_config)
+        rule = I002_DataSourceOnlyMetric()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "pay_amount", "alias": "gmv"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+    def test_does_not_trigger_with_empty_metrics(self, i002_config):
+        from nl2dsl.optimizer.rules.intent import I002_DataSourceOnlyMetric
+        ctx = RuleContext(semantic_config=i002_config)
+        rule = I002_DataSourceOnlyMetric()
+        result = rule.check({"data_source": "products", "metrics": None}, ctx)
+        assert result.description == ""

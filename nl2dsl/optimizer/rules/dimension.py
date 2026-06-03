@@ -50,3 +50,38 @@ class D003_RedundantDimension(BaseRule):
         dsl = copy.deepcopy(dsl)
         dsl["dimensions"] = result.after.get("dimensions", dsl.get("dimensions"))
         return dsl
+
+
+@RuleRegistry.register
+class D002_DimensionNotInDataSource(BaseRule):
+    """Check if each dimension belongs to the current data_source or is joinable."""
+
+    metadata = RuleMetadata(
+        error_code="D002",
+        category="Dimension",
+        description="Dimension does not belong to the current data_source",
+        priority=3,
+        severity="Reject",
+        confidence="high",
+        is_fatal=False,
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        data_source = dsl.get("data_source", "")
+        if not data_source:
+            return RuleResult.no_issue("D002", "Dimension")
+
+        dims = dsl.get("dimensions") or []
+        source_dims = context.semantic_config.get_dimensions_for_source(data_source)
+
+        for i, d in enumerate(dims):
+            if d in context.semantic_config.dimensions and d not in source_dims:
+                correct_source = context.semantic_config.find_data_source_for_dimension(d)
+                return RuleResult.from_metadata(
+                    self.metadata,
+                    description=f"Dimension '{d}' does not belong to data_source '{data_source}'"
+                                + (f" (found in '{correct_source}')" if correct_source else ""),
+                    before={"data_source": data_source, "dimension": d},
+                    location=f"dimensions[{i}]",
+                )
+        return RuleResult.no_issue("D002", "Dimension")

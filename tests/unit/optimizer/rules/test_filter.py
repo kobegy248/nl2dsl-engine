@@ -121,3 +121,52 @@ class TestF002OperatorTypeMismatch:
         # F002 uses BaseRule's default _apply_location_fix
         fixed = rule.fix(dsl, result)
         assert fixed["filters"][0]["operator"] == "="
+
+
+class TestF001InvalidEnumValue:
+    @pytest.fixture
+    def f001_config(self):
+        return SemanticConfig(
+            dimensions={
+                "region": {"column": "region", "type": "string", "value_map": {"华东": "huadong", "华南": "huanan", "华北": "huabei"}},
+                "status": {"column": "status", "type": "string", "values": ["pending", "completed", "cancelled"]},
+                "name": {"column": "name", "type": "string"},
+            },
+            data_sources={
+                "orders": {"table": "order_fact", "metrics": [], "dimensions": ["region", "status", "name"]},
+            },
+        )
+
+    def test_exact_match_no_trigger(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "region", "operator": "=", "value": "华东"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+    def test_fuzzy_match_triggers_fix(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "region", "operator": "=", "value": "华东区"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.after["value"] == "华东"
+
+    def test_no_match_when_field_has_no_enum(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "name", "operator": "=", "value": "anything"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+    def test_values_list_fuzzy_match(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "status", "operator": "=", "value": "pendding"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.after["value"] == "pending"

@@ -24,6 +24,7 @@ from nl2dsl.optimizer.rules import intent  # noqa: F401
 from nl2dsl.optimizer.rules import metric  # noqa: F401
 from nl2dsl.optimizer.rules import dimension  # noqa: F401
 from nl2dsl.optimizer.rules import filter as filter_rules  # noqa: F401
+from nl2dsl.optimizer.rules import governance  # noqa: F401
 
 
 def optimize(

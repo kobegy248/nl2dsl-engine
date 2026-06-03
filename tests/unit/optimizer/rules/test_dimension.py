@@ -52,3 +52,43 @@ class TestD003RedundantDimension:
         assert result.description != ""
         fixed = rule.fix(dsl, result)
         assert fixed["dimensions"] == ["x", "y"]
+
+
+class TestD002DimensionNotInDataSource:
+    @pytest.fixture
+    def d002_config(self):
+        return SemanticConfig(
+            dimensions={
+                "region": {"column": "region", "type": "string"},
+                "user_level": {"column": "user_level", "type": "string"},
+            },
+            data_sources={
+                "orders": {"table": "order_fact", "metrics": [], "dimensions": ["region"]},
+                "users": {"table": "user_dim", "metrics": [], "dimensions": ["user_level"]},
+            },
+        )
+
+    def test_triggers_when_dimension_not_in_datasource(self, d002_config):
+        from nl2dsl.optimizer.rules.dimension import D002_DimensionNotInDataSource
+        ctx = RuleContext(semantic_config=d002_config)
+        rule = D002_DimensionNotInDataSource()
+        dsl = {"data_source": "orders", "dimensions": ["user_level"]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.severity == "Reject"
+
+    def test_does_not_trigger_when_dimension_in_datasource(self, d002_config):
+        from nl2dsl.optimizer.rules.dimension import D002_DimensionNotInDataSource
+        ctx = RuleContext(semantic_config=d002_config)
+        rule = D002_DimensionNotInDataSource()
+        dsl = {"data_source": "orders", "dimensions": ["region"]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+    def test_skips_unregistered_dimension(self, d002_config):
+        from nl2dsl.optimizer.rules.dimension import D002_DimensionNotInDataSource
+        ctx = RuleContext(semantic_config=d002_config)
+        rule = D002_DimensionNotInDataSource()
+        dsl = {"data_source": "orders", "dimensions": ["unknown_dim"]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""

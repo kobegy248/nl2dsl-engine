@@ -143,3 +143,44 @@ class TestM003MissingAlias:
         result = rule.check(dsl, context)
         fixed = rule.fix(dsl, result)
         assert fixed["metrics"][0]["alias"] == "sum_pay_amount"
+
+
+class TestM004MetricDataSourceMismatch:
+    @pytest.fixture
+    def m004_config(self):
+        return SemanticConfig(
+            metrics={
+                "sales_amount": {"expr": "SUM(pay_amount)"},
+                "gmv": {"expr": "SUM(pay_amount)"},
+                "user_count": {"expr": "COUNT(user_id)"},
+            },
+            data_sources={
+                "orders": {"table": "order_fact", "metrics": ["sales_amount", "gmv"], "dimensions": []},
+                "users": {"table": "user_dim", "metrics": ["user_count"], "dimensions": []},
+            },
+        )
+
+    def test_triggers_when_metric_not_in_datasource(self, m004_config):
+        from nl2dsl.optimizer.rules.metric import M004_MetricDataSourceMismatch
+        ctx = RuleContext(semantic_config=m004_config)
+        rule = M004_MetricDataSourceMismatch()
+        dsl = {"data_source": "orders", "metrics": [{"func": "count", "field": "user_id", "alias": "user_count"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.severity == "Reject"
+
+    def test_does_not_trigger_when_metric_in_datasource(self, m004_config):
+        from nl2dsl.optimizer.rules.metric import M004_MetricDataSourceMismatch
+        ctx = RuleContext(semantic_config=m004_config)
+        rule = M004_MetricDataSourceMismatch()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "pay_amount", "alias": "gmv"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+    def test_skips_unregistered_metric(self, m004_config):
+        from nl2dsl.optimizer.rules.metric import M004_MetricDataSourceMismatch
+        ctx = RuleContext(semantic_config=m004_config)
+        rule = M004_MetricDataSourceMismatch()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "unknown", "alias": "unregistered"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""

@@ -59,13 +59,19 @@ class RuleResult:
         clarification_question: str | None = None,
         candidate_values: list[str] | None = None,
         applied: bool = False,
+        confidence: str | None = None,
     ) -> RuleResult:
-        """Build a RuleResult from a rule's metadata."""
+        """Build a RuleResult from a rule's metadata.
+
+        Args:
+            metadata: The rule's metadata descriptor.
+            confidence: Optional override for the metadata's confidence level.
+        """
         return cls(
             error_code=metadata.error_code,
             category=metadata.category,
             severity=metadata.severity,
-            confidence=metadata.confidence,
+            confidence=confidence if confidence is not None else metadata.confidence,
             is_fatal=metadata.is_fatal,
             description=description,
             before=before,

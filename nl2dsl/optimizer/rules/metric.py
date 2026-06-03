@@ -80,3 +80,42 @@ class M003_MissingAlias(BaseRule):
                     location=f"metrics[{i}].alias",
                 )
         return RuleResult.no_issue("M003", "Metric")
+
+
+@RuleRegistry.register
+class M004_MetricDataSourceMismatch(BaseRule):
+    """Check if a registered metric belongs to the current data_source."""
+
+    metadata = RuleMetadata(
+        error_code="M004",
+        category="Metric",
+        description="Metric does not belong to the current data_source",
+        priority=3,
+        severity="Reject",
+        confidence="high",
+        is_fatal=False,
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        data_source = dsl.get("data_source", "")
+        if not data_source:
+            return RuleResult.no_issue("M004", "Metric")
+
+        metrics = dsl.get("metrics") or []
+        source_metrics = context.semantic_config.get_metrics_for_source(data_source)
+
+        for i, m in enumerate(metrics):
+            alias = m.get("alias", "")
+            if alias and alias in context.semantic_config.metrics:
+                # Check if this metric belongs to the current data_source
+                if alias not in source_metrics:
+                    # Find where it does belong
+                    correct_source = context.semantic_config.find_data_source_for_metric(alias)
+                    return RuleResult.from_metadata(
+                        self.metadata,
+                        description=f"Metric '{alias}' does not belong to data_source '{data_source}'"
+                                    + (f" (found in '{correct_source}')" if correct_source else ""),
+                        before={"data_source": data_source, "metric": alias},
+                        location=f"metrics[{i}].alias",
+                    )
+        return RuleResult.no_issue("M004", "Metric")
