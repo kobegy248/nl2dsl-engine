@@ -170,3 +170,69 @@ class TestF001InvalidEnumValue:
         result = rule.check(dsl, ctx)
         assert result.description != ""
         assert result.after["value"] == "pending"
+
+
+class TestF003MissingTimeRange:
+    @pytest.fixture
+    def ctx(self):
+        return RuleContext(semantic_config=SemanticConfig())
+
+    def test_triggers_with_time_keyword_no_range(self, ctx):
+        from nl2dsl.optimizer.rules.filter import F003_MissingTimeRange
+        ctx2 = RuleContext(semantic_config=SemanticConfig(), original_question="本月GMV是多少")
+        rule = F003_MissingTimeRange()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "x", "alias": "gmv"}]}
+        result = rule.check(dsl, ctx2)
+        assert result.description != ""
+
+    def test_does_not_trigger_without_time_keyword(self, ctx):
+        from nl2dsl.optimizer.rules.filter import F003_MissingTimeRange
+        ctx2 = RuleContext(semantic_config=SemanticConfig(), original_question="GMV是多少")
+        rule = F003_MissingTimeRange()
+        dsl = {"data_source": "orders"}
+        result = rule.check(dsl, ctx2)
+        assert result.description == ""
+
+    def test_does_not_trigger_when_time_range_exists(self, ctx):
+        from nl2dsl.optimizer.rules.filter import F003_MissingTimeRange
+        ctx2 = RuleContext(semantic_config=SemanticConfig(), original_question="本月GMV")
+        rule = F003_MissingTimeRange()
+        dsl = {"data_source": "orders", "time_range": ("2024-01-01", "2024-01-31")}
+        result = rule.check(dsl, ctx2)
+        assert result.description == ""
+
+
+class TestF004ContradictoryFilters:
+    def test_triggers_on_contradictory_equals(self):
+        from nl2dsl.optimizer.rules.filter import F004_ContradictoryFilters
+        ctx = RuleContext(semantic_config=SemanticConfig())
+        rule = F004_ContradictoryFilters()
+        dsl = {"data_source": "orders", "filters": [
+            {"field": "region", "operator": "=", "value": "华东"},
+            {"field": "region", "operator": "=", "value": "华南"},
+        ]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.severity == "Reject"
+
+    def test_does_not_trigger_same_value(self):
+        from nl2dsl.optimizer.rules.filter import F004_ContradictoryFilters
+        ctx = RuleContext(semantic_config=SemanticConfig())
+        rule = F004_ContradictoryFilters()
+        dsl = {"data_source": "orders", "filters": [
+            {"field": "region", "operator": "=", "value": "华东"},
+            {"field": "region", "operator": "=", "value": "华东"},
+        ]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
+
+
+class TestF005ValueTypeMismatch:
+    def test_triggers_string_in_integer_field(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        config = SemanticConfig(dimensions={"age": {"column": "age", "type": "integer"}}, data_sources={"t": {"table": "t", "metrics": [], "dimensions": ["age"]}})
+        ctx = RuleContext(semantic_config=config)
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "age", "operator": "=", "value": "一百"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""

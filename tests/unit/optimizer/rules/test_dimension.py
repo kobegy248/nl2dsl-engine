@@ -92,3 +92,29 @@ class TestD002DimensionNotInDataSource:
         dsl = {"data_source": "orders", "dimensions": ["unknown_dim"]}
         result = rule.check(dsl, ctx)
         assert result.description == ""
+
+
+class TestD001UnregisteredDimension:
+    @pytest.fixture
+    def d001_config(self):
+        return SemanticConfig(
+            dimensions={"region": {"column": "region", "type": "string"}},
+            data_sources={"orders": {"table": "order_fact", "metrics": [], "dimensions": ["region"]}},
+        )
+
+    def test_triggers_when_dimension_not_registered(self, d001_config):
+        from nl2dsl.optimizer.rules.dimension import D001_UnregisteredDimension
+        ctx = RuleContext(semantic_config=d001_config)
+        rule = D001_UnregisteredDimension()
+        dsl = {"data_source": "orders", "dimensions": ["unknown_dim"]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.severity == "Warn"
+
+    def test_does_not_trigger_for_registered_dimension(self, d001_config):
+        from nl2dsl.optimizer.rules.dimension import D001_UnregisteredDimension
+        ctx = RuleContext(semantic_config=d001_config)
+        rule = D001_UnregisteredDimension()
+        dsl = {"data_source": "orders", "dimensions": ["region"]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""

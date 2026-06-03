@@ -56,6 +56,7 @@ class OptimizationReport:
             "location": result.location,
             "clarification_required": result.clarification_required,
             "clarification_question": result.clarification_question,
+            "candidate_values": result.candidate_values,
             "applied": result.applied,
         }
 

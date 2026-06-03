@@ -184,3 +184,29 @@ class TestM004MetricDataSourceMismatch:
         dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "unknown", "alias": "unregistered"}]}
         result = rule.check(dsl, ctx)
         assert result.description == ""
+
+
+class TestM002UnregisteredMetric:
+    @pytest.fixture
+    def m002_config(self):
+        return SemanticConfig(
+            metrics={"gmv": {"expr": "SUM(pay_amount)"}, "sales_amount": {"expr": "SUM(pay_amount)"}},
+            data_sources={"orders": {"table": "order_fact", "metrics": ["gmv", "sales_amount"], "dimensions": []}},
+        )
+
+    def test_triggers_when_metric_not_registered(self, m002_config):
+        from nl2dsl.optimizer.rules.metric import M002_UnregisteredMetric
+        ctx = RuleContext(semantic_config=m002_config)
+        rule = M002_UnregisteredMetric()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "x", "alias": "revenue"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.severity == "Warn"
+
+    def test_does_not_trigger_for_registered_metric(self, m002_config):
+        from nl2dsl.optimizer.rules.metric import M002_UnregisteredMetric
+        ctx = RuleContext(semantic_config=m002_config)
+        rule = M002_UnregisteredMetric()
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "pay_amount", "alias": "gmv"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description == ""
