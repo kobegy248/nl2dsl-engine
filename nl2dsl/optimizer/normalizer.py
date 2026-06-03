@@ -62,20 +62,7 @@ class Normalizer:
         if dsl.get("filters") is not None:
             dsl["filters"] = self._normalize_filters(dsl["filters"], log)
 
-        # 4. Dedup dimensions
-        dims = dsl.get("dimensions")
-        if isinstance(dims, list) and len(dims) > 0:
-            seen = set()
-            deduped = []
-            for d in dims:
-                if d not in seen:
-                    seen.add(d)
-                    deduped.append(d)
-            if len(deduped) < len(dims):
-                log.add(f"Deduped dimensions: {dims} -> {deduped}")
-                dsl["dimensions"] = deduped
-
-        # 5. Dedup metrics by (func, field) pair
+        # 4. Dedup metrics by (func, field) pair
         metrics = dsl.get("metrics")
         if isinstance(metrics, list) and len(metrics) > 0:
             seen = set()
@@ -88,9 +75,6 @@ class Normalizer:
             if len(deduped) < len(metrics):
                 log.add(f"Deduped metrics: {len(metrics)} -> {len(deduped)}")
                 dsl["metrics"] = deduped
-
-        # 6. Generate missing aliases for metrics
-        dsl = self._ensure_aliases(dsl, log)
 
         return dsl, log
 

@@ -44,11 +44,13 @@ class TestNormalizerTypeCoercion:
 
 
 class TestNormalizerDedup:
-    def test_dedup_dimensions(self, normalizer):
+    def test_dimension_dedup_is_not_normalizer_responsibility(self, normalizer):
+        """D003 rule handles dimension dedup — Normalizer no longer does it."""
         dsl, log = normalizer.normalize(
             {"data_source": "orders", "dimensions": ["a", "b", "a", "c", "b"]}
         )
-        assert dsl["dimensions"] == ["a", "b", "c"]
+        # Normalizer no longer deduplicates dimensions (D003 handles it)
+        assert dsl["dimensions"] == ["a", "b", "a", "c", "b"]
 
     def test_dedup_metrics_by_func_field(self, normalizer):
         dsl, log = normalizer.normalize(
@@ -71,14 +73,16 @@ class TestNormalizerDedup:
 
 
 class TestNormalizerAliases:
-    def test_generates_alias_for_unaliased_metric(self, normalizer):
+    def test_alias_generation_is_not_normalizer_responsibility(self, normalizer):
+        """M003 rule handles alias generation — Normalizer no longer does it."""
         dsl, log = normalizer.normalize(
             {
                 "data_source": "orders",
                 "metrics": [{"func": "sum", "field": "pay_amount"}],
             }
         )
-        assert dsl["metrics"][0]["alias"] == "sum_pay_amount"
+        # Normalizer no longer generates aliases (M003 handles it)
+        assert "alias" not in dsl["metrics"][0] or dsl["metrics"][0]["alias"] is None
 
     def test_preserves_existing_alias(self, normalizer):
         dsl, log = normalizer.normalize(

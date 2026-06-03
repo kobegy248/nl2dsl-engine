@@ -20,6 +20,10 @@ from nl2dsl.optimizer.report import OptimizationReport
 
 # Import rule modules so @RuleRegistry.register executes
 from nl2dsl.optimizer.rules import structural  # noqa: F401
+from nl2dsl.optimizer.rules import intent  # noqa: F401
+from nl2dsl.optimizer.rules import metric  # noqa: F401
+from nl2dsl.optimizer.rules import dimension  # noqa: F401
+from nl2dsl.optimizer.rules import filter as filter_rules  # noqa: F401
 
 
 def optimize(
