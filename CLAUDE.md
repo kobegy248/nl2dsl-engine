@@ -112,6 +112,15 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 |------|------|
 | [`docs/planner/query-optimization-design.md`](docs/planner/query-optimization-design.md) | 查询优化器：谓词下推、投影下推、Join 重排序（预留架构） |
 
+### Optimizer（语义优化器）
+
+| 文档 | 职责说明 |
+|------|------|
+| [`docs/specs/semantic-optimizer-architecture-v2.md`](docs/specs/semantic-optimizer-architecture-v2.md) | Optimizer 架构设计：Normalizer → Rule Engine → CanonicalResolver 三层管道 |
+| [`docs/specs/semantic-optimizer-error-taxonomy-v2.md`](docs/specs/semantic-optimizer-error-taxonomy-v2.md) | 26 种错误类型分类体系（9 大类），含 Confidence 机制 |
+| [`docs/specs/semantic-optimizer-implementation-plan-v2.md`](docs/specs/semantic-optimizer-implementation-plan-v2.md) | 5 Phase 实施计划（P0-P5）、里程碑、测试策略 |
+| [`docs/evaluation/optimizer-guide.md`](docs/evaluation/optimizer-guide.md) | Optimizer 使用指南：CLI 参数、规则分类、报告解读 |
+
 ### Audit & Feedback（审计与反馈）
 
 | 文档 | 职责说明 |
@@ -129,7 +138,7 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 
 | 文档 | 职责说明 |
 |------|------|
-| [`docs/evaluation-design.md`](docs/evaluation-design.md) | 4 大类 12 维度量化评估框架设计 |
+| [`docs/specs/evaluation-design.md`](docs/specs/evaluation-design.md) | 4 大类 12 维度量化评估框架设计 |
 | [`docs/evaluation/framework-guide.md`](docs/evaluation/framework-guide.md) | 评估框架使用指南：添加用例、运行评估、解读报告、自定义权重 |
 
 ### Specs & Reports（专项设计与过程报告）
@@ -137,6 +146,9 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 | 文档 | 职责说明 |
 |------|------|
 | [`docs/specs/2026-05-19-failover-system-design.md`](docs/specs/2026-05-19-failover-system-design.md) | 生产级兜底：Retry Chain、Query Sandbox、Clarification 机制 |
+| [`docs/specs/semantic-optimizer-error-taxonomy-v2.md`](docs/specs/semantic-optimizer-error-taxonomy-v2.md) | Semantic Query Optimizer V1 错误分类体系（9 大类 26 种） |
+| [`docs/specs/semantic-optimizer-architecture-v2.md`](docs/specs/semantic-optimizer-architecture-v2.md) | Semantic Query Optimizer V1 架构设计、Rule Engine、Evaluation 集成 |
+| [`docs/specs/semantic-optimizer-implementation-plan-v2.md`](docs/specs/semantic-optimizer-implementation-plan-v2.md) | Semantic Query Optimizer V1 实施计划（6 Phase、里程碑、测试策略） |
 | [`docs/reports/e2e_report.md`](docs/reports/e2e_report.md) | 253 个 E2E 测试通过报告，含查询链路 Trace 分析 |
 | [`docs/reports/complex_nl_query_analysis.md`](docs/reports/complex_nl_query_analysis.md) | 22 个复杂查询语义分析，17 个语义丢失案例根因 |
 | [`docs/reports/code_review_report.md`](docs/reports/code_review_report.md) | feat/agent-capabilities 分支代码审查，5 个 P0 Bug |
@@ -163,7 +175,7 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 | **语义层 / 指标注册 / 枚举映射** | `docs/business/10-semantic-layer.md` → `docs/configuration/schema-reference.md` → `docs/business/13-business-rules.md` |
 | **API 接口 / 错误处理 / 流式响应** | `docs/api/21-api-contract.md` → `docs/api/22-error-handling.md` |
 | **部署 / 配置 / 性能调优** | `docs/architecture/04-deployment.md` → `docs/architecture/01-overview.md` |
-| **测试 / 评估 / 质量报告** | `docs/agent/33-testing.md` → `docs/evaluation/framework-guide.md` → `docs/evaluation-design.md` → `docs/reports/e2e_report.md` |
+| **测试 / 评估 / 质量报告** | `docs/agent/33-testing.md` → `docs/evaluation/framework-guide.md` → `docs/specs/evaluation-design.md` → `docs/reports/e2e_report.md` |
 | **插件扩展 / 自定义节点** | `docs/history/superpowers/specs/2026-05-22-插件框架设计.md` |
 | **多领域支持 / 域切换** | `docs/history/superpowers/specs/2026-05-27-multi-domain-design.md` |
 | **前端 / Web UI** | `docs/history/superpowers/specs/2026-05-23-web-frontend-design.md` |
@@ -171,7 +183,8 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 | **用户反馈 / 纠错闭环** | `docs/feedback/feedback-loop-design.md` |
 | **查询歧义 / 澄清机制** | `docs/query/query-clarification-design.md` |
 | **查询沙箱 / 安全预检** | `docs/query/query-sandbox-design.md` |
-| **查询规划 / 优化器** | `docs/planner/query-optimization-design.md` |
+| **查询规划 / 语义优化** | `docs/planner/query-optimization-design.md` → `docs/specs/semantic-optimizer-architecture-v2.md` → `docs/specs/semantic-optimizer-error-taxonomy-v2.md` → `docs/specs/semantic-optimizer-implementation-plan-v2.md` |
+| **Semantic Query Optimizer / 规则开发** | `docs/specs/semantic-optimizer-architecture-v2.md` → `docs/specs/semantic-optimizer-error-taxonomy-v2.md` → `docs/specs/semantic-optimizer-implementation-plan-v2.md` |
 
 ---
 

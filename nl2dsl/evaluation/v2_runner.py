@@ -162,3 +162,97 @@ class V2BenchmarkRunner:
                 progress_callback(i + 1, total)
 
         return results
+
+    def run_batch_with_optimizer(
+        self,
+        cases: list[V2TestCase],
+        config: dict,
+        resolver: CanonicalResolver,
+        *,
+        use_optimizer: bool = False,
+        enabled_rules: list[str] | None = None,
+        disabled_rules: list[str] | None = None,
+        verbose_optimizer: bool = False,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[dict]:
+        """批量运行测试用例，可选启用 Semantic Optimizer。"""
+        from nl2dsl.optimizer import optimize
+        from nl2dsl.optimizer.context import SemanticConfig
+
+        semantic_config = SemanticConfig.from_registry_dict(config) if use_optimizer else None
+        results: list[dict] = []
+        total = len(cases)
+
+        for i, case in enumerate(cases):
+            # Build a mock DSL from the test case's expected values for scoring
+            actual_dsl = self._build_dsl_from_case(case)
+
+            optimizer_report = None
+            if use_optimizer and semantic_config:
+                optimized_dsl, opt_report = optimize(
+                    actual_dsl,
+                    semantic_config=semantic_config,
+                    original_question=case.query,
+                    enabled_rules=enabled_rules,
+                    disabled_rules=disabled_rules,
+                )
+                actual_dsl = optimized_dsl
+                optimizer_report = opt_report
+
+            result = self.run_single(case, actual_dsl, resolver)
+            if optimizer_report:
+                result["optimizer"] = optimizer_report.to_dict() if verbose_optimizer else {
+                    "fixes_applied": len(optimizer_report.fixes_applied),
+                    "warnings_issued": len(optimizer_report.warnings_issued),
+                    "rejections": len(optimizer_report.rejections),
+                    "fix_rate": optimizer_report.fix_rate,
+                    "elapsed_ms": optimizer_report.elapsed_ms,
+                }
+            results.append(result)
+
+            if progress_callback:
+                progress_callback(i + 1, total)
+
+        return results
+
+    def _build_dsl_from_case(self, case: V2TestCase) -> dict:
+        """从测试用例的预期值构建一个可用于评分和优化的 DSL dict。"""
+        expected = case.expected
+        dsl: dict = {"data_source": expected.get("intent", {}).get("data_source", "default")}
+
+        # Metric
+        metric_info = expected.get("metric", {})
+        if metric_info:
+            dsl["metrics"] = [{
+                "func": metric_info.get("func", "sum"),
+                "field": metric_info.get("field", metric_info.get("alias", "")),
+                "alias": metric_info.get("alias", ""),
+            }]
+
+        # Dimensions
+        if "dimensions" in expected:
+            dsl["dimensions"] = expected["dimensions"]
+
+        # Filters
+        filters_info = expected.get("filters", [])
+        if filters_info:
+            dsl["filters"] = []
+            for f in filters_info:
+                if isinstance(f, dict):
+                    dsl["filters"].append({
+                        "field": f.get("field", ""),
+                        "operator": f.get("operator", "="),
+                        "value": f.get("value"),
+                    })
+
+        # Planner info
+        planner_info = expected.get("planner", {})
+        if planner_info:
+            if "limit" in planner_info:
+                dsl["limit"] = planner_info["limit"]
+            if "order_by" in planner_info:
+                dsl["order_by"] = planner_info["order_by"]
+            if "joins" in planner_info:
+                dsl["joins"] = planner_info["joins"]
+
+        return dsl

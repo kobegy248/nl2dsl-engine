@@ -147,3 +147,131 @@ class V2Reporter:
                 ])
 
         return "\n".join(lines)
+
+    def build_comparison(self, baseline_results: list[dict], optimized_results: list[dict]) -> dict:
+        """Build a comparison report between baseline and optimized runs."""
+        baseline_avg = self._compute_avg_scores(baseline_results)
+        optimized_avg = self._compute_avg_scores(optimized_results)
+
+        return {
+            "baseline": baseline_avg,
+            "optimized": optimized_avg,
+            "overall_delta": optimized_avg.get("overall", 0) - baseline_avg.get("overall", 0),
+            "deltas": {
+                k: optimized_avg.get(k, 0) - baseline_avg.get(k, 0)
+                for k in baseline_avg if k != "overall"
+            },
+            "optimizer_stats": self._compute_optimizer_stats(optimized_results),
+        }
+
+    def _compute_avg_scores(self, results: list[dict]) -> dict:
+        """Compute average scores across all results."""
+        if not results:
+            return {}
+        keys = ["overall", "intent", "metric", "filter", "planner", "governance"]
+        avgs = {}
+        for key in keys:
+            values = [r.get("scores", {}).__dict__.get(key, 0) if hasattr(r.get("scores", {}), '__dict__') else 0 for r in results]
+            avgs[key] = sum(values) / len(values) if values else 0
+        return avgs
+
+    def _compute_optimizer_stats(self, results: list[dict]) -> dict:
+        """Compute aggregate optimizer statistics."""
+        total_fixes = sum(r.get("optimizer", {}).get("fixes_applied", 0) for r in results)
+        total_warnings = sum(r.get("optimizer", {}).get("warnings_issued", 0) for r in results)
+        total_rejections = sum(r.get("optimizer", {}).get("rejections", 0) for r in results)
+        avg_elapsed = sum(r.get("optimizer", {}).get("elapsed_ms", 0) for r in results) / max(len(results), 1)
+        return {
+            "avg_fixes": total_fixes / max(len(results), 1),
+            "avg_warnings": total_warnings / max(len(results), 1),
+            "avg_rejections": total_rejections / max(len(results), 1),
+            "avg_elapsed_ms": avg_elapsed,
+        }
+
+    def print_comparison(self, comparison: dict, fmt: str = "console") -> None:
+        """Print a comparison report to console."""
+        baseline = comparison["baseline"]
+        optimized = comparison["optimized"]
+        delta = comparison["overall_delta"]
+
+        print("\n" + "=" * 60)
+        print("NL2DSL Evaluation — Optimizer Comparison")
+        print("=" * 60)
+        print(f"\nOverall Score:")
+        print(f"  Baseline:  {baseline.get('overall', 0):.1%}")
+        print(f"  Optimized: {optimized.get('overall', 0):.1%}")
+        print(f"  Delta:     {delta:+.1%} {'✓' if delta >= 0 else '✗'}")
+        print(f"\nBy Category:")
+        print(f"  {'Category':<15} {'Baseline':>10} {'Optimized':>10} {'Delta':>10}")
+        print(f"  {'-'*45}")
+        for cat, d in comparison.get("deltas", {}).items():
+            b = baseline.get(cat, 0)
+            o = optimized.get(cat, 0)
+            print(f"  {cat:<15} {b:>10.1%} {o:>10.1%} {d:>+10.1%}")
+        print(f"\nOptimizer Stats (avg per case):")
+        stats = comparison.get("optimizer_stats", {})
+        print(f"  Fixes:     {stats.get('avg_fixes', 0):.1f}")
+        print(f"  Warnings:  {stats.get('avg_warnings', 0):.1f}")
+        print(f"  Rejections:{stats.get('avg_rejections', 0):.1f}")
+        print(f"  Latency:   {stats.get('avg_elapsed_ms', 0):.1f} ms")
+
+    def build_summary(self, results: list[dict]) -> dict:
+        """Build a summary from results."""
+        avg_scores = self._compute_avg_scores(results)
+        return {
+            "total_cases": len(results),
+            "avg_scores": avg_scores,
+            "passed": sum(1 for r in results if r.get("passed", False)),
+            "failed": sum(1 for r in results if not r.get("passed", False)),
+            "optimizer_stats": self._compute_optimizer_stats(results) if any("optimizer" in r for r in results) else None,
+        }
+
+    def print_summary(self, summary: dict, fmt: str = "console") -> None:
+        """Print a summary to console."""
+        print("\n" + "=" * 50)
+        print("NL2DSL Benchmark Results")
+        print("=" * 50)
+        print(f"Cases:  {summary['total_cases']}")
+        print(f"Passed: {summary['passed']} | Failed: {summary['failed']}")
+        scores = summary.get("avg_scores", {})
+        print(f"Overall: {scores.get('overall', 0):.1%}")
+        for k, v in scores.items():
+            if k != "overall":
+                print(f"  {k}: {v:.1%}")
+
+    def build_summary_markdown(self, summary: dict) -> str:
+        """Build markdown summary."""
+        lines = ["# NL2DSL Benchmark Results", ""]
+        lines.append(f"- Cases: {summary['total_cases']}")
+        lines.append(f"- Passed: {summary['passed']} | Failed: {summary['failed']}")
+        lines.append("")
+        scores = summary.get("avg_scores", {})
+        for k, v in scores.items():
+            lines.append(f"- {k}: {v:.1%}")
+        return "\n".join(lines)
+
+    def build_comparison_markdown(self, comparison: dict) -> str:
+        """Build markdown comparison report."""
+        lines = ["# NL2DSL Evaluation — Optimizer Comparison", ""]
+        baseline = comparison["baseline"]
+        optimized = comparison["optimized"]
+        delta = comparison["overall_delta"]
+        lines.append(f"## Overall Score")
+        lines.append(f"- Baseline:  {baseline.get('overall', 0):.1%}")
+        lines.append(f"- Optimized: {optimized.get('overall', 0):.1%}")
+        lines.append(f"- Delta:     {delta:+.1%}")
+        lines.append("")
+        lines.append("## By Category")
+        lines.append("| Category | Baseline | Optimized | Delta |")
+        lines.append("|----------|----------|-----------|-------|")
+        for cat, d in comparison.get("deltas", {}).items():
+            b = baseline.get(cat, 0)
+            o = optimized.get(cat, 0)
+            lines.append(f"| {cat} | {b:.1%} | {o:.1%} | {d:+.1%} |")
+        stats = comparison.get("optimizer_stats", {})
+        lines.append("")
+        lines.append("## Optimizer Stats")
+        lines.append(f"- Avg Fixes: {stats.get('avg_fixes', 0):.1f}")
+        lines.append(f"- Avg Warnings: {stats.get('avg_warnings', 0):.1f}")
+        lines.append(f"- Avg Latency: {stats.get('avg_elapsed_ms', 0):.1f} ms")
+        return "\n".join(lines)
