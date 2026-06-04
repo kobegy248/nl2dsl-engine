@@ -1343,7 +1343,7 @@ def _make_optimize_dsl_node(
                 user_id=user_id,
                 permission_config=permission_config,
                 original_question=question,
-                max_limit=dsl_dict.get("limit", 10000),
+                max_limit=10000,  # system-wide hard cap
             )
         except Exception as exc:
             logger.error("[optimize_dsl] Optimizer crashed: %s", exc, exc_info=True)
