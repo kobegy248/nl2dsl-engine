@@ -24,6 +24,7 @@ from nl2dsl.graph.subgraphs import build_permission_subgraph, build_validation_s
 
 if TYPE_CHECKING:
     from nl2dsl.dsl.validator import DSLValidator
+    from nl2dsl.optimizer.context import SemanticConfig
     from nl2dsl.permission.row_level import RowLevelSecurity
     from nl2dsl.permission.column_level import ColumnLevelSecurity
     from nl2dsl.semantic.resolver import SemanticResolver
@@ -51,6 +52,7 @@ def build_graph(
     llm_system_prompt: str = "",
     checkpointer=None,
     semantic_validator=None,
+    optimizer_semantic_config: SemanticConfig | None = None,
 ):
     """Build and compile the NL2DSL query pipeline StateGraph.
 
@@ -60,19 +62,19 @@ def build_graph(
                              |--[continue] -> plan -> [agent] END
                                                 |--[continue] -> decompose -> validation
                                                 -> permission_check -> resolve_semantic
-                                                -> confidence -> [clarify] END
-                                                               |--[continue] -> build_sql -> scan_sql -> sandbox_check
-                                                                                                    |--[review] -> human_review
-                                                                                                    |              |--[rebuild] -> build_sql
-                                                                                                    |              |--[execute] -> execute_sql
-                                                                                                    |--[execute] -> execute_sql
-                                                                                                                    |--[retry] -> simplify_dsl -> build_sql
-                                                                                                                    |--[end] -> verify_dsl -> explain -> END
+                                                -> optimize_dsl -> [fatal] END
+                                                                |--[continue] -> confidence
+                                                                -> [clarify] END
+                                                                               |--[continue] -> build_sql ...
 
     Agentic enhancements:
     - ``plan`` (NEW): intent classification + task decomposition. Routes
       "single_query" through the existing pipeline; other intents go to END
       (handled by AgentOrchestrator outside the graph).
+    - ``optimize_dsl`` (NEW): semantic rule engine (Normalize → Rule Engine).
+      Runs 9 categories of rules (26 error types) against the DSL, auto-fixes
+      correctable issues, and surfaces warnings. Fatal rejections (e.g. security
+      violations) route to END.
     - ``confidence`` (NEW): DSL quality scoring after semantic resolution.
       Routes "continue" if confidence >= 60, "clarify" to END if < 60.
     - ``explain`` (NEW): natural language explanation generation after
@@ -102,6 +104,8 @@ def build_graph(
         checkpointer: Optional checkpointer for persistence (e.g. MemorySaver).
             If None, no checkpointing is enabled and human_review will not
             interrupt.
+        optimizer_semantic_config: Optional SemanticConfig for the semantic
+            optimizer. If None, the optimizer node is skipped.
 
     Returns:
         A compiled StateGraph ready for ``invoke()`` / ``ainvoke()``.
@@ -123,6 +127,7 @@ def build_graph(
         clarification_detector=clarification_detector,
         registry_dict=registry_dict,
         llm_system_prompt=llm_system_prompt,
+        optimizer_semantic_config=optimizer_semantic_config,
     )
 
     # -----------------------------------------------------------------------
@@ -145,6 +150,12 @@ def build_graph(
     builder.add_node("validation", validation_subgraph)
     builder.add_node("permission_check", permission_subgraph)
     builder.add_node("resolve_semantic", nodes["resolve_semantic_node"])
+
+    # Optimizer node (conditional: only if semantic config is provided)
+    optimize_node = nodes.get("optimize_dsl_node")
+    if optimize_node is not None:
+        builder.add_node("optimize_dsl", optimize_node)
+
     builder.add_node("confidence", nodes["confidence_node"])
     builder.add_node("build_sql", nodes["build_sql_node"])
     builder.add_node("scan_sql", nodes["scan_sql_node"])
@@ -187,8 +198,27 @@ def build_graph(
     # 3. permission_check -> resolve_semantic
     builder.add_edge("permission_check", "resolve_semantic")
 
-    # 4. resolve_semantic -> confidence
-    builder.add_edge("resolve_semantic", "confidence")
+    # 4. resolve_semantic -> optimize_dsl (if enabled) or confidence (skip)
+    if optimize_node is not None:
+        builder.add_edge("resolve_semantic", "optimize_dsl")
+
+        # 4a. optimize_dsl -> confidence (continue) or END (fatal rejection)
+        def _route_after_optimize(state: QueryState) -> str:
+            if state.get("status") == "error":
+                return "end"
+            return "continue"
+
+        builder.add_conditional_edges(
+            "optimize_dsl",
+            _route_after_optimize,
+            {
+                "continue": "confidence",
+                "end": END,
+            },
+        )
+    else:
+        # Optimizer disabled — resolve_semantic feeds directly to confidence
+        builder.add_edge("resolve_semantic", "confidence")
 
     # 4b. confidence -> build_sql (continue), END (clarify or error)
     builder.add_conditional_edges(

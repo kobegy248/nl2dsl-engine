@@ -456,6 +456,12 @@ def create_app(
     _sandbox = QuerySandbox(_db_engine)
     _executor = SQLExecutor(_db_engine)
 
+    # Build SemanticConfig for the optimizer from the registry dict
+    _optimizer_config = None
+    if registry_dict:
+        from nl2dsl.optimizer.context import SemanticConfig
+        _optimizer_config = SemanticConfig.from_registry_dict(registry_dict)
+
     query_graph = build_graph(
         llm_client=llm_client,
         rag_retriever=None,
@@ -471,6 +477,7 @@ def create_app(
         registry_dict=registry_dict or {},
         llm_system_prompt=_build_domain_system_prompt(registry_dict),
         checkpointer=None,
+        optimizer_semantic_config=_optimizer_config,
     )
 
     # Build DomainContext for AgentOrchestrator

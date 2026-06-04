@@ -20,6 +20,8 @@ from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy
 from nl2dsl.dsl.validator import DSLValidator
 from nl2dsl.exceptions import NL2DSLException, ValidationError
 from nl2dsl.graph.state import QueryState
+from nl2dsl.optimizer import optimize
+from nl2dsl.optimizer.context import SemanticConfig
 from nl2dsl.query.clarification import ClarificationDetector
 from nl2dsl.query.sandbox import QuerySandbox
 from nl2dsl.semantic.resolver import SemanticResolver
@@ -1294,6 +1296,154 @@ def _make_verify_dsl_node(llm_client, llm_system_prompt: str = ""):
 
 
 # ---------------------------------------------------------------------------
+# Optimizer node (semantic rule engine pipeline)
+# ---------------------------------------------------------------------------
+
+
+def _make_optimize_dsl_node(
+    semantic_config: SemanticConfig,
+    registry_dict: dict | None = None,
+):
+    """Create an optimize_dsl node that runs the semantic rule engine.
+
+    Sits between resolve_semantic and confidence in the pipeline.
+    Runs the optimizer (Normalize → Rule Engine) on the DSL, applies
+    auto-fixable corrections, and emits trace/warning/rejection info.
+
+    Args:
+        semantic_config: SemanticConfig built from the registry.
+        registry_dict: Raw registry dict (for permission config fallback).
+    """
+
+    @with_error_handler("optimize_dsl")
+    def optimize_dsl_node(state: QueryState) -> dict:
+        dsl = state.get("dsl")
+        if dsl is None:
+            return {
+                "trace": {
+                    "step": "optimize_dsl",
+                    "status": "skipped",
+                    "reason": "no_dsl",
+                }
+            }
+
+        dsl_dict = dsl.model_dump()
+        question = state.get("original_question") or state.get("question", "")
+        user_id = state.get("user_id")
+
+        # Extract permission config from registry for governance rules
+        permission_config = None
+        if registry_dict:
+            permission_config = registry_dict.get("permissions")
+
+        try:
+            optimized_dict, report = optimize(
+                dsl_dict,
+                semantic_config=semantic_config,
+                user_id=user_id,
+                permission_config=permission_config,
+                original_question=question,
+                max_limit=dsl_dict.get("limit", 10000),
+            )
+        except Exception as exc:
+            logger.error("[optimize_dsl] Optimizer crashed: %s", exc, exc_info=True)
+            return {
+                "trace": {
+                    "step": "optimize_dsl",
+                    "status": "error",
+                    "error": str(exc),
+                }
+            }
+
+        # Build trace summary
+        trace_detail = {
+            "step": "optimize_dsl",
+            "status": "success",
+            "rules_checked": report.total_rules_checked,
+            "rules_triggered": report.total_rules_triggered,
+            "fixes_applied": len(report.fixes_applied),
+            "warnings": len(report.warnings_issued),
+            "rejections": len(report.rejections),
+            "elapsed_ms": report.elapsed_ms,
+        }
+
+        if report.fixes_applied:
+            trace_detail["applied_codes"] = [
+                f["error_code"] for f in report.fixes_applied
+            ]
+        if report.warnings_issued:
+            trace_detail["warning_codes"] = [
+                w["error_code"] for w in report.warnings_issued
+            ]
+
+        # Handle fatal rejection (e.g., security violation)
+        if report.fatal and report.fatal_rejection:
+            rejection = report.fatal_rejection
+            logger.warning(
+                "[optimize_dsl] Fatal rejection: %s — %s",
+                rejection.get("error_code"),
+                rejection.get("description"),
+            )
+            return {
+                "status": "error",
+                "error": rejection.get("description", "Optimizer fatal rejection"),
+                "error_code": rejection.get("error_code", "OPTIMIZER_FATAL"),
+                "trace": {
+                    **trace_detail,
+                    "status": "fatal",
+                    "fatal_code": rejection.get("error_code"),
+                },
+            }
+
+        # Log non-fatal issues
+        if report.fixes_applied:
+            logger.info(
+                "[optimize_dsl] Applied %d fix(es): %s",
+                len(report.fixes_applied),
+                [f["error_code"] for f in report.fixes_applied],
+            )
+        if report.warnings_issued:
+            logger.warning(
+                "[optimize_dsl] %d warning(s): %s",
+                len(report.warnings_issued),
+                [w["error_code"] for w in report.warnings_issued],
+            )
+
+        # Determine status: warnings downgrade to "warning" if not already error
+        new_status = None
+        if report.warnings_issued and not report.fixes_applied:
+            # Only warnings, no fixes — surface as warning
+            new_status = "warning"
+
+        # Rebuild DSL model from optimized dict
+        try:
+            optimized_dsl = DSL.model_validate(optimized_dict)
+        except Exception as exc:
+            logger.error(
+                "[optimize_dsl] Failed to validate optimized DSL: %s", exc
+            )
+            # Return original DSL unchanged
+            return {
+                "trace": {
+                    **trace_detail,
+                    "status": "warning",
+                    "warning": f"Optimized DSL validation failed, keeping original: {exc}",
+                },
+            }
+
+        result: dict = {
+            "dsl": optimized_dsl,
+            "trace": trace_detail,
+        }
+        if new_status:
+            result["status"] = new_status
+
+        return result
+
+    return optimize_dsl_node
+
+
+# ---------------------------------------------------------------------------
 # Node factory
 # ---------------------------------------------------------------------------
 
@@ -1314,6 +1464,7 @@ def create_node_functions(
     registry_dict: dict | None = None,
     semantic_validator=None,
     llm_system_prompt: str = "",
+    optimizer_semantic_config: SemanticConfig | None = None,
 ) -> dict[str, Callable[[QueryState], dict]]:
     """Factory that creates all node functions with injected dependencies.
 
@@ -1562,6 +1713,15 @@ def create_node_functions(
     decompose_node = _make_decompose_node(llm_client, llm_system_prompt)
     verify_dsl_node_fn = _make_verify_dsl_node(llm_client, llm_system_prompt)
 
+    # -----------------------------------------------------------------------
+    # optimize_dsl_node (semantic rule engine)
+    # -----------------------------------------------------------------------
+    optimize_dsl_node = None
+    if optimizer_semantic_config is not None:
+        optimize_dsl_node = _make_optimize_dsl_node(
+            optimizer_semantic_config, registry_dict
+        )
+
     return {
         "clarification_node": clarification_node,
         "plan_node": plan_node,
@@ -1573,6 +1733,7 @@ def create_node_functions(
         "inject_row_permission_node": inject_row_permission_node,
         "check_col_permission_node": check_col_permission_node,
         "resolve_semantic_node": resolve_semantic_node,
+        "optimize_dsl_node": optimize_dsl_node,
         "build_sql_node": build_sql_node,
         "scan_sql_node": scan_sql_node,
         "sandbox_check_node": sandbox_check_node,
