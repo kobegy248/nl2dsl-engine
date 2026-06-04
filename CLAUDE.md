@@ -288,7 +288,24 @@ nl2dsl/
 ├── dsl/                      # DSL Schema、校验器、构建工具
 ├── graph/                    # LangGraph StateGraph 查询管道
 ├── llm/                      # Prompt 模板 + LLM 客户端
-├── rag/                      # 向量存储 + Embedder + 检索器
+├── optimizer/                # 语义优化器：Normalizer → Rule Engine → CanonicalResolver
+│   ├── base.py               #   规则基类 + 接口定义
+│   ├── context.py            #   优化上下文（DSL + 语义元数据）
+│   ├── engine.py             #   优化引擎入口（三层管道）
+│   ├── metadata.py           #   语义元数据提供器
+│   ├── normalizer.py         #   DSL 标准化器
+│   ├── registry.py           #   规则注册表
+│   ├── report.py             #   优化报告生成器
+│   └── rules/                #   规则集（9 类 26 种错误类型）
+│       ├── ambiguity.py      #     歧义检测规则
+│       ├── dimension.py      #     维度修正规则
+│       ├── filter.py         #     过滤条件修正规则
+│       ├── governance.py     #     治理合规规则
+│       ├── intent.py         #     意图修正规则
+│       ├── metric.py         #     指标修正规则
+│       ├── planning.py       #     规划优化规则
+│       ├── structural.py     #     结构修正规则
+│       └── time.py           #     时间语义修正规则
 ├── permission/               # 行级权限 + 列级权限 + 脱敏
 ├── query/                    # 歧义检测 + 查询改写 + 沙箱
 ├── semantic/                 # 语义层注册中心 + 解析器
@@ -299,6 +316,10 @@ nl2dsl/
 └── utils/                    # 日志工具
 
 configs/                      # YAML 配置（指标/维度/意图/术语/权限）
+docs/
+├── specs/                    # 专项设计文档（优化器架构、评估设计等）
+├── superpowers/              # Superpowers 实施计划与过程记录
+└── ...                       # 架构/API/业务/Agent/审计等（见文档导航）
 web/                          # React + Vite 前端
 tests/                        # 单元 / 集成 / E2E
 data/                         # SQLite + Milvus + 测试结果
