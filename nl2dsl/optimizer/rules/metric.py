@@ -119,3 +119,35 @@ class M004_MetricDataSourceMismatch(BaseRule):
                         location=f"metrics[{i}].alias",
                     )
         return RuleResult.no_issue("M004", "Metric")
+
+
+@RuleRegistry.register
+class M002_UnregisteredMetric(BaseRule):
+    """Warn when a metric alias is not found in the semantic config."""
+
+    metadata = RuleMetadata(
+        error_code="M002",
+        category="Metric",
+        description="Metric is not registered in the semantic layer",
+        priority=5,
+        severity="Warn",
+        confidence="low",
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        metrics = dsl.get("metrics") or []
+        for i, m in enumerate(metrics):
+            alias = m.get("alias", "")
+            if alias and not context.semantic_config.has_metric(alias):
+                # Find similar metric names as candidates
+                candidates = [
+                    name for name in context.semantic_config.metrics
+                    if alias.lower() in name.lower() or name.lower() in alias.lower()
+                ][:5]
+                return RuleResult.from_metadata(
+                    self.metadata,
+                    description=f"Metric '{alias}' is not registered in the semantic layer",
+                    location=f"metrics[{i}].alias",
+                    candidate_values=candidates,
+                )
+        return RuleResult.no_issue("M002", "Metric")

@@ -85,3 +85,33 @@ class D002_DimensionNotInDataSource(BaseRule):
                     location=f"dimensions[{i}]",
                 )
         return RuleResult.no_issue("D002", "Dimension")
+
+
+@RuleRegistry.register
+class D001_UnregisteredDimension(BaseRule):
+    """Warn when a dimension is not found in the semantic config."""
+
+    metadata = RuleMetadata(
+        error_code="D001",
+        category="Dimension",
+        description="Dimension is not registered in the semantic layer",
+        priority=5,
+        severity="Warn",
+        confidence="low",
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        dims = dsl.get("dimensions") or []
+        for i, d in enumerate(dims):
+            if d and not context.semantic_config.has_dimension(d):
+                candidates = [
+                    name for name in context.semantic_config.dimensions
+                    if d.lower() in name.lower() or name.lower() in d.lower()
+                ][:5]
+                return RuleResult.from_metadata(
+                    self.metadata,
+                    description=f"Dimension '{d}' is not registered in the semantic layer",
+                    location=f"dimensions[{i}]",
+                    candidate_values=candidates,
+                )
+        return RuleResult.no_issue("D001", "Dimension")

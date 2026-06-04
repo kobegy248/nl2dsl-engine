@@ -219,3 +219,137 @@ class F001_InvalidEnumValue(BaseRule):
                     )
 
         return RuleResult.no_issue("F001", "Filter")
+
+
+# Time-related keywords for F003
+_TIME_KEYWORDS = [
+    "本月", "上月", "本周", "上周", "今天", "昨天", "今年", "去年",
+    "最近", "过去", "未来", "近期", "当月", "当季",
+    "this month", "last month", "this week", "today", "yesterday",
+    "recent", "quarter", "Q1", "Q2", "Q3", "Q4",
+]
+
+
+@RuleRegistry.register
+class F003_MissingTimeRange(BaseRule):
+    """Warn when the original question contains time keywords but DSL lacks time_range."""
+
+    metadata = RuleMetadata(
+        error_code="F003",
+        category="Filter",
+        description="Original question mentions time but DSL has no time_range filter",
+        priority=5,
+        severity="Warn",
+        confidence="medium",
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        question = context.original_question or ""
+        if not question:
+            return RuleResult.no_issue("F003", "Filter")
+
+        # Check if any time keyword appears in the question
+        has_time_keyword = any(kw in question for kw in _TIME_KEYWORDS)
+        if not has_time_keyword:
+            return RuleResult.no_issue("F003", "Filter")
+
+        # Check if DSL already has time constraints
+        has_time_range = dsl.get("time_range") is not None
+        has_time_field = dsl.get("time_field") is not None
+
+        if not has_time_range and not has_time_field:
+            return RuleResult.from_metadata(
+                self.metadata,
+                description=f"Query contains time keyword but DSL has no time_range or time_field",
+                before={"original_question": question},
+            )
+
+        return RuleResult.no_issue("F003", "Filter")
+
+
+@RuleRegistry.register
+class F004_ContradictoryFilters(BaseRule):
+    """Detect contradictory equality filters on the same field (AND semantics)."""
+
+    metadata = RuleMetadata(
+        error_code="F004",
+        category="Filter",
+        description="Same field has multiple contradictory '=' filter values",
+        priority=5,
+        severity="Reject",
+        confidence="high",
+        is_fatal=False,
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        filters = dsl.get("filters") or []
+        if len(filters) < 2:
+            return RuleResult.no_issue("F004", "Filter")
+
+        # Collect equality conditions by field
+        eq_conditions: dict[str, list] = {}
+        for i, f in enumerate(filters):
+            if isinstance(f, dict) and f.get("operator") == "=":
+                field = f.get("field", "")
+                eq_conditions.setdefault(field, []).append((i, f.get("value")))
+
+        for field, occurrences in eq_conditions.items():
+            if len(occurrences) > 1:
+                values = [v for _, v in occurrences]
+                unique_values = set(str(v) for v in values)
+                if len(unique_values) > 1:
+                    return RuleResult.from_metadata(
+                        self.metadata,
+                        description=f"Contradictory filters on '{field}': values {values} (AND semantics — cannot satisfy both)",
+                        before={"field": field, "values": values},
+                    )
+
+        return RuleResult.no_issue("F004", "Filter")
+
+
+@RuleRegistry.register
+class F005_ValueTypeMismatch(BaseRule):
+    """Warn when filter value type doesn't match the field's declared type."""
+
+    metadata = RuleMetadata(
+        error_code="F005",
+        category="Filter",
+        description="Filter value type is incompatible with field type",
+        priority=5,
+        severity="Warn",
+        confidence="low",
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        filters = dsl.get("filters") or []
+        for i, f in enumerate(filters):
+            if not isinstance(f, dict):
+                continue
+            field = f.get("field", "")
+            value = f.get("value")
+            if value is None:
+                continue
+
+            field_type = context.semantic_config.get_dimension_type(field)
+            if field_type == "string":
+                continue  # default type, skip
+
+            # Check integer field with non-numeric value
+            if field_type in ("integer", "float", "numeric", "number"):
+                if isinstance(value, str) and not value.isdigit():
+                    return RuleResult.from_metadata(
+                        self.metadata,
+                        description=f"Value '{value}' for numeric field '{field}' appears to be non-numeric",
+                        location=f"filters[{i}].value",
+                    )
+
+            # Check boolean field with non-boolean value
+            if field_type in ("boolean", "bool"):
+                if isinstance(value, str) and value.lower() not in ("true", "false", "0", "1"):
+                    return RuleResult.from_metadata(
+                        self.metadata,
+                        description=f"Value '{value}' for boolean field '{field}' is not boolean-like",
+                        location=f"filters[{i}].value",
+                    )
+
+        return RuleResult.no_issue("F005", "Filter")
