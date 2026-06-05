@@ -6,6 +6,8 @@
 [![Tests](https://img.shields.io/badge/tests-732%20passed-brightgreen.svg)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![NL2DSL 产品展示图](docs/assets/img_v3_0212c_aeab1d54-a49f-4a56-a5eb-c4e03aba81cg.jpg)
+
 **NL2DSL 是一个面向数据治理的自然语言语义查询层。**
 
 它不替代你的数据仓库或 BI 工具，而是在业务人员和数据库之间建立一个**语义层**：业务说"华东销售额"，系统自动理解成 `SUM(pay_amount) WHERE region_code='HD'`——同时保证口径一致、权限受控、全程可审计。
