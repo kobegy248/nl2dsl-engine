@@ -82,21 +82,29 @@ class RuleBasedDSLGenerator(DSLGenerator):
         if not dimensions:
             dimensions.append("product_name")
 
+        # Helpers for value_map lookup
+        dims_registry = self._registry.get("dimensions", {})
+
+        def _map_value(dim_name: str, semantic_value: str) -> str:
+            """Map semantic value to DB code via registry value_map."""
+            vm = dims_registry.get(dim_name, {}).get("value_map", {})
+            return vm.get(semantic_value, semantic_value)
+
         # Filters
         if "华东" in question:
-            filters.append(Filter(field="region", operator="=", value="华东"))
+            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华东")))
         if "华南" in question:
-            filters.append(Filter(field="region", operator="=", value="华南"))
+            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华南")))
         if "华北" in question:
-            filters.append(Filter(field="region", operator="=", value="华北"))
+            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华北")))
         if "西南" in question:
-            filters.append(Filter(field="region", operator="=", value="西南"))
+            filters.append(Filter(field="region", operator="=", value=_map_value("region", "西南")))
         if "线上" in question:
-            filters.append(Filter(field="channel", operator="=", value="线上"))
+            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "线上")))
         if "线下" in question:
-            filters.append(Filter(field="channel", operator="=", value="线下"))
+            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "线下")))
         if "分销" in question:
-            filters.append(Filter(field="channel", operator="=", value="分销"))
+            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "分销")))
         if "手机" in question:
             filters.append(Filter(field="category", operator="=", value="手机"))
         if "电脑" in question:

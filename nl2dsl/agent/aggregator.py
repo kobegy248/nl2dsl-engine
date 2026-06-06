@@ -111,8 +111,15 @@ def _aggregate_compare(rows: list[dict]) -> dict:
             )
             totals[sq_id] = total
 
-        # Compute diff and growth rate between first two groups
-        if len(totals) >= 2:
+        # Include per-group totals in the result for the explainer
+        comparison["totals"] = {
+            sq_id: round(total, 2)
+            for sq_id, total in totals.items()
+        }
+
+        # Compute diff and growth rate
+        if len(totals) == 2:
+            # Two-way comparison: keep legacy behaviour
             values = list(totals.values())
             first = values[0]
             second = values[1]
@@ -122,12 +129,26 @@ def _aggregate_compare(rows: list[dict]) -> dict:
                 comparison["growth_rate"] = f"{growth:.2f}%"
             else:
                 comparison["growth_rate"] = "N/A"
-
-        # Also include per-group totals in the result for the explainer
-        comparison["totals"] = {
-            sq_id: round(total, 2)
-            for sq_id, total in totals.items()
-        }
+        elif len(totals) > 2:
+            # N-way comparison: diff = max - min, growth_rate = N/A
+            values_list = list(totals.values())
+            comparison["diff"] = round(max(values_list) - min(values_list), 2)
+            comparison["growth_rate"] = "N/A"
+            # Build pairwise comparisons
+            pairwise = []
+            ids = list(totals.keys())
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    a, b = ids[i], ids[j]
+                    va, vb = totals[a], totals[b]
+                    gr = f"{((vb - va) / va * 100):.2f}%" if va != 0 else "N/A"
+                    pairwise.append({
+                        "from": a,
+                        "to": b,
+                        "diff": round(vb - va, 2),
+                        "growth_rate": gr,
+                    })
+            comparison["pairwise"] = pairwise
     else:
         # Legacy fallback: compare first two rows directly
         first = _find_numeric_value(rows[0])

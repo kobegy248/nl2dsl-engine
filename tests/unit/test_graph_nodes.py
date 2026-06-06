@@ -289,8 +289,10 @@ class TestGenerateDSLNode:
         )
 
         result = nodes_no_llm["generate_dsl_node"](base_state)
-        assert result["status"] == "error"
-        assert result["error_code"] == "VALIDATION_ERROR"
+        # Without LLM, generate_dsl falls back to RuleBasedDSLGenerator
+        assert "dsl" in result
+        assert result["dsl"] is not None
+        assert result.get("trace", {}).get("source") == "rule_based"
 
     def test_uses_rag_when_available(self, nodes, base_state, mock_rag_retriever):
         nodes["generate_dsl_node"](base_state)
@@ -911,13 +913,14 @@ class TestPostProcessDSLEdgeCases:
         assert result["metrics"][0]["alias"] == "sales_amount"
 
     def test_empty_dimensions_list(self):
+        """Empty dimensions list is preserved (valid for pure aggregation)."""
         dsl_dict = {
             "data_source": "orders",
             "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
             "dimensions": [],
         }
         result = _post_process_dsl(dsl_dict)
-        assert result["dimensions"] == ["product_name"]
+        assert result["dimensions"] == []
 
     def test_dimensions_with_non_string_items(self):
         dsl_dict = {
@@ -929,14 +932,14 @@ class TestPostProcessDSLEdgeCases:
         assert "product_name" in result["dimensions"]
         assert 123 not in result["dimensions"]
 
-    def test_generates_order_by_when_missing(self):
+    def test_does_not_auto_generate_order_by(self):
+        """Missing order_by is left as-is (design decision: don't auto-add)."""
         dsl_dict = {
             "data_source": "orders",
             "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
         }
         result = _post_process_dsl(dsl_dict)
-        assert result["order_by"] is not None
-        assert result["order_by"][0]["field"] == "sales_amount"
+        assert "order_by" not in result
 
     def test_zero_limit_becomes_default(self):
         dsl_dict = {

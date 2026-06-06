@@ -266,13 +266,19 @@ class TestAgentControllerRoute:
 
     @pytest.mark.asyncio
     async def test_default_planner_initialization(self):
-        """AgentController creates a default Planner when none is provided."""
+        """AgentController lazily creates a default Planner when none is provided."""
         controller = AgentController()
-        assert controller._planner is not None
-        assert isinstance(controller._planner, Planner)
+        # Lazy init: _planner is None until _ensure_planner() is called
+        assert controller._planner is None
+        planner = controller._ensure_planner()
+        assert planner is not None
+        assert isinstance(planner, Planner)
+        # Second call returns cached instance
+        assert controller._ensure_planner() is planner
 
     @pytest.mark.asyncio
     async def test_custom_planner_passed_in(self, mock_planner):
         """AgentController uses the provided planner instance."""
         controller = AgentController(planner=mock_planner)
         assert controller._planner is mock_planner
+        assert controller._ensure_planner() is mock_planner

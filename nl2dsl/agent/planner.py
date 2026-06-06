@@ -288,7 +288,15 @@ class Planner:
         intents: IntentRegistry | None = None,
     ):
         self._llm = llm_client
-        self._intents = intents or IntentRegistry.load("configs/intents.yaml")
+        if intents is not None:
+            self._intents = intents
+        else:
+            import pathlib
+
+            config_path = (
+                pathlib.Path(__file__).parent.parent.parent / "configs" / "intents.yaml"
+            )
+            self._intents = IntentRegistry.load(str(config_path))
 
     # ------------------------------------------------------------------
     # Internal helpers

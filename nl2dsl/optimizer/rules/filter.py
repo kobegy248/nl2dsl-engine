@@ -189,6 +189,14 @@ class F001_InvalidEnumValue(BaseRule):
             if not candidates:
                 continue
 
+            # Skip if value is already a valid internal code (reverse lookup).
+            # This prevents circular correction when SemanticResolver or
+            # RuleBasedDSLGenerator has already mapped the semantic value.
+            if value_map:
+                internal_codes = [str(v) for v in value_map.values()]
+                if str(value) in internal_codes:
+                    continue
+
             # For 'in' operator, check each value
             if operator == "in" and isinstance(value, list):
                 for j, v in enumerate(value):

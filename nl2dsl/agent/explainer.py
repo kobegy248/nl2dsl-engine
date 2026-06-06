@@ -38,7 +38,7 @@ def _format_data_summary(data: list[dict], max_rows: int = 3) -> str:
 
     rows = []
     for i, row in enumerate(data[:max_rows]):
-        pairs = [f"{k}={v}" for k, v in row.items()]
+        pairs = [f"{k}={v}" for k, v in row.items() if not k.startswith("__")]
         rows.append(", ".join(pairs))
 
     summary = "; ".join(rows)

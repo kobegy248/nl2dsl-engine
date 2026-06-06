@@ -38,9 +38,17 @@ class SQLBuilder:
         Supports qualified references like 'table.column'.
         Falls back to first table that contains the column.
         Also resolves semantic dimension names to physical column names.
+        For SQL expressions (e.g. CASE WHEN...), returns a text() literal.
         """
         # Map semantic name to physical column name
         physical_field = self._dimension_mapping.get(field, field)
+
+        # If the field looks like a SQL expression (contains spaces or SQL keywords),
+        # wrap it in text() so SQLAlchemy treats it as a literal expression.
+        if " " in physical_field or any(
+            kw in physical_field.upper() for kw in ("CASE", "WHEN", "THEN", "ELSE", "END", "COALESCE", "NULLIF", "CAST")
+        ):
+            return text(physical_field)
 
         if "." in physical_field:
             table_name, col_name = physical_field.split(".", 1)

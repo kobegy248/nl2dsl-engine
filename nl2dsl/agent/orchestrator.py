@@ -60,11 +60,18 @@ class AgentOrchestrator:
         """Return the ``DomainContext`` for *domain*.
 
         Falls back to ``"ecommerce"`` when the requested domain is not found.
+        If ``"ecommerce"`` is also missing, returns the first available domain.
         """
         if domain in self._domains:
             return self._domains[domain]
         logger.warning("[orchestrator] Domain '%s' not found, falling back to 'ecommerce'", domain)
-        return self._domains["ecommerce"]
+        if "ecommerce" in self._domains:
+            return self._domains["ecommerce"]
+        # Last resort: return the first available domain
+        fallback = next(iter(self._domains.values()), None)
+        if fallback is None:
+            raise RuntimeError("No domains configured in AgentOrchestrator")
+        return fallback
 
     @staticmethod
     async def _emit_event(

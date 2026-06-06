@@ -212,8 +212,8 @@ class TestBuildValidationSubgraph:
         # With real LLM, the generate node produces valid DSL
         assert result["dsl"] is not None
 
-    def test_validation_fails_with_no_llm(self, test_registry):
-        """When LLM is None, generate_dsl fails with validation error."""
+    def test_validation_fallback_with_no_llm(self, test_registry):
+        """When LLM is None, generate_dsl falls back to RuleBasedDSLGenerator."""
         validator = DSLValidator(test_registry)
         llm_client = None
         rag_retriever = None
@@ -223,10 +223,9 @@ class TestBuildValidationSubgraph:
         state = make_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Without LLM, generate_dsl raises ValidationError;
-        # the error propagates through validate_dsl which reports DSL is None
-        assert result["status"] == "error"
-        assert result.get("error_code") == "VALIDATION_ERROR"
+        # Without LLM, generate_dsl uses RuleBasedDSLGenerator fallback;
+        # validation passes and DSL is generated
+        assert result["dsl"] is not None
 
     def test_correct_dsl_runs_when_routed(self, test_registry, real_llm_client):
         """Test that correct_dsl node is callable and produces output."""

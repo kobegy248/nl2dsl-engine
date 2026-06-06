@@ -30,33 +30,37 @@ def resolver():
 
 
 def test_resolve_metric_expr(resolver):
+    """Metric expr is parsed into func + field; field holds the raw column name."""
     dsl = DSL(
         metrics=[Aggregation(func="sum", field="order_amount", alias="sales_amount")],
         data_source="orders",
     )
     resolved = resolver.resolve(dsl)
-    assert resolved.metrics[0].field == "SUM(order_amount)"
+    assert resolved.metrics[0].func == "sum"
+    assert resolved.metrics[0].field == "order_amount"
 
 
-def test_resolve_value_map_in_filter(resolver):
+def test_resolve_value_map_keeps_semantic_value(resolver):
+    """Semantic values are preserved in DSL; SQLBuilder maps to internal codes."""
     dsl = DSL(
         dimensions=["region"],
         filters=[Filter(field="region", operator="=", value="华东")],
         data_source="orders",
     )
     resolved = resolver.resolve(dsl)
-    assert resolved.filters[0].value == "HD"
-    assert resolved.filters[0].field == "region_code"
+    # Semantic value is kept (not mapped to internal code)
+    assert resolved.filters[0].value == "华东"
 
 
-def test_resolve_value_map_in_filter_in_operator(resolver):
+def test_resolve_value_map_in_filter_list_keeps_semantic_values(resolver):
+    """Semantic values in list filters are preserved."""
     dsl = DSL(
         dimensions=["region"],
         filters=[Filter(field="region", operator="in", value=["华东", "华南"])],
         data_source="orders",
     )
     resolved = resolver.resolve(dsl)
-    assert resolved.filters[0].value == ["HD", "HN"]
+    assert resolved.filters[0].value == ["华东", "华南"]
 
 
 def test_resolve_unknown_metric(resolver):

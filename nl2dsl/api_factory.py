@@ -444,6 +444,9 @@ def create_app(
     _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
     audit_logger = AuditLogger(_db_engine)
 
+    # Cache AgentController to avoid re-loading intents.yaml on every request
+    _agent_controller = AgentController()
+
     # Build a fresh LangGraph StateGraph with the overridden components.
     # Do NOT use _nl2dsl_engine.build() which returns a pre-built graph
     # using default components from _load_defaults().
@@ -644,13 +647,12 @@ def create_app(
                     )
 
             # Step 1: Route via AgentController (intent classification + routing)
-            controller = AgentController()
             from nl2dsl.agent.orchestrator import AgentOrchestrator
             entities = AgentOrchestrator._extract_entities(req.question)
-            execution_plan = await controller.route(req.question, entities)
+            execution_plan = await _agent_controller.route(req.question, entities)
 
             # Step 2: Dispatch based on execution plan type
-            if isinstance(execution_plan, ComplexExecutionPlan):
+            if isinstance(execution_plan, (ComplexExecutionPlan, ExplorationPlan)):
                 # Complex query: use AgentOrchestrator
                 domains = _build_domains_dict()
                 orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
@@ -674,7 +676,7 @@ def create_app(
                     status=agent_result.status,
                     execution_time_ms=elapsed,
                     rows_returned=len(agent_result.data) if agent_result.data else 0,
-                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": execution_plan.plan.intent}],
+                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": getattr(getattr(execution_plan, 'plan', None), 'intent', 'exploration')}],
                     error_code=None,
                     error_message=agent_result.error,
                 )
@@ -682,8 +684,11 @@ def create_app(
                 if agent_result.status == "error":
                     raise ValidationError(agent_result.error or "Agent execution failed")
 
+                # Surface agent status as-is (success / warning / clarification)
+                response_status = agent_result.status if agent_result.status != "error" else "success"
+
                 return QueryResponse(
-                    status="success",
+                    status=response_status,
                     data=agent_result.data,
                     dsl=None,
                     sql=None,
@@ -816,12 +821,11 @@ def create_app(
         import json
 
         # Step 1: Route via AgentController (intent classification + routing)
-        controller = AgentController()
         from nl2dsl.agent.orchestrator import AgentOrchestrator
         entities = AgentOrchestrator._extract_entities(req.question)
-        execution_plan = await controller.route(req.question, entities)
+        execution_plan = await _agent_controller.route(req.question, entities)
 
-        if isinstance(execution_plan, ComplexExecutionPlan):
+        if isinstance(execution_plan, (ComplexExecutionPlan, ExplorationPlan)):
             # Complex query: use AgentOrchestrator with real-time SSE streaming
             domains = _build_domains_dict()
             orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
