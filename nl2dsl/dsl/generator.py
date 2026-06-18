@@ -8,11 +8,27 @@ Provides:
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import Callable
 
 from nl2dsl.dsl.models import DSL, Aggregation, Filter, OrderBy
 from nl2dsl.exceptions import ValidationError
+
+
+# Negation cues that, when preceding a value, flip an equality to `!=`.
+_NEGATION_CUES = ("非", "不是", "排除", "除外", "不包含", "不含")
+
+
+def _is_negated(question: str, keyword: str) -> bool:
+    """True if ``keyword`` is preceded (within 4 chars) by a negation cue."""
+    idx = question.find(keyword)
+    while idx != -1:
+        prefix = question[max(0, idx - 4):idx]
+        if any(cue in prefix for cue in _NEGATION_CUES):
+            return True
+        idx = question.find(keyword, idx + 1)
+    return False
 
 
 class DSLGenerator(ABC):
@@ -91,34 +107,38 @@ class RuleBasedDSLGenerator(DSLGenerator):
             return vm.get(semantic_value, semantic_value)
 
         # Filters
+        def _eq_or_ne(field: str, value: str, dim_name: str | None = None) -> Filter:
+            """Emit `=` or `!=` based on whether the value is negated in the question."""
+            mapped = _map_value(dim_name or field, value) if dim_name else value
+            op = "!=" if _is_negated(question, value) else "="
+            return Filter(field=field, operator=op, value=mapped)
+
         if "华东" in question:
-            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华东")))
+            filters.append(_eq_or_ne("region", "华东", "region"))
         if "华南" in question:
-            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华南")))
+            filters.append(_eq_or_ne("region", "华南", "region"))
         if "华北" in question:
-            filters.append(Filter(field="region", operator="=", value=_map_value("region", "华北")))
+            filters.append(_eq_or_ne("region", "华北", "region"))
         if "西南" in question:
-            filters.append(Filter(field="region", operator="=", value=_map_value("region", "西南")))
+            filters.append(_eq_or_ne("region", "西南", "region"))
         if "线上" in question:
-            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "线上")))
+            filters.append(_eq_or_ne("channel", "线上", "channel"))
         if "线下" in question:
-            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "线下")))
+            filters.append(_eq_or_ne("channel", "线下", "channel"))
         if "分销" in question:
-            filters.append(Filter(field="channel", operator="=", value=_map_value("channel", "分销")))
-        if "手机" in question:
-            filters.append(Filter(field="category", operator="=", value="手机"))
-        if "电脑" in question:
-            filters.append(Filter(field="category", operator="=", value="电脑"))
-        if "家电" in question:
-            filters.append(Filter(field="category", operator="=", value="家电"))
-        if "服饰" in question:
-            filters.append(Filter(field="category", operator="=", value="服饰"))
+            filters.append(_eq_or_ne("channel", "分销", "channel"))
+        for cat in ("手机", "电脑", "家电", "服饰"):
+            if cat in question:
+                filters.append(_eq_or_ne("category", cat))
         if "新客" in question:
-            filters.append(Filter(field="customer_type", operator="=", value="新客"))
+            filters.append(_eq_or_ne("customer_type", "新客"))
         if "老客" in question:
-            filters.append(Filter(field="customer_type", operator="=", value="老客"))
+            filters.append(_eq_or_ne("customer_type", "老客"))
         if "VIP" in question:
-            filters.append(Filter(field="customer_type", operator="=", value="VIP"))
+            filters.append(_eq_or_ne("customer_type", "VIP"))
+
+        # Numeric / range / comparison filters on price (Week 2 semantics).
+        self._add_numeric_filters(filters, question)
 
         # Order by
         if metrics:
@@ -138,6 +158,51 @@ class RuleBasedDSLGenerator(DSLGenerator):
             limit=limit,
             data_source=ds,
         )
+
+    @staticmethod
+    def _add_numeric_filters(filters: list, question: str) -> None:
+        """Detect numeric comparison / range / negation on price.
+
+        Supports:
+        - range: "价格在5000到20000之间" / "介于5000和20000之间" → between [5000, 20000]
+        - comparison: "价格大于5000"/"超过5000"/">=8000"/"小于3000" → > / >= / <
+        Comparison is skipped when a range was matched (range takes precedence).
+        """
+        # Range: between X and Y  (X到Y之间 / 介于X和Y之间)
+        range_match = re.search(
+            r"(?:价格|单价)?[在介]?于?\s*(\d+(?:\.\d+)?)\s*(?:到|和|至|-|~)\s*(\d+(?:\.\d+)?)\s*(?:元)?之间",
+            question,
+        )
+        if range_match:
+            lo, hi = float(range_match.group(1)), float(range_match.group(2))
+            lo, hi = (lo, hi) if lo <= hi else (hi, lo)
+            filters.append(Filter(field="price", operator="between", value=[lo, hi]))
+            return
+
+        # Comparison: look for an explicit number near a comparison cue.
+        comp_match = re.search(
+            r"价格(?:大于等于|大于|超过|高于|不少于|不低于|小于等于|小于|低于|不多于|不高于|≥|<=|>=|>|<)\s*(\d+(?:\.\d+)?)"
+            r"|大于等于\s*(\d+(?:\.\d+)?)|大于\s*(\d+(?:\.\d+)?)|超过\s*(\d+(?:\.\d+)?)"
+            r"|小于等于\s*(\d+(?:\.\d+)?)|小于\s*(\d+(?:\.\d+)?)",
+            question,
+        )
+        if not comp_match:
+            return
+
+        # Determine operator + value from whichever group matched.
+        token = comp_match.group(0)
+        value = float(next(g for g in comp_match.groups() if g is not None))
+        if any(c in token for c in ("大于等于", "不少于", "不低于", "≥", ">=")):
+            op = ">="
+        elif any(c in token for c in ("小于等于", "不多于", "不高于", "<=")):
+            op = "<="
+        elif any(c in token for c in ("大于", "超过", "高于", ">")):
+            op = ">"
+        elif any(c in token for c in ("小于", "低于", "<")):
+            op = "<"
+        else:
+            return
+        filters.append(Filter(field="price", operator=op, value=value))
 
 
 class MaxRetryExceeded(Exception):

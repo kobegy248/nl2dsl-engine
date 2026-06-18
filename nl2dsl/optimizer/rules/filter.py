@@ -88,6 +88,25 @@ def _get_field_type(dimension_name: str, context) -> str:
     return context.semantic_config.get_dimension_type(dimension_name)
 
 
+def _is_numeric_value(value) -> bool:
+    """Return True if value is a numeric int/float or a string parseable as float.
+
+    Handles negatives, decimals and scientific notation (e.g. 5000.5, -3, "1e3").
+    Replaces the old ``value.isdigit()`` check which rejected floats/negatives.
+    """
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, str):
+        try:
+            float(value)
+            return True
+        except (ValueError, TypeError):
+            return False
+    return False
+
+
 def _find_replacement_op(operator: str, field_type: str) -> str | None:
     """Find a compatible replacement operator."""
     op_lower = operator.lower()
@@ -173,7 +192,7 @@ class F001_InvalidEnumValue(BaseRule):
 
             if value is None:
                 continue
-            if operator not in ("=", "in"):
+            if operator not in ("=", "in", "!="):
                 continue
 
             # Check value_map
@@ -342,14 +361,17 @@ class F005_ValueTypeMismatch(BaseRule):
             if field_type == "string":
                 continue  # default type, skip
 
-            # Check integer field with non-numeric value
+            # Check numeric field with non-numeric value
             if field_type in ("integer", "float", "numeric", "number"):
-                if isinstance(value, str) and not value.isdigit():
-                    return RuleResult.from_metadata(
-                        self.metadata,
-                        description=f"Value '{value}' for numeric field '{field}' appears to be non-numeric",
-                        location=f"filters[{i}].value",
-                    )
+                # Normalize list values (e.g. between [a, b], in [...]) to elements
+                values_to_check = value if isinstance(value, list) else [value]
+                for v in values_to_check:
+                    if not _is_numeric_value(v):
+                        return RuleResult.from_metadata(
+                            self.metadata,
+                            description=f"Value '{v}' for numeric field '{field}' appears to be non-numeric",
+                            location=f"filters[{i}].value",
+                        )
 
             # Check boolean field with non-boolean value
             if field_type in ("boolean", "bool"):

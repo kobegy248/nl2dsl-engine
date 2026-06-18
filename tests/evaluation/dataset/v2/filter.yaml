@@ -27,3 +27,63 @@ test_cases:
           - field: sales_amount
             operator: ">"
             value: 100000
+
+  - id: FILTER_003
+    query: "价格大于5000的商品"
+    difficulty: easy
+    category: filter
+    tags: ["filter", "numeric", "greater_than"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [product_name]
+      filters:
+        - field: price
+          operator: ">"
+          value: 5000
+
+  - id: FILTER_004
+    query: "价格在5000到20000之间的商品"
+    difficulty: medium
+    category: filter
+    tags: ["filter", "range", "between", "numeric"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [product_name]
+      filters:
+        - field: price
+          operator: between
+          value: [5000, 20000]
+
+  - id: FILTER_005
+    query: "非手机品类的销售额"
+    difficulty: easy
+    category: filter
+    tags: ["filter", "negation", "not_equal"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      filters:
+        - field: category
+          operator: "!="
+          value: "手机"
+
+  - id: FILTER_006
+    query: "华东地区线上渠道价格大于5000的销售额"
+    difficulty: hard
+    category: filter
+    tags: ["filter", "multi_condition", "and", "numeric"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      filters:
+        - field: region
+          operator: "="
+          value: "华东"
+        - field: channel
+          operator: "="
+          value: "线上"
+        - field: price
+          operator: ">"
+          value: 5000

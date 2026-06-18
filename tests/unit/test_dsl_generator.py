@@ -99,6 +99,51 @@ class TestRuleBasedDSLGenerator:
         dsl = gen.generate("查询")
         assert isinstance(dsl, DSL)
 
+    def test_numeric_greater_than(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("价格大于5000的销售额")
+        assert any(f.field == "price" and f.operator == ">" and f.value == 5000.0 for f in dsl.filters)
+
+    def test_numeric_greater_equal(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("价格大于等于8000的销售额")
+        assert any(f.field == "price" and f.operator == ">=" and f.value == 8000.0 for f in dsl.filters)
+
+    def test_numeric_less_than(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("价格小于3000的销售额")
+        assert any(f.field == "price" and f.operator == "<" and f.value == 3000.0 for f in dsl.filters)
+
+    def test_range_between(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("价格在5000到20000之间的销售额")
+        price_filters = [f for f in dsl.filters if f.field == "price"]
+        assert len(price_filters) == 1
+        assert price_filters[0].operator == "between"
+        assert sorted(price_filters[0].value) == [5000.0, 20000.0]
+
+    def test_range_between_swapped_bounds_normalized(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("价格在20000到5000之间的销售额")
+        price_filters = [f for f in dsl.filters if f.field == "price"]
+        assert price_filters[0].operator == "between"
+        assert sorted(price_filters[0].value) == [5000.0, 20000.0]
+
+    def test_negation_category_not_equal(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("非手机品类的销售额")
+        cat_filters = [f for f in dsl.filters if f.field == "category"]
+        assert len(cat_filters) == 1
+        assert cat_filters[0].operator == "!="
+        assert cat_filters[0].value == "手机"
+
+    def test_negation_channel_not_equal(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("不是线上渠道的销售额")
+        ch_filters = [f for f in dsl.filters if f.field == "channel"]
+        assert len(ch_filters) == 1
+        assert ch_filters[0].operator == "!="
+
 
 class TestRetryChain:
     def test_success_no_retry(self):

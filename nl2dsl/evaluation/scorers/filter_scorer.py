@@ -4,6 +4,18 @@ from nl2dsl.evaluation.scorers.base import Scorer
 from nl2dsl.evaluation.canonical.resolver import CanonicalResolver
 
 
+def _sort_key(value):
+    """Sort key that tolerates mixed numeric / string between bounds.
+
+    Numeric bounds are sorted by magnitude; non-numeric bounds fall back to
+    string ordering so the sort never crashes on heterogeneous values.
+    """
+    try:
+        return (0, float(value))
+    except (TypeError, ValueError):
+        return (1, str(value))
+
+
 class FilterScorer(Scorer):
     """使用规范化解析器对过滤条件匹配进行评分。
 
@@ -38,6 +50,15 @@ class FilterScorer(Scorer):
         for f in filters:
             field = self._resolver.resolve_dimension(f.get("field", ""))
             op = f.get("operator", "=")
-            value = self._resolver.resolve_value(f.get("field", ""), f.get("value"))
+            raw_value = f.get("value")
+            # Normalize `between` bounds BEFORE resolve_value (which stringifies
+            # lists), so [5000, 20000] == [20000, 5000].
+            if op == "between" and isinstance(raw_value, (list, tuple)) and len(raw_value) == 2:
+                sorted_vals = sorted(raw_value, key=_sort_key)
+                value = [
+                    self._resolver.resolve_value(f.get("field", ""), v) for v in sorted_vals
+                ]
+            else:
+                value = self._resolver.resolve_value(f.get("field", ""), raw_value)
             result.add(f"{field} {op} {value}")
         return result

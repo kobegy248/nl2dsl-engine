@@ -104,3 +104,52 @@ class TestNormalizerEmptyLists:
     def test_empty_dimensions_becomes_none(self, normalizer):
         dsl, log = normalizer.normalize({"data_source": "orders", "dimensions": []})
         assert dsl["dimensions"] is None
+
+
+class TestNormalizerNegationTree:
+    """Week 2 Task 4: 'not' single-leaf trees invert to != leaves, not dropped."""
+
+    def test_not_equal_inverts_to_not_equal(self, normalizer):
+        dsl, _ = normalizer.normalize({
+            "data_source": "orders",
+            "filters": {"op": "not", "children": [{"field": "category", "operator": "=", "value": "手机"}]},
+        })
+        assert dsl["filters"] == [{"field": "category", "operator": "!=", "value": "手机"}]
+
+    def test_not_greater_than_inverts_to_le(self, normalizer):
+        dsl, _ = normalizer.normalize({
+            "data_source": "orders",
+            "filters": {"op": "not", "children": [{"field": "price", "operator": ">", "value": 100}]},
+        })
+        assert dsl["filters"] == [{"field": "price", "operator": "<=", "value": 100}]
+
+    def test_not_not_equal_inverts_to_equal(self, normalizer):
+        dsl, _ = normalizer.normalize({
+            "data_source": "orders",
+            "filters": {"op": "not", "children": [{"field": "region", "operator": "!=", "value": "华东"}]},
+        })
+        assert dsl["filters"] == [{"field": "region", "operator": "=", "value": "华东"}]
+
+    def test_and_tree_still_flattens(self, normalizer):
+        dsl, _ = normalizer.normalize({
+            "data_source": "orders",
+            "filters": {"op": "and", "children": [
+                {"field": "region", "operator": "=", "value": "华东"},
+                {"field": "channel", "operator": "=", "value": "线上"},
+            ]},
+        })
+        assert dsl["filters"] == [
+            {"field": "region", "operator": "=", "value": "华东"},
+            {"field": "channel", "operator": "=", "value": "线上"},
+        ]
+
+    def test_not_in_keeps_leaf_and_warns(self, normalizer):
+        dsl, log = normalizer.normalize({
+            "data_source": "orders",
+            "filters": {"op": "not", "children": [{"field": "region", "operator": "in", "value": ["华东", "华南"]}]},
+        })
+        # Not silently dropped: the original leaf survives
+        assert len(dsl["filters"]) == 1
+        assert dsl["filters"][0]["operator"] == "in"
+        assert any("not" in m.lower() for m in log.actions)
+

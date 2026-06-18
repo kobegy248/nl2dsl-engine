@@ -236,3 +236,88 @@ class TestF005ValueTypeMismatch:
         dsl = {"data_source": "t", "filters": [{"field": "age", "operator": "=", "value": "一百"}]}
         result = rule.check(dsl, ctx)
         assert result.description != ""
+
+    def _ctx_with(self, dim_name, dim_type):
+        config = SemanticConfig(
+            dimensions={dim_name: {"column": dim_name, "type": dim_type}},
+            data_sources={"t": {"table": "t", "metrics": [], "dimensions": [dim_name]}},
+        )
+        return RuleContext(semantic_config=config)
+
+    def test_float_string_passes(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": ">", "value": "5000.5"}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description == ""
+
+    def test_negative_string_passes(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": "<", "value": "-3"}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description == ""
+
+    def test_scientific_notation_string_passes(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": ">", "value": "1e3"}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description == ""
+
+    def test_numeric_int_value_passes(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "age", "operator": ">", "value": 30}]}
+        assert rule.check(dsl, self._ctx_with("age", "integer")).description == ""
+
+    def test_between_list_with_numeric_strings_passes(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": "between", "value": ["5000.5", "20000"]}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description == ""
+
+    def test_between_list_with_non_numeric_warns(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": "between", "value": ["abc", "20000"]}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description != ""
+
+    def test_non_numeric_string_warns(self):
+        from nl2dsl.optimizer.rules.filter import F005_ValueTypeMismatch
+        rule = F005_ValueTypeMismatch()
+        dsl = {"data_source": "t", "filters": [{"field": "price", "operator": ">", "value": "abc"}]}
+        assert rule.check(dsl, self._ctx_with("price", "float")).description != ""
+
+
+class TestF001NotEqualEnum:
+    """Week 2 Task 3: F001 enum-value correction extended to != (negation)."""
+
+    @pytest.fixture
+    def f001_config(self):
+        return SemanticConfig(
+            dimensions={
+                "category": {
+                    "column": "category",
+                    "type": "string",
+                    "value_map": {"手机": "phone", "电脑": "computer", "服饰": "apparel"},
+                },
+            },
+            data_sources={
+                "orders": {"table": "order_fact", "metrics": [], "dimensions": ["category"]},
+            },
+        )
+
+    def test_not_equal_typo_corrected(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "category", "operator": "!=", "value": "手机类"}]}
+        result = rule.check(dsl, ctx)
+        assert result.description != ""
+        assert result.after["value"] == "手机"
+
+    def test_not_equal_exact_no_trigger(self, f001_config):
+        from nl2dsl.optimizer.rules.filter import F001_InvalidEnumValue
+        ctx = RuleContext(semantic_config=f001_config)
+        rule = F001_InvalidEnumValue()
+        dsl = {"data_source": "orders", "filters": [{"field": "category", "operator": "!=", "value": "手机"}]}
+        assert rule.check(dsl, ctx).description == ""
+

@@ -27,30 +27,56 @@ metrics:
 dimensions:
   product_name:
     column: product_name
+    type: string
     description: "产品名称"
   region:
     column: region
+    type: string
     description: "地区"
+    value_map:
+      华东: HD
+      华南: HN
+      华北: HB
+      华西: HX
   order_date:
     column: order_date
+    type: date
     description: "订单日期"
   brand:
     column: brand
+    type: string
     description: "品牌"
   category:
     column: category
+    type: string
     description: "品类"
+    value_map:
+      手机: phone
+      电脑: computer
+      服饰: apparel
+      食品: food
   channel:
     column: channel
+    type: string
     description: "销售渠道"
+    value_map:
+      线上: online
+      线下: offline
   customer_type:
     column: customer_type
+    type: string
     description: "客户类型"
+    value_map:
+      VIP: vip
+      新客: new
+      老客: old
   customer_name:
     column: customer_name
+    type: string
     description: "客户名称"
   price:
     column: price
+    type: float
     description: "产品单价"
 
 data_sources:

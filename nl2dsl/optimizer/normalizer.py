@@ -146,10 +146,32 @@ class Normalizer:
     def _flatten_filter_tree(self, node: dict, log: NormalizerLog) -> list[dict]:
         """Flatten a filter tree into a list. For non-trivial trees, this is lossy
         (loses AND/OR structure), so we log a warning.
+
+        ``not`` nodes with a single leaf child are preserved by inverting the
+        leaf's operator (e.g. ``not{category=手机}`` → ``category != 手机``),
+        so negation semantics are not silently dropped. ``not`` over a nested
+        and/or subtree, or over ``in``/``between``/``like``/``is_null`` (which
+        have no single-leaf negation), cannot be losslessly flattened and only
+        a warning is logged.
         """
         results = []
         op = node.get("op", "and")
         children = node.get("children", [])
+
+        if op == "not" and len(children) == 1 and isinstance(children[0], dict):
+            child = children[0]
+            if not ("op" in child and "children" in child):
+                inverted = self._invert_leaf(child)
+                if inverted is not None:
+                    results.append(self._normalize_single_filter(inverted))
+                    return results
+                # Cannot express negation as a single leaf — fall through to
+                # append the original leaf and warn (do not silently drop it).
+                log.add("Warning: 'not' over non-invertible operator — negation may be lost")
+                results.append(self._normalize_single_filter(child))
+                return results
+            # not over a nested and/or subtree — cannot invert losslessly
+            log.add("Warning: 'not' over nested subtree — negation may be lost")
 
         for child in children:
             if isinstance(child, dict):
@@ -162,6 +184,25 @@ class Normalizer:
         if op == "or":
             log.add("Warning: flattened OR filter tree — logical structure may be lost")
         return results
+
+    # Operators that can be inverted to express negation as a single leaf.
+    _OPPOSITE = {
+        "=": "!=",
+        "!=": "=",
+        ">": "<=",
+        "<": ">=",
+        ">=": "<",
+        "<=": ">",
+    }
+
+    def _invert_leaf(self, leaf: dict) -> dict | None:
+        """Return a single-leaf negation of ``leaf``, or None if not invertible."""
+        operator = leaf.get("operator")
+        if operator in self._OPPOSITE:
+            inverted = self._normalize_single_filter(leaf)
+            inverted["operator"] = self._OPPOSITE[operator]
+            return inverted
+        return None
 
     def _ensure_aliases(self, dsl: dict, log: NormalizerLog) -> dict:
         """Generate default aliases for metrics that lack them."""

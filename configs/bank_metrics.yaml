@@ -91,6 +91,7 @@ dimensions:
     description: "风险等级（01保守/02稳健/03平衡/04进取/05激进）"
   reg_date:
     column: reg_dt
+    type: date
     description: "客户注册日期"
   manager_no:
     column: mgr_emp_no
@@ -108,14 +109,17 @@ dimensions:
     description: "账户状态（01正常/02冻结/03止付/09销户）"
   open_date:
     column: open_dt
+    type: date
     description: "开户日期"
   maturity_date:
     column: mat_dt
+    type: date
     description: "到期日期"
 
   # ── 交易维度 ──────────────────────────────────────────
   txn_date:
     column: txn_dt
+    type: date
     description: "交易日期"
   txn_type:
     column: txn_type_cd
@@ -151,6 +155,7 @@ dimensions:
     description: "产品状态（01在售/02停售/03售罄）"
   min_purchase:
     column: min_pur_amt
+    type: float
     description: "最低购买金额"
 
   # ── 机构维度 ──────────────────────────────────────────
@@ -162,6 +167,7 @@ dimensions:
     description: "机构名称"
   org_level:
     column: org_lvl
+    type: integer
     description: "机构层级（1总行/2分行/3支行）"
 
   # ── 合约维度 ──────────────────────────────────────────
@@ -170,9 +176,11 @@ dimensions:
     description: "合约状态（01有效/02到期/03提前终止）"
   sign_date:
     column: sign_dt
+    type: date
     description: "签约日期"
   due_date:
     column: due_dt
+    type: date
     description: "到期日期"
 
 data_sources:

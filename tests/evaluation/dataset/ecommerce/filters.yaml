@@ -150,3 +150,63 @@ test_cases:
           value: [新客, 老客]
       order_by: []
       limit: 10
+
+  - id: ec_filter_009
+    query: "价格在5000到20000之间的商品销售额"
+    description: "Between / range filter on numeric field"
+    tags: ["filter", "between", "range", "numeric"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: price
+          operator: between
+          value: [5000, 20000]
+      order_by: []
+      limit: 10
+
+  - id: ec_filter_010
+    query: "价格大于等于8000的商品销售额"
+    description: "Greater-or-equal filter on numeric field"
+    tags: ["filter", "greater_equal", "numeric"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: price
+          operator: ">="
+          value: 8000
+      order_by: []
+      limit: 10
+
+  - id: ec_filter_011
+    query: "华东地区线上渠道价格大于5000的销售额"
+    description: "Multi-condition AND combination with numeric comparison"
+    tags: ["filter", "multi_condition", "and", "numeric"]
+    expected_dsl:
+      data_source: orders
+      metrics:
+        - func: sum
+          field: pay_amount
+          alias: sales_amount
+      dimensions: []
+      filters:
+        - field: region
+          operator: "="
+          value: 华东
+        - field: channel
+          operator: "="
+          value: 线上
+        - field: price
+          operator: ">"
+          value: 5000
+      order_by: []
+      limit: 10
