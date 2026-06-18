@@ -9,6 +9,35 @@ class DSLValidator:
         self._data_sources = registry.get("data_sources", {})
         self._data_source_names = set(self._data_sources.keys())
 
+    def _reachable_tables(self, ds_cfg: dict) -> set[str]:
+        """Tables reachable from a data_source: its primary table plus the
+        tables declared in its ``joins`` config (which may themselves chain
+        further, but the declared set is what the optimizer/SQLBuilder injects).
+        """
+        tables = {ds_cfg.get("table", "")}
+        joins = ds_cfg.get("joins", {})
+        if isinstance(joins, dict):
+            tables.update(joins.keys())
+        elif isinstance(joins, list):
+            for j in joins:
+                if isinstance(j, dict) and j.get("table"):
+                    tables.add(j["table"])
+        tables.discard("")
+        return tables
+
+    def _dim_reachable_via_joins(self, dim: str, ds_cfg: dict) -> bool:
+        """True if ``dim`` belongs to a data_source whose physical table is
+        reachable from ``dsl.data_source`` via declared joins. This allows
+        cross-table dimensions (e.g. customer_name via customer_dim) that the
+        optimizer (P001) and SQLBuilder resolve with a JOIN.
+        """
+        reachable = self._reachable_tables(ds_cfg)
+        for src_cfg in self._data_sources.values():
+            if dim in (src_cfg.get("dimensions") or []):
+                if src_cfg.get("table", "") in reachable:
+                    return True
+        return False
+
     def validate(self, dsl: DSL) -> None:
         errors = []
 
@@ -41,7 +70,7 @@ class DSLValidator:
 
             if dsl.dimensions:
                 for d in dsl.dimensions:
-                    if d not in ds_dims:
+                    if d not in ds_dims and not self._dim_reachable_via_joins(d, ds_cfg):
                         errors.append(f"维度 '{d}' 不在数据源 '{dsl.data_source}' 的可用维度列表中")
 
         # Must have metrics or dimensions

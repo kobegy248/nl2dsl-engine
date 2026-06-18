@@ -67,3 +67,62 @@ def test_generate_structured_accepts_dict_schema():
         client.generate_structured("prompt", "sys", schema_dict)
         call_kwargs = mock_create.call_args.kwargs
         assert call_kwargs["response_format"]["json_schema"]["schema"] == schema_dict
+
+
+def test_generate_with_schema_fallback_uses_structured_when_supported():
+    """Prefers strict structured output when the endpoint supports it."""
+    client = LLMClient(api_key="test-key", base_url="https://api.example.com", model="test-model")
+
+    with patch.object(client, "generate_structured", return_value='{"data_source": "orders"}') as m_struct, \
+         patch.object(client, "generate_json_object") as m_json, \
+         patch.object(client, "generate") as m_plain:
+        result = client.generate_with_schema_fallback("p", "s", "{}")
+        assert result == '{"data_source": "orders"}'
+        m_struct.assert_called_once()
+        m_json.assert_not_called()
+        m_plain.assert_not_called()
+
+
+def test_generate_with_schema_fallback_falls_through_to_json_object():
+    """Strict rejected -> json_object tier; both sticky-disabled appropriately."""
+    client = LLMClient(api_key="test-key", base_url="https://api.example.com", model="test-model")
+
+    def boom(*a, **k):
+        raise Exception("400 response_format json_schema unavailable now")
+
+    with patch.object(client, "generate_structured", side_effect=boom), \
+         patch.object(client, "generate_json_object", return_value='{"data_source": "orders"}') as m_json, \
+         patch.object(client, "generate") as m_plain:
+        result = client.generate_with_schema_fallback("p", "s", "{}")
+        assert result == '{"data_source": "orders"}'
+        m_json.assert_called_once()
+        m_plain.assert_not_called()
+        # Sticky: strict disabled, second call goes straight to json_object.
+        with patch.object(client, "generate_structured") as m_struct2, \
+             patch.object(client, "generate_json_object", return_value='{"data_source": "orders"}') as m_json2:
+            client.generate_with_schema_fallback("p", "s", "{}")
+            m_struct2.assert_not_called()
+            m_json2.assert_called_once()
+
+
+def test_generate_with_schema_fallback_falls_through_to_plain():
+    """Both structured tiers rejected -> plain generation, all sticky."""
+    client = LLMClient(api_key="test-key", base_url="https://api.example.com", model="test-model")
+
+    def boom(*a, **k):
+        raise Exception("400 response_format unavailable")
+
+    with patch.object(client, "generate_structured", side_effect=boom), \
+         patch.object(client, "generate_json_object", side_effect=boom), \
+         patch.object(client, "generate", return_value='{"data_source": "orders"}') as m_plain:
+        result = client.generate_with_schema_fallback("p", "s", "{}")
+        assert result == '{"data_source": "orders"}'
+        m_plain.assert_called_once()
+        # Sticky: second call skips both structured tiers straight to plain.
+        with patch.object(client, "generate_structured") as m_struct2, \
+             patch.object(client, "generate_json_object") as m_json2, \
+             patch.object(client, "generate", return_value='{"data_source": "orders"}') as m_plain2:
+            client.generate_with_schema_fallback("p", "s", "{}")
+            m_struct2.assert_not_called()
+            m_json2.assert_not_called()
+            m_plain2.assert_called_once()

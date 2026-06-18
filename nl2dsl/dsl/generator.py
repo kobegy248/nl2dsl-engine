@@ -14,6 +14,7 @@ from typing import Callable
 
 from nl2dsl.dsl.models import DSL, Aggregation, Filter, OrderBy
 from nl2dsl.exceptions import ValidationError
+from nl2dsl.query.time_resolver import resolve_time
 
 
 # Negation cues that, when preceding a value, flip an equality to `!=`.
@@ -140,6 +141,15 @@ class RuleBasedDSLGenerator(DSLGenerator):
         # Numeric / range / comparison filters on price (Week 2 semantics).
         self._add_numeric_filters(filters, question)
 
+        # Time expression resolution (Week 3): resolve any relative/absolute
+        # time expression in the question into DSL.time_field/time_range.
+        time_field = self._resolve_time_field(ds)
+        time_range = None
+        if time_field:
+            resolved = resolve_time(question, time_field)
+            if resolved is not None:
+                time_range = resolved.time_range
+
         # Order by
         if metrics:
             order_by.append(OrderBy(field=metrics[0].alias or metrics[0].field, direction="desc"))
@@ -157,7 +167,28 @@ class RuleBasedDSLGenerator(DSLGenerator):
             order_by=order_by or None,
             limit=limit,
             data_source=ds,
+            time_field=time_field if time_range else None,
+            time_range=time_range,
         )
+
+    def _resolve_time_field(self, data_source: str) -> str | None:
+        """Find the date-typed time dimension for a data source.
+
+        Returns the first dimension declared under ``data_source`` whose
+        ``type == "date"`` (e.g. ``order_date`` for ``orders``), falling back
+        to a scan of all registry dimensions. Mirrors
+        ``SemanticConfig.get_time_field`` but works off the raw registry dict
+        available to the rule-based generator.
+        """
+        dims_registry = self._registry.get("dimensions", {})
+        sources = self._registry.get("data_sources", {})
+        for dim_id in sources.get(data_source, {}).get("dimensions", []):
+            if dims_registry.get(dim_id, {}).get("type") == "date":
+                return dim_id
+        for dim_id, cfg in dims_registry.items():
+            if isinstance(cfg, dict) and cfg.get("type") == "date":
+                return dim_id
+        return None
 
     @staticmethod
     def _add_numeric_filters(filters: list, question: str) -> None:

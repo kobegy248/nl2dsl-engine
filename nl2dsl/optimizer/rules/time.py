@@ -1,8 +1,9 @@
-"""Time rules: T001 (Invalid Time Grain), T002 (Missing Time Context)."""
+"""Time rules: T001 (Invalid Time Grain), T002 (Missing Time Context), T003 (Missing Time Range)."""
 
 from nl2dsl.optimizer.base import BaseRule, RuleResult
 from nl2dsl.optimizer.metadata import RuleMetadata
 from nl2dsl.optimizer.registry import RuleRegistry
+from nl2dsl.query.time_resolver import resolve_time
 
 
 # Time grain keywords
@@ -116,3 +117,68 @@ class T002_MissingTimeContext(BaseRule):
             )
 
         return RuleResult.no_issue("T002", "Time")
+
+
+@RuleRegistry.register
+class T003_MissingTimeRange(BaseRule):
+    """Auto-inject a resolvable time_range when the LLM omitted it.
+
+    When the question contains a relative/absolute time expression (本月 / 上月
+    / 最近7天 / 1月份 / 2024年 …) that ``resolve_time`` can deterministically
+    resolve, but the DSL has no ``time_range``, inject ``time_field`` +
+    ``time_range``. Complements F003, which only Warns on *unresolvable* time
+    mentions (近期 / 未来 / 当季). F003 runs first within priority 5 (registered
+    earlier) and yields to T003 by returning no_issue for resolvable expressions.
+    """
+
+    metadata = RuleMetadata(
+        error_code="T003",
+        category="Time",
+        description="Question contains a resolvable time expression but DSL lacks time_range",
+        priority=5,
+        severity="Fix",
+        confidence="high",
+        auto_fixable=True,
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        if dsl.get("time_range") is not None:
+            return RuleResult.no_issue("T003", "Time")
+
+        question = context.original_question or ""
+        if not question:
+            return RuleResult.no_issue("T003", "Time")
+
+        time_field = context.semantic_config.get_time_field(dsl.get("data_source", ""))
+        if not time_field:
+            return RuleResult.no_issue("T003", "Time")
+
+        resolved = resolve_time(question, time_field, reference_date=context.reference_date)
+        if resolved is None:
+            # Unresolvable (or no time expression) — let F003 warn if appropriate.
+            return RuleResult.no_issue("T003", "Time")
+
+        return RuleResult.from_metadata(
+            self.metadata,
+            description=(
+                f"Injected time_range {list(resolved.time_range)} "
+                f"(granularity={resolved.granularity}) from '{resolved.source_expr}'"
+            ),
+            before={"time_field": None, "time_range": None},
+            after={
+                "time_field": resolved.time_field,
+                "time_range": list(resolved.time_range),
+            },
+            location="time_range",
+        )
+
+    def fix(self, dsl: dict, result: RuleResult) -> dict:
+        """Set both time_field and time_range (default fix sets one location)."""
+        import copy
+
+        if result.after is None:
+            return dsl
+        dsl = copy.deepcopy(dsl)
+        dsl["time_field"] = result.after["time_field"]
+        dsl["time_range"] = tuple(result.after["time_range"])
+        return dsl

@@ -37,6 +37,7 @@ from nl2dsl.query.sandbox import SandboxResult
 def mock_rag_retriever():
     retriever = MagicMock()
     retriever.build_prompt = MagicMock(return_value="rag prompt")
+    retriever.build_context = MagicMock(return_value="rag context")
     return retriever
 
 
@@ -212,11 +213,15 @@ class TestCreateNodeFunctions:
             "execute_sql_node",
             "simplify_dsl_node",
             "verify_dsl_node",
+            "optimize_dsl_node",
         }
         assert set(nodes.keys()) == expected
 
     def test_all_nodes_are_callable(self, nodes):
         for name, node in nodes.items():
+            if name == "optimize_dsl_node":
+                assert node is None
+                continue
             assert callable(node), f"{name} should be callable"
 
 
@@ -297,7 +302,7 @@ class TestGenerateDSLNode:
 
     def test_uses_rag_when_available(self, nodes, base_state, mock_rag_retriever):
         nodes["generate_dsl_node"](base_state)
-        mock_rag_retriever.build_prompt.assert_called_once_with("查询销售额")
+        mock_rag_retriever.build_context.assert_called_once_with("查询销售额", top_k=5)
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,15 @@ from nl2dsl.evaluation.scorers.base import Scorer
 from nl2dsl.evaluation.canonical.resolver import CanonicalResolver
 
 
+def _as_tuple(value) -> tuple | None:
+    """Normalize a time_range (list or tuple) to a comparable tuple."""
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return tuple(str(v) for v in value)
+    return None
+
+
 class PlannerScorer(Scorer):
     """对规划器方面进行评分：维度、排序、分页、关联。
 
@@ -44,7 +53,22 @@ class PlannerScorer(Scorer):
         a_joins = actual.get("joins") or []
         scores.append(self._score_joins(e_joins, a_joins))
 
+        # 时间范围 (Week 3): only scored when the expected case declares a
+        # time_range, so non-time cases are unaffected.
+        if expected.get("time_range") is not None:
+            scores.append(self._score_time_range(expected, actual))
+
         return sum(scores) / len(scores) if scores else 1.0
+
+    def _score_time_range(self, expected: dict, actual: dict) -> float:
+        """Score time_field + time_range match (normalized to tuples)."""
+        e_field = expected.get("time_field")
+        a_field = actual.get("time_field")
+        e_range = _as_tuple(expected.get("time_range"))
+        a_range = _as_tuple(actual.get("time_range"))
+        if e_field != a_field:
+            return 0.0
+        return 1.0 if e_range == a_range else 0.0
 
     def _score_order_by(self, expected, actual) -> float:
         if expected is None and actual is None:

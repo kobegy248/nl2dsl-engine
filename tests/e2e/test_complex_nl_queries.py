@@ -52,6 +52,7 @@ def setup_client():
         sensitive_columns=sensitive_columns,
         masking_rules=masking_rules,
         llm_client=llm_client,
+        enable_clarification=True,
     )
     return TestClient(app)
 

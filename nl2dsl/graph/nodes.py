@@ -20,6 +20,7 @@ from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy
 from nl2dsl.dsl.validator import DSLValidator
 from nl2dsl.exceptions import NL2DSLException, ValidationError
 from nl2dsl.graph.state import QueryState
+from nl2dsl.llm.prompts import DSL_JSON_SCHEMA_STRICT
 from nl2dsl.optimizer import optimize
 from nl2dsl.optimizer.context import SemanticConfig
 from nl2dsl.query.clarification import ClarificationDetector
@@ -91,8 +92,25 @@ def with_error_handler(node_name: str):
 # ---------------------------------------------------------------------------
 
 
-def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> str:
-    """Build a fallback prompt without RAG context, dynamically from registry."""
+def _join_on_field(join_cfg: dict) -> str:
+    """Read a join's `on` field, tolerating YAML's ``on:`` -> ``True`` quirk.
+
+    PyYAML parses an unquoted ``on:`` key as the boolean ``True`` (YAML 1.1),
+    so the config ends up as ``{True: "customer_id", ...}``. Mirror the
+    workaround used by SQLBuilder / P001 so prompts show the real on-field.
+    """
+    return (join_cfg.get("on") or join_cfg.get(True) or "id") if isinstance(join_cfg, dict) else "id"
+
+
+def _build_schema_section(registry_dict: dict | None = None) -> str:
+    """Build the full semantic-layer schema section from the registry.
+
+    This is the *baseline* context every LLM prompt must carry — the complete
+    list of data sources, metrics, dimensions, and join relations. Without it
+    the model has no authoritative source of valid names and invents plausible-
+    but-wrong ones (e.g. ``supplier`` instead of ``supplier_name``). RAG
+    few-shot examples are *additive* on top of this, never a replacement.
+    """
     if registry_dict is None:
         registry_dict = {}
 
@@ -115,11 +133,13 @@ def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> 
         desc = m_cfg.get("description", "")
         metric_lines.append(f'- {m_name}: {expr}, {desc}')
 
-    # Build dimensions section
+    # Build dimensions section (include type so date/value_map dims are visible)
     dim_lines = []
     for d_name, d_cfg in dimensions.items():
         desc = d_cfg.get("description", "")
-        dim_lines.append(f'- {d_name}: {desc}')
+        dtype = d_cfg.get("type", "")
+        suffix = f" [{dtype}]" if dtype and dtype != "string" else ""
+        dim_lines.append(f'- {d_name}: {desc}{suffix}')
 
     # Build data_source options
     ds_names = list(data_sources.keys())
@@ -130,10 +150,16 @@ def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> 
     join_lines = []
     for ds_name, ds_cfg in data_sources.items():
         joins = ds_cfg.get("joins", {})
-        for join_table, join_cfg in joins.items():
-            on_field = join_cfg.get("on", "id")
+        if isinstance(joins, dict):
+            join_items = joins.items()
+        elif isinstance(joins, list):
+            join_items = [(j.get("table", ""), j) for j in joins if isinstance(j, dict)]
+        else:
+            join_items = []
+        for join_table, join_cfg in join_items:
+            on_field = _join_on_field(join_cfg)
             join_type = join_cfg.get("type", "left")
-            alias = join_cfg.get("alias", join_table[0])
+            alias = join_cfg.get("alias", join_table[0] if join_table else "")
             join_lines.append(f'- {ds_name} 可以 {join_type.upper()} JOIN {join_table} ON {on_field}, alias={alias}')
 
     ds_section = "\n".join(ds_lines) if ds_lines else '- (无数据源配置)'
@@ -146,26 +172,74 @@ def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> 
 
 【表关联关系】
 {join_section}
-- 当用户问题涉及非主表字段时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义
+- 当用户问题涉及非主表字段时，必须在 DSL 的 joins 字段中添加对应的 JOIN 定义（table/on_field/join_type/alias 必须与上方配置一致）
 
-【可用指标】
+【可用指标】（metrics 的 alias 必须取自此清单）
 {metric_section}
 
-【可用维度】
+【可用维度】（dimensions 必须取自此清单）
 {dim_section}
 
 【重要规则】
 1. data_source 必须是以下之一: {ds_options}；默认使用 "{default_ds}"
-2. metrics 的 alias 必须是已注册的指标名，且必须在对应数据源的可用指标列表中
-3. dimensions 必须是已注册的维度名，且必须在对应数据源的可用维度列表中（不要选其他数据源独有的维度）
-4. filters 中的 field 必须是**维度名**，直接使用维度名称，不要加数据源前缀（如用 "channel_code" 而非 "transactions.channel_code"）
+2. metrics 的 alias 必须是【可用指标】清单中的名字
+3. dimensions 必须是【可用维度】清单中的名字；跨表维度需同时配 joins
+4. filters 中的 field 必须是**维度名**，直接使用维度名称，不要加表前缀
 5. 涉及关联表维度时 joins 中必须包含对应的 JOIN 定义
-6. 不要输出任何解释文字，只输出 JSON
+6. 不要输出任何解释文字，只输出 JSON"""
+
+
+def _build_fallback_prompt(question: str, registry_dict: dict | None = None) -> str:
+    """Build a prompt without RAG context, dynamically from registry."""
+    schema_section = _build_schema_section(registry_dict)
+    return f"""{schema_section}
 
 【用户问题】
 {question}
 
 请输出 DSL JSON："""
+
+
+def _build_generation_prompt(
+    question: str,
+    registry_dict: dict | None,
+    rag_context: str | None = None,
+    entity_hints: dict | None = None,
+) -> str:
+    """Build the full generation prompt: baseline schema + optional RAG context + question.
+
+    The baseline schema (full registry) is ALWAYS included so the model has an
+    authoritative list of valid metric/dimension/data_source names. RAG context
+    (retrieved few-shot examples / business terms) is appended on top as extra
+    guidance — it never replaces the baseline. This closes the gap where a RAG
+    retrieval miss left the model guessing dimension names.
+
+    ``entity_hints`` carries dimension/metric ids the router already extracted
+    from the question (e.g. supplier_name for "按供应商"). They are surfaced as
+    a strong directive so the LLM does not drop the group-by dimension it
+    already identified — a common failure on weaker models in json_object mode.
+    """
+    schema_section = _build_schema_section(registry_dict)
+    parts = [schema_section]
+    if rag_context and rag_context.strip():
+        parts.append(f"【检索到的业务知识（作为补充参考，不能违反上方清单）】\n{rag_context}")
+    if entity_hints:
+        hint_dims = [d for d in (entity_hints.get("dimensions") or []) if d]
+        hint_metrics = [m for m in (entity_hints.get("metrics") or []) if m]
+        hint_lines = []
+        if hint_dims:
+            hint_lines.append(
+                f"- 用户意图中已识别的分组维度（dimensions 必须包含这些）: {hint_dims}"
+            )
+        if hint_metrics:
+            hint_lines.append(
+                f"- 用户意图中已识别的指标（metrics 的 alias 应取这些）: {hint_metrics}"
+            )
+        if hint_lines:
+            parts.append("【路由层实体识别结果（必须遵守）】\n" + "\n".join(hint_lines))
+    parts.append(f"【用户问题】\n{question}")
+    parts.append("请输出 DSL JSON：")
+    return "\n\n".join(parts)
 
 
 def _parse_llm_output(raw: str) -> dict:
@@ -963,12 +1037,25 @@ def _make_generate_dsl_node(
                 "trace": {"step": "generate_dsl", "status": "success", "source": "rule_based"},
             }
 
+        rag_context = None
         if rag_retriever is not None:
-            prompt = rag_retriever.build_prompt(question)
-        else:
-            prompt = _build_fallback_prompt(question, registry_dict)
+            try:
+                rag_context = rag_retriever.build_context(question, top_k=5)
+            except Exception as exc:
+                logger.warning("[generate_dsl] RAG context build failed: %s", exc)
+                rag_context = None
+        prompt = _build_generation_prompt(
+            question, registry_dict, rag_context=rag_context,
+            entity_hints=state.get("entity_hints"),
+        )
 
-        raw = llm_client.generate(prompt, llm_system_prompt)
+        # Prefer structured output (json_schema) so the operator/func/join_type
+        # enums are enforced — the model cannot emit illegal operators like
+        # `time_range`. Falls back to plain generation on endpoints that don't
+        # support strict json_schema.
+        raw = llm_client.generate_with_schema_fallback(
+            prompt, llm_system_prompt, DSL_JSON_SCHEMA_STRICT
+        )
         if not raw:
             raise ValidationError("LLM returned empty response")
         logger.info("[generate_dsl] LLM raw output (len=%d): %s", len(raw), raw)
@@ -1069,8 +1156,13 @@ def _make_correct_dsl_node(
                 except Exception as exc:
                     logger.warning("[correct_dsl] retrieval failed: %s", exc)
 
-            # Step 3: 拿着 error + 原 DSL + 定向 context + 原问题 重新生成
+            # Step 3: 拿着 error + 原 DSL + 定向 context + 原问题 重新生成。
+            # The baseline schema is always included so the corrected DSL uses
+            # valid names from the registry, not guesses.
+            schema_section = _build_schema_section(registry_dict)
             feedback = f"""上一次生成的 DSL 校验失败，请修正。
+
+{schema_section}
 
 【用户原始问题】
 {question}
@@ -1081,16 +1173,18 @@ def _make_correct_dsl_node(
 【失败原因】
 {error}
 
-【针对失败原因补充的业务知识】
+【针对失败原因补充的业务知识（参考，不能违反上方清单）】
 {extra_context or "(无额外上下文)"}
 
 【修正要求】
 1. 不要重复上次的错误
-2. 严格按补充的业务知识中的 metric alias / dimension 名称
+2. metrics 的 alias、dimensions、data_source 必须取自上方【可用指标】【可用维度】清单
 3. 只输出修正后的 DSL JSON，不要解释
 
 请输出修正后的 DSL JSON："""
-            raw = llm_client.generate(feedback, llm_system_prompt)
+            raw = llm_client.generate_with_schema_fallback(
+                feedback, llm_system_prompt, DSL_JSON_SCHEMA_STRICT
+            )
             if raw:
                 dsl_dict = _parse_llm_output(raw)
                 ds_config = registry_dict.get("data_sources", {})
@@ -1399,6 +1493,7 @@ def _make_optimize_dsl_node(
                 permission_config=permission_config,
                 original_question=question,
                 max_limit=10000,  # system-wide hard cap
+                reference_date=state.get("reference_date"),
             )
         except Exception as exc:
             logger.error("[optimize_dsl] Optimizer crashed: %s", exc, exc_info=True)
@@ -1410,16 +1505,25 @@ def _make_optimize_dsl_node(
                 }
             }
 
-        # Build trace summary
+        # Build trace summary. Counts are kept for backward-compat; the full
+        # fixes/warnings/rejections lists (each entry carries error_code,
+        # description, before/after, location, candidate_values) make JOIN
+        # injection, time injection, and clarification signals visible in the
+        # audit trace. `diff` is a one-line-per-field human summary.
         trace_detail = {
             "step": "optimize_dsl",
             "status": "success",
+            "report_id": report.report_id,
             "rules_checked": report.total_rules_checked,
             "rules_triggered": report.total_rules_triggered,
             "fixes_applied": len(report.fixes_applied),
             "warnings": len(report.warnings_issued),
             "rejections": len(report.rejections),
             "elapsed_ms": report.elapsed_ms,
+            "fixes": report.fixes_applied,
+            "warnings_detail": report.warnings_issued,
+            "rejections_detail": report.rejections,
+            "diff": report.diff,
         }
 
         if report.fixes_applied:
@@ -1625,10 +1729,23 @@ def create_node_functions(
         if dsl is None:
             raise ValidationError("DSL is None, cannot build SQL")
         dsl_for_build = _restore_metric_fields(dsl)
+        had_joins = bool(dsl_for_build.joins)
         sql = sql_builder.build(dsl_for_build)
+        trace = {"step": "build_sql", "status": "success"}
+        # If the DSL had no joins but the generated SQL contains a JOIN, the
+        # SQLBuilder inferred it silently (optimizer disabled or P001 did not
+        # cover this case). Surface that as a trace note so the silent path is
+        # at least observable in the audit trail.
+        if (
+            not had_joins
+            and isinstance(sql, str)
+            and re.search(r"\bjoin\b", sql, re.IGNORECASE)
+        ):
+            trace["join_source"] = "sqlbuilder_inferred"
+            trace["note"] = "JOIN inferred by SQLBuilder (optimizer did not inject)"
         return {
             "sql": sql,
-            "trace": {"step": "build_sql", "status": "success"},
+            "trace": trace,
         }
 
     # -----------------------------------------------------------------------

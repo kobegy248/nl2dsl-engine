@@ -44,6 +44,8 @@ class AgentResult(BaseModel):
 
     status: str
     data: list[dict] | None = None
+    dsl: dict | None = None
+    sql: str | None = None
     explanation: str | None = None
     confidence: float | None = None
     plan: Plan | None = None

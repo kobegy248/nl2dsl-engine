@@ -284,14 +284,24 @@ class F003_MissingTimeRange(BaseRule):
         has_time_range = dsl.get("time_range") is not None
         has_time_field = dsl.get("time_field") is not None
 
-        if not has_time_range and not has_time_field:
-            return RuleResult.from_metadata(
-                self.metadata,
-                description=f"Query contains time keyword but DSL has no time_range or time_field",
-                before={"original_question": question},
-            )
+        if has_time_range or has_time_field:
+            return RuleResult.no_issue("F003", "Filter")
 
-        return RuleResult.no_issue("F003", "Filter")
+        # The question mentions time but the DSL has none. If the expression is
+        # deterministically resolvable, yield to T003 (which auto-injects the
+        # range); only Warn on genuinely vague/unresolvable mentions
+        # (近期 / 未来 / 当季 without a number).
+        from nl2dsl.query.time_resolver import resolve_time
+
+        time_field = context.semantic_config.get_time_field(dsl.get("data_source", ""))
+        if time_field and resolve_time(question, time_field, reference_date=context.reference_date) is not None:
+            return RuleResult.no_issue("F003", "Filter")
+
+        return RuleResult.from_metadata(
+            self.metadata,
+            description=f"Query contains vague time keyword but DSL has no resolvable time_range",
+            before={"original_question": question},
+        )
 
 
 @RuleRegistry.register

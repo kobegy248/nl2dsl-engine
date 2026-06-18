@@ -74,6 +74,14 @@ dimensions:
     column: customer_name
     type: string
     description: "客户名称"
+  city_level:
+    column: city_level
+    type: string
+    description: "城市等级"
+  supplier_name:
+    column: supplier_name
+    type: string
+    description: "供应商名称"
   price:
     column: price
     type: float
@@ -93,6 +101,10 @@ data_sources:
         on: customer_id
         type: left
         alias: c
+      supplier_dim:
+        on: p.supplier_id
+        type: left
+        alias: s
   products:
     table: product_dim
     metrics: [max_price, avg_price]
@@ -100,4 +112,8 @@ data_sources:
   customers:
     table: customer_dim
     metrics: [customer_count]
-    dimensions: [customer_name, customer_type, region]
+    dimensions: [customer_name, customer_type, region, city_level]
+  suppliers:
+    table: supplier_dim
+    metrics: []
+    dimensions: [supplier_name]

@@ -41,6 +41,7 @@ def optimize(
     enabled_rules: list[str] | None = None,
     disabled_rules: list[str] | None = None,
     max_limit: int = 10000,
+    reference_date=None,
 ) -> tuple[dict, OptimizationReport]:
     """Run semantic optimization on a DSL dict.
 
@@ -72,6 +73,7 @@ def optimize(
         permission_config=permission_config,
         original_question=original_question,
         max_limit=max_limit,
+        reference_date=reference_date,
     )
 
     engine = RuleEngine(context)

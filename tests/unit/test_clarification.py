@@ -29,6 +29,22 @@ class TestClarificationDetector:
         items = detector.detect("查询2024年5月销售额")
         assert not any(i.type == "time_missing" for i in items)
 
+    def test_trend_without_time_clarifies(self, detector):
+        # Week 3 acceptance: trend/growth without time -> clarify, don't guess.
+        items = detector.detect("销售额趋势")
+        assert any(i.type == "time_missing" for i in items)
+
+    def test_trend_with_explicit_time_does_not_clarify(self, detector):
+        # An explicit resolvable time expression suppresses the clarification.
+        items = detector.detect("本月销售额趋势")
+        assert not any(i.type == "time_missing" for i in items)
+
+    def test_this_week_last_year_recognized_as_time(self, detector):
+        # Broadened keywords: 本周/上周/今年/去年 count as time context.
+        for q in ("本周销售额趋势", "上周销售额趋势", "今年销售额趋势", "去年销售额趋势"):
+            items = detector.detect(q)
+            assert not any(i.type == "time_missing" for i in items), q
+
     def test_time_present_recent(self, detector):
         items = detector.detect("查询最近7天的销售额")
         assert not any(i.type == "time_missing" for i in items)

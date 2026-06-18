@@ -14,6 +14,7 @@ from nl2dsl.domain_context import DomainContext
 from nl2dsl.plugin import Registry, Pipeline, Plugin
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.dsl.semantic_validator import SemanticValidator
+from nl2dsl.optimizer.context import SemanticConfig
 from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("engine")
@@ -249,6 +250,12 @@ class Engine:
             # Create semantic validator
             semantic_validator = SemanticValidator(rd)
 
+            # Build the optimizer's semantic config so the optimizer runs on the
+            # production path (it was previously only wired in api_factory/E2E).
+            # This satisfies the roadmap's "优化器进入主链路" goal and makes
+            # JOIN/time derivation visible in the trace.
+            optimizer_config = SemanticConfig.from_registry_dict(rd)
+
             # 7. Build graph
             graph = build_graph(
                 llm_client=llm,
@@ -266,6 +273,7 @@ class Engine:
                 llm_system_prompt=DSL_SYSTEM_PROMPT,
                 checkpointer=self._checkpointer,
                 semantic_validator=semantic_validator,
+                optimizer_semantic_config=optimizer_config,
             )
 
             # 8. Assemble DomainContext

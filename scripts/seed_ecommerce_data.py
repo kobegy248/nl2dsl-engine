@@ -45,6 +45,7 @@ def seed():
         Column("brand", String),
         Column("category", String),
         Column("price", Float),
+        Column("supplier_id", Integer),
     )
 
     Table(
@@ -55,6 +56,14 @@ def seed():
         Column("customer_type", String),
         Column("register_date", String),
         Column("region", String),
+        Column("city_level", String),
+    )
+
+    Table(
+        "supplier_dim",
+        metadata,
+        Column("supplier_id", Integer, primary_key=True),
+        Column("supplier_name", String),
     )
 
     metadata.create_all(db)
@@ -63,28 +72,36 @@ def seed():
         result = conn.execute(text("SELECT COUNT(*) FROM order_fact"))
         count = result.scalar()
         if count == 0:
+            # Insert suppliers
+            suppliers = [
+                {"supplier_id": 1, "supplier_name": "华东供应商"},
+                {"supplier_id": 2, "supplier_name": "华南供应商"},
+                {"supplier_id": 3, "supplier_name": "北方供应商"},
+            ]
+            conn.execute(insert(metadata.tables["supplier_dim"]), suppliers)
+
             # Insert products
             products = [
-                {"product_id": 1, "product_name": "iPhone 15 Pro", "brand": "苹果", "category": "手机", "price": 7999.0},
-                {"product_id": 2, "product_name": "华为 Mate 60 Pro", "brand": "华为", "category": "手机", "price": 6999.0},
-                {"product_id": 3, "product_name": "小米 14", "brand": "小米", "category": "手机", "price": 3999.0},
-                {"product_id": 4, "product_name": "联想拯救者 Y9000P", "brand": "联想", "category": "电脑", "price": 8999.0},
-                {"product_id": 5, "product_name": "MacBook Pro 14", "brand": "苹果", "category": "电脑", "price": 14999.0},
-                {"product_id": 6, "product_name": "海尔冰箱 500L", "brand": "海尔", "category": "家电", "price": 3999.0},
-                {"product_id": 7, "product_name": "美的空调 1.5匹", "brand": "美的", "category": "家电", "price": 2699.0},
-                {"product_id": 8, "product_name": "Nike Air Max", "brand": "Nike", "category": "服饰", "price": 899.0},
-                {"product_id": 9, "product_name": "索尼电视 65寸", "brand": "索尼", "category": "家电", "price": 5999.0},
-                {"product_id": 10, "product_name": "优衣库羽绒服", "brand": "优衣库", "category": "服饰", "price": 499.0},
+                {"product_id": 1, "product_name": "iPhone 15 Pro", "brand": "苹果", "category": "手机", "price": 7999.0, "supplier_id": 1},
+                {"product_id": 2, "product_name": "华为 Mate 60 Pro", "brand": "华为", "category": "手机", "price": 6999.0, "supplier_id": 2},
+                {"product_id": 3, "product_name": "小米 14", "brand": "小米", "category": "手机", "price": 3999.0, "supplier_id": 1},
+                {"product_id": 4, "product_name": "联想拯救者 Y9000P", "brand": "联想", "category": "电脑", "price": 8999.0, "supplier_id": 3},
+                {"product_id": 5, "product_name": "MacBook Pro 14", "brand": "苹果", "category": "电脑", "price": 14999.0, "supplier_id": 1},
+                {"product_id": 6, "product_name": "海尔冰箱 500L", "brand": "海尔", "category": "家电", "price": 3999.0, "supplier_id": 2},
+                {"product_id": 7, "product_name": "美的空调 1.5匹", "brand": "美的", "category": "家电", "price": 2699.0, "supplier_id": 2},
+                {"product_id": 8, "product_name": "Nike Air Max", "brand": "Nike", "category": "服饰", "price": 899.0, "supplier_id": 3},
+                {"product_id": 9, "product_name": "索尼电视 65寸", "brand": "索尼", "category": "家电", "price": 5999.0, "supplier_id": 3},
+                {"product_id": 10, "product_name": "优衣库羽绒服", "brand": "优衣库", "category": "服饰", "price": 499.0, "supplier_id": 1},
             ]
             conn.execute(insert(metadata.tables["product_dim"]), products)
 
             # Insert customers
             customers = [
-                {"customer_id": 1, "customer_name": "张三", "customer_type": "VIP", "register_date": "2023-01-15", "region": "华东"},
-                {"customer_id": 2, "customer_name": "李四", "customer_type": "老客", "register_date": "2023-03-20", "region": "华东"},
-                {"customer_id": 3, "customer_name": "王五", "customer_type": "新客", "register_date": "2024-01-05", "region": "华南"},
-                {"customer_id": 4, "customer_name": "赵六", "customer_type": "VIP", "register_date": "2022-08-10", "region": "华北"},
-                {"customer_id": 5, "customer_name": "孙七", "customer_type": "老客", "register_date": "2023-06-18", "region": "西南"},
+                {"customer_id": 1, "customer_name": "张三", "customer_type": "VIP", "register_date": "2023-01-15", "region": "华东", "city_level": "一线"},
+                {"customer_id": 2, "customer_name": "李四", "customer_type": "老客", "register_date": "2023-03-20", "region": "华东", "city_level": "二线"},
+                {"customer_id": 3, "customer_name": "王五", "customer_type": "新客", "register_date": "2024-01-05", "region": "华南", "city_level": "一线"},
+                {"customer_id": 4, "customer_name": "赵六", "customer_type": "VIP", "register_date": "2022-08-10", "region": "华北", "city_level": "三线"},
+                {"customer_id": 5, "customer_name": "孙七", "customer_type": "老客", "register_date": "2023-06-18", "region": "西南", "city_level": "二线"},
             ]
             conn.execute(insert(metadata.tables["customer_dim"]), customers)
 

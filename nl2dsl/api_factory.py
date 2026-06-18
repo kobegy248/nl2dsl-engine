@@ -39,6 +39,7 @@ from nl2dsl.agent.planner import classify_intent, _decompose_fallback
 from nl2dsl.domain_context import DomainContext
 from nl2dsl.graph.builder import build_graph
 from nl2dsl.graph.state import QueryState
+from nl2dsl.llm.prompts import DSL_SYSTEM_PROMPT
 from langgraph.checkpoint.memory import InMemorySaver
 
 
@@ -431,13 +432,21 @@ def create_app(
     _nl2dsl_engine.register("row_security", RowLevelSecurity(permissions or {}))
     _nl2dsl_engine.register("col_security", ColumnLevelSecurity(sensitive_columns or {}, masking_rules or {}))
 
-    # Use no-op clarification detector to preserve pre-LangGraph behavior
+    # Clarification detector: real detector when enabled (so trend/growth
+    # queries missing time context clarify on the api_factory/E2E path too),
+    # otherwise a no-op to preserve pre-LangGraph behavior.
     class _NoOpClarificationDetector:
         def detect(self, question: str) -> list:
             return []
 
-    clarification_detector = _NoOpClarificationDetector()
+    if enable_clarification:
+        clarification_detector = ClarificationDetector()
+    else:
+        clarification_detector = _NoOpClarificationDetector()
     _nl2dsl_engine.register("clarification_detector", clarification_detector)
+
+    # Registry used for registry-aware entity extraction in the agent route.
+    _route_registry = registry_dict or _nl2dsl_engine.registry.get("registry_dict") or {}
 
     # Services used directly by routes
     feedback_collector = FeedbackCollector()
@@ -478,7 +487,7 @@ def create_app(
         executor=_executor,
         clarification_detector=clarification_detector,
         registry_dict=registry_dict or {},
-        llm_system_prompt=_build_domain_system_prompt(registry_dict),
+        llm_system_prompt=DSL_SYSTEM_PROMPT,
         checkpointer=None,
         optimizer_semantic_config=_optimizer_config,
     )
@@ -648,7 +657,7 @@ def create_app(
 
             # Step 1: Route via AgentController (intent classification + routing)
             from nl2dsl.agent.orchestrator import AgentOrchestrator
-            entities = AgentOrchestrator._extract_entities(req.question)
+            entities = AgentOrchestrator._extract_entities(req.question, _route_registry)
             execution_plan = await _agent_controller.route(req.question, entities)
 
             # Step 2: Dispatch based on execution plan type
@@ -690,8 +699,8 @@ def create_app(
                 return QueryResponse(
                     status=response_status,
                     data=agent_result.data,
-                    dsl=None,
-                    sql=None,
+                    dsl=agent_result.dsl,
+                    sql=agent_result.sql,
                     execution_time_ms=elapsed,
                     explanation=agent_result.explanation,
                     confidence=agent_result.confidence,
@@ -822,7 +831,7 @@ def create_app(
 
         # Step 1: Route via AgentController (intent classification + routing)
         from nl2dsl.agent.orchestrator import AgentOrchestrator
-        entities = AgentOrchestrator._extract_entities(req.question)
+        entities = AgentOrchestrator._extract_entities(req.question, _route_registry)
         execution_plan = await _agent_controller.route(req.question, entities)
 
         if isinstance(execution_plan, (ComplexExecutionPlan, ExplorationPlan)):
@@ -851,6 +860,8 @@ def create_app(
                             "data": {
                                 "status": agent_result.status,
                                 "data": agent_result.data,
+                                "dsl": agent_result.dsl,
+                                "sql": agent_result.sql,
                                 "explanation": agent_result.explanation,
                                 "confidence": agent_result.confidence,
                             },

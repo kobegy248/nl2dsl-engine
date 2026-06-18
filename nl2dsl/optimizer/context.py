@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 
 @dataclass
@@ -92,9 +93,27 @@ class SemanticConfig:
         return ds.get("dimensions", [])
 
     def get_joins_for_source(self, data_source: str) -> list[dict]:
-        """Get available JOIN paths from a data source."""
+        """Get available JOIN paths from a data source.
+
+        Note: in the current metrics.yaml format this is actually a dict
+        keyed by target table name ({table: {on, type, alias}}). Callers
+        that need to iterate should handle both dict and list forms.
+        """
         ds = self.data_sources.get(data_source, {})
         return ds.get("joins", [])
+
+    def get_time_field(self, data_source: str) -> str | None:
+        """Get the semantic time dimension ID for a data source.
+
+        Returns the first dimension listed under ``data_source`` whose
+        ``type == "date"`` (e.g. ``order_date`` for ``orders``), or ``None``.
+        Makes time resolution domain-agnostic (works for bank/ecommerce alike).
+        """
+        ds = self.data_sources.get(data_source, {})
+        for dim_id in ds.get("dimensions", []):
+            if self.get_dimension_type(dim_id) == "date":
+                return dim_id
+        return None
 
     def find_data_source_for_metric(self, metric_name: str) -> str | None:
         """Find which data source contains a given metric."""
@@ -121,3 +140,7 @@ class RuleContext:
     permission_config: dict | None = None
     original_question: str | None = None
     max_limit: int = 10000
+    reference_date: "date | None" = None
+    """Pinned "today" for relative-time resolution (本月/最近7天). Defaults to
+    ``date.today()`` inside the resolver when None; tests/eval pin it for
+    deterministic time-range assertions."""

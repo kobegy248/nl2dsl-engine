@@ -129,9 +129,9 @@ class TestGetDomainContext:
         assert ctx is mock_domain_context
 
     def test_fallback_when_no_domains(self):
-        """When no domains and unknown domain requested, raises KeyError."""
+        """When no domains and unknown domain requested, raises RuntimeError."""
         orch = AgentOrchestrator(domains={})
-        with pytest.raises(KeyError):
+        with pytest.raises(RuntimeError):
             orch._get_domain_context("anything")
 
 

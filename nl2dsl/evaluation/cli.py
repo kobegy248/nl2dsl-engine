@@ -106,6 +106,7 @@ def _create_client_for_domain(domain: str):
         sensitive_columns=sensitive_columns,
         masking_rules=masking_rules,
         llm_client=llm_client,
+        enable_clarification=True,
     )
     from fastapi.testclient import TestClient
 

@@ -78,6 +78,10 @@ def mock_services_with_rag(rag_store):
         # verify_dsl call (if reached)
         '{"answer_match": true, "issues": []}',
     ]
+    # generate_dsl now uses the structured-fallback path.
+    llm_client.generate_with_schema_fallback.return_value = (
+        '{"metrics": [{"field": "sales_amount", "alias": "sales_amount"}], "dimensions": [], "filters": [], "limit": 10}'
+    )
 
     # Mock other services
     engine = MagicMock()
@@ -122,13 +126,15 @@ class TestRAGInPipeline:
 
         assert result["status"] == "success"
         llm_client = mock_services_with_rag["llm_client"]
-        assert llm_client.generate.called
+        assert llm_client.generate_with_schema_fallback.called
 
-        # Collect all prompts passed to LLM across all calls
-        all_prompts = [call[0][0] for call in llm_client.generate.call_args_list]
+        # Collect all prompts passed to the DSL-generation call across all calls
+        all_prompts = [
+            call[0][0] for call in llm_client.generate_with_schema_fallback.call_args_list
+        ]
         combined = "\n".join(all_prompts)
 
-        # Verify at least one prompt contains RAG context sections
+        # Verify at least one prompt contains the full schema section
         assert "【可用指标】" in combined
         assert "sales_amount" in combined
 
@@ -230,6 +236,11 @@ class TestRAGGracefulDegradation:
             '{"metrics": [{"field": "sales_amount"}], "dimensions": [], "filters": [], "limit": 10}',
             '{"answer_match": true, "issues": []}',
         ]
+        # generate_dsl now uses the structured-fallback path; stub it to return
+        # the same valid DSL JSON the first .generate call would have returned.
+        llm_client.generate_with_schema_fallback.return_value = (
+            '{"metrics": [{"field": "sales_amount"}], "dimensions": [], "filters": [], "limit": 10}'
+        )
 
         engine = MagicMock()
         conn = MagicMock()
@@ -267,4 +278,4 @@ class TestRAGGracefulDegradation:
         })
 
         assert result["status"] == "success"
-        assert llm_client.generate.called
+        assert llm_client.generate_with_schema_fallback.called

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import date
 from typing import Any, Callable
 
 from nl2dsl.evaluation.models import V2TestCase, V2ScoreBreakdown, CanonicalQuery
@@ -11,6 +12,10 @@ from nl2dsl.evaluation.scorers.base import Scorer
 from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("evaluation.v2_runner")
+
+# Pinned reference date for deterministic relative-time evaluation (本月/最近7天).
+# Test cases encode absolute dates against this date.
+_EVAL_REFERENCE_DATE = date(2026, 6, 18)
 
 # 默认权重
 DEFAULT_WEIGHTS: dict[str, float] = {
@@ -130,6 +135,8 @@ class V2BenchmarkRunner:
             "order_by": dsl.get("order_by"),
             "limit": dsl.get("limit"),
             "joins": dsl.get("joins", []),
+            "time_field": dsl.get("time_field"),
+            "time_range": dsl.get("time_range"),
         }
 
     def run_batch(
@@ -195,6 +202,7 @@ class V2BenchmarkRunner:
                     original_question=case.query,
                     enabled_rules=enabled_rules,
                     disabled_rules=disabled_rules,
+                    reference_date=_EVAL_REFERENCE_DATE,
                 )
                 actual_dsl = optimized_dsl
                 optimizer_report = opt_report
@@ -218,16 +226,27 @@ class V2BenchmarkRunner:
     def _build_dsl_from_case(self, case: V2TestCase) -> dict:
         """从测试用例的预期值构建一个可用于评分和优化的 DSL dict。"""
         expected = case.expected
-        dsl: dict = {"data_source": expected.get("intent", {}).get("data_source", "default")}
+        # data_source: ecommerce cases target the "orders" source so the
+        # optimizer (T003/P001) can resolve time fields and JOINs. intent may
+        # be a plain string ("aggregate"), so default safely.
+        intent = expected.get("intent")
+        if isinstance(intent, dict):
+            data_source = intent.get("data_source", "orders")
+        else:
+            data_source = "orders"
+        dsl: dict = {"data_source": data_source}
 
-        # Metric
-        metric_info = expected.get("metric", {})
+        # Metric (may be a string alias like "sales_amount" or a dict)
+        metric_info = expected.get("metric")
         if metric_info:
-            dsl["metrics"] = [{
-                "func": metric_info.get("func", "sum"),
-                "field": metric_info.get("field", metric_info.get("alias", "")),
-                "alias": metric_info.get("alias", ""),
-            }]
+            if isinstance(metric_info, dict):
+                dsl["metrics"] = [{
+                    "func": metric_info.get("func", "sum"),
+                    "field": metric_info.get("field", metric_info.get("alias", "")),
+                    "alias": metric_info.get("alias", ""),
+                }]
+            else:
+                dsl["metrics"] = [{"func": "sum", "field": "order_amount", "alias": metric_info}]
 
         # Dimensions
         if "dimensions" in expected:
@@ -254,5 +273,9 @@ class V2BenchmarkRunner:
                 dsl["order_by"] = planner_info["order_by"]
             if "joins" in planner_info:
                 dsl["joins"] = planner_info["joins"]
+            if "time_field" in planner_info:
+                dsl["time_field"] = planner_info["time_field"]
+            if "time_range" in planner_info:
+                dsl["time_range"] = planner_info["time_range"]
 
         return dsl

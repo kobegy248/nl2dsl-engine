@@ -16,23 +16,15 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 8. **识别否定**：是否有"非""不是""排除"？→ 用 not 操作符
 9. **遗漏检查**：重新读用户问题，确认没有遗漏任何条件
 
-## 指标映射词典（用户说的词 → alias）
-- "销售额" / "营收" / "收入" → `sales_amount`
-- "成交总额" / "GMV" / "交易额" → `gmv`
-- "订单数量" / "订单量" / "单量" → `order_count`
-- "客单价" / "平均订单金额" → `avg_order_value`
-- "客户数量" / "用户数" / "人数" → `customer_count`
-- "优惠总额" / "折扣金额" → `total_discount`
+## 指标与维度（核心：必须使用上下文中提供的清单）
 
-## 维度映射词典（用户说的词 → dimension）
-- "产品" / "商品" → `product_name`
-- "品牌" → `brand`
-- "品类" / "分类" → `category`
-- "地区" / "区域" → `region`
-- "渠道" / "销售方式" → `channel`
-- "客户类型" → `customer_type`
-- "客户名" → `customer_name`
-- "时间" / "日期" → `order_date`
+**不要凭记忆自创指标别名或维度名。** 用户问题中提到的每个数值/分组概念，都必须到
+上下文【可用指标】【可用维度】清单里查找对应的合法名称。如果某个概念在清单里找不到
+完全匹配的项，宁可不要输出也不要编造一个看起来合理的名字——系统会进入澄清流程。
+
+- 指标的 `alias` 必须是【可用指标】清单里出现过的名字
+- dimensions 的每个元素必须是【可用维度】清单里出现过的名字
+- 上下文【表关联关系】里列出了哪些维度需要 JOIN 以及对应的表名
 
 ## 过滤条件规则（核心）
 
@@ -49,6 +41,8 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 | 在...之中 / 包含于 | `in` | `["a", "b"]` 数组 |
 | 包含 / 像 | `like` | 字符串（自动加 % 通配符） |
 | 为空 / NULL | `is_null` | 省略 value 字段 |
+
+**operator 只能是上表列出的取值之一，绝对不要使用 time_range / gt / lt / eq 等其它写法。**
 
 ### 复合条件树结构
 当用户问题包含多个条件时，必须用条件树（tree）格式，不要用扁平列表：
@@ -86,9 +80,8 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 - 也可以直接用 filters：`{"field": "order_date", "operator": "between", "value": ["2024-01-01", "2024-12-31"]}`
 
 ### 隐含 JOIN 识别规则
-当用户问题涉及以下字段时，必须在 joins 中添加对应的 JOIN：
-- brand, category, price → product_dim: `{"table": "product_dim", "on_field": "product_id", "join_type": "inner", "alias": "p"}`
-- customer_name, customer_type, register_date → customer_dim: `{"table": "customer_dim", "on_field": "customer_id", "join_type": "left", "alias": "c"}`
+当用户问题涉及非主表字段时，按上下文【表关联关系】在 joins 中添加对应的 JOIN 定义。
+JOIN 的 table / on_field / join_type / alias 必须与【表关联关系】中给出的配置一致。
 
 ### HAVING 使用规则
 当用户问题包含对聚合结果的过滤时，用 having（不是 filters）：
@@ -102,11 +95,12 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 - 必须是数组，每个元素包含：
   - `func`: 聚合函数，只能是 "sum" | "avg" | "count" | "min" | "max"
   - `field`: 原始字段名（不要带 SUM/AVG/COUNT 等函数前缀）
-  - `alias`: 指标别名，**必须是上面词典中的名称**，不要自创
+  - `alias`: 指标别名，**必须是【可用指标】清单中出现的名称**，不要自创
 
 ### dimensions（维度，必填）
 - 必须是字符串数组，不能为空数组 []
 - **用户说"按XX统计"，dimensions 就必须包含 XX 对应的维度名**
+- 维度名必须是【可用维度】清单中出现的名字
 - 如果用户没有指定分组维度，默认使用 ["product_name"]
 
 ### filters（过滤条件，可选但重要）
@@ -131,14 +125,12 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 - 用户说"全部"或"所有"时才用 100
 
 ### data_source（数据源，必填）
-- 查询销售额/订单/客户等用 "orders"
-- 查询产品单价等用 "products"
-- 查询客户信息等用 "customers"
+- 必须是上下文【表结构】中列出的合法数据源之一
+- 默认使用上下文中标注的默认数据源
 
 ### joins（多表关联，可选）
-- 只有当查询涉及客户信息或产品详情时才需要
-- customer_dim: `{"table": "customer_dim", "on_field": "customer_id", "join_type": "left", "alias": "c"}`
-- product_dim: `{"table": "product_dim", "on_field": "product_id", "join_type": "inner", "alias": "p"}`
+- 只有当查询涉及非主表字段时才需要
+- 配置必须与上下文【表关联关系】一致
 
 ### time_field + time_range（时间范围，可选）
 - time_field: 时间字段名（如 "order_date"）
@@ -150,6 +142,7 @@ DSL_SYSTEM_PROMPT = """你是一个数据查询助手。请根据提供的信息
 3. 所有字符串值用双引号
 4. 数值不要用引号包裹
 5. 确保所有用户提到的条件都在 DSL 中体现，无一遗漏
+6. metrics 的 alias、dimensions、data_source 必须全部来自上下文清单，不得自创
 """
 
 DSL_JSON_SCHEMA = json.dumps(
@@ -245,6 +238,110 @@ DSL_JSON_SCHEMA = json.dumps(
                         },
                     },
                 },
+            },
+        },
+    },
+    ensure_ascii=False,
+    indent=2,
+)
+
+
+# A non-recursive, strict-mode-friendly variant of DSL_JSON_SCHEMA for use with
+# OpenAI-compatible `response_format: {type: json_schema, strict: true}`.
+#
+# Why a separate schema: strict json_schema mode rejects recursive $ref
+# (filter_tree referencing itself), which DSL_JSON_SCHEMA uses for arbitrarily
+# nested condition trees. This variant bounds nesting at one level — `filters`
+# is either a flat array of leaf filters, or a single tree whose children are
+# leaf filters (no deeper nesting) — which covers real queries while remaining
+# strict-compatible. The load-bearing constraint this enforces is the operator
+# enum (`= != > < >= <= between in like is_null`), so the model cannot emit
+# illegal operators like `time_range` or `gt`. Tree nesting beyond one level is
+# rare; the post-processor / validator still normalizes whatever comes back.
+_LEAF = {
+    "type": "object",
+    "required": ["field", "operator"],
+    "additionalProperties": False,
+    "properties": {
+        "field": {"type": "string"},
+        "operator": {
+            "enum": ["=", "!=", ">", "<", ">=", "<=", "between", "in", "like", "is_null"]
+        },
+        "value": {"type": ["string", "number", "array", "boolean", "null"]},
+    },
+}
+
+DSL_JSON_SCHEMA_STRICT = json.dumps(
+    {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["metrics", "dimensions", "data_source"],
+        "properties": {
+            "metrics": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["func", "field", "alias"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "func": {"type": "string", "enum": ["sum", "avg", "count", "min", "max"]},
+                        "field": {"type": "string"},
+                        "alias": {"type": "string"},
+                    },
+                },
+            },
+            "dimensions": {"type": "array", "items": {"type": "string"}},
+            # filters: flat leaf list, or one-level tree {op, children:[leaf,...]}
+            "filters": {
+                "anyOf": [
+                    {"type": "array", "items": _LEAF},
+                    {
+                        "type": "object",
+                        "required": ["op", "children"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "op": {"type": "string", "enum": ["and", "or", "not"]},
+                            "children": {"type": "array", "items": _LEAF},
+                        },
+                    },
+                ]
+            },
+            "having": {"type": "array", "items": _LEAF},
+            "order_by": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["field", "direction"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "field": {"type": "string"},
+                        "direction": {"type": "string", "enum": ["asc", "desc"]},
+                    },
+                },
+            },
+            "limit": {"type": "integer"},
+            "offset": {"type": "integer"},
+            "data_source": {"type": "string"},
+            "joins": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["table", "on_field", "join_type", "alias"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "table": {"type": "string"},
+                        "on_field": {"type": "string"},
+                        "join_type": {"type": "string", "enum": ["inner", "left", "right"]},
+                        "alias": {"type": "string"},
+                    },
+                },
+            },
+            "time_field": {"type": "string"},
+            "time_range": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 2,
+                "maxItems": 2,
             },
         },
     },

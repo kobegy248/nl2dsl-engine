@@ -94,11 +94,16 @@ class AgentOrchestrator:
             logger.warning("[orchestrator] SSE callback error for event '%s': %s", event_type, exc)
 
     @staticmethod
-    def _extract_entities(question: str) -> Entities:
-        """Extract entities from *question* using simple keyword matching (MVP).
+    def _extract_entities(question: str, registry_dict: dict | None = None) -> Entities:
+        """Extract entities from *question* using keyword + registry matching.
 
-        Uses hardcoded keyword lists for metrics and dimensions.
-        Time ranges are detected via common temporal markers.
+        Uses hardcoded keyword lists as a baseline, then augments with the
+        semantic registry: any registered dimension/metric whose description
+        or id appears in the question is also counted. This lets queries like
+        "按供应商统计销售额" (供应商 → supplier_name) be recognized as having a
+        dimension so they route to the simple path instead of falling through
+        to the exploration path. Time ranges are detected via common temporal
+        markers.
         """
         # Simple keyword lists for MVP entity extraction
         _METRIC_KEYWORDS = {
@@ -141,6 +146,40 @@ class AgentOrchestrator:
 
         metrics = [kw for kw in _METRIC_KEYWORDS if kw in question]
         dimensions = [kw for kw in _DIMENSION_KEYWORDS if kw in question]
+
+        # Registry augmentation: a registered dim/metric is "mentioned" if its
+        # description (Chinese label) or id appears in the question. This catches
+        # domain-specific terms (供应商→supplier_name, 城市等级→city_level) that
+        # the hardcoded lists don't cover, so the query routes correctly.
+        # Match if the full description is in the question, the id is in the
+        # question, or the description shares any ≥2-char Chinese substring with
+        # the question (so "按供应商统计" matches the dim described as
+        # "供应商名称" via the shared substring "供应商").
+        def _mentions(question_text: str, desc: str) -> bool:
+            if not desc:
+                return False
+            if desc in question_text:
+                return True
+            # Slide a ≥2 window over the description; descriptions are short.
+            for i in range(len(desc) - 1):
+                for j in range(i + 2, len(desc) + 1):
+                    if desc[i:j] in question_text:
+                        return True
+            return False
+
+        if registry_dict:
+            for dim_id, dim_cfg in (registry_dict.get("dimensions") or {}).items():
+                if not isinstance(dim_cfg, dict):
+                    continue
+                if _mentions(question, dim_cfg.get("description", "")) or dim_id in question:
+                    if dim_id not in dimensions:
+                        dimensions.append(dim_id)
+            for m_id, m_cfg in (registry_dict.get("metrics") or {}).items():
+                if not isinstance(m_cfg, dict):
+                    continue
+                if _mentions(question, m_cfg.get("description", "")) or m_id in question:
+                    if m_id not in metrics:
+                        metrics.append(m_id)
 
         time_range = None
         for kw, val in _TIME_RANGE_KEYWORDS.items():
@@ -345,6 +384,11 @@ class AgentOrchestrator:
         data = graph_result.get("data") or []
         status = graph_result.get("status", "success")
         confidence = graph_result.get("confidence") or 0.0
+        # Surface the generated DSL/SQL so the API response carries them.
+        # graph_result["dsl"] is a DSL pydantic model; serialize to dict.
+        dsl_model = graph_result.get("dsl")
+        dsl_dict = dsl_model.model_dump() if dsl_model is not None else None
+        sql = graph_result.get("sql")
 
         await self._emit_event(
             sse_callback,
@@ -387,6 +431,8 @@ class AgentOrchestrator:
         return AgentResult(
             status=status,
             data=data,
+            dsl=dsl_dict,
+            sql=sql,
             explanation=explanation,
             confidence=confidence,
             plan=plan,

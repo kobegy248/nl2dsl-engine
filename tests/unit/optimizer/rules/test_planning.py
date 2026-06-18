@@ -50,3 +50,121 @@ class TestP004OrderByNotInOutput:
                "order_by": [{"field": "total", "direction": "asc"}]}
         result = rule.check(dsl, ctx)
         assert result.description == ""
+
+
+def _ecommerce_config() -> SemanticConfig:
+    """A synthetic semantic config mirroring the real ecommerce metrics.yaml.
+
+    Uses the boolean ``True`` key for ``on`` to mimic PyYAML's parsing of an
+    unquoted ``on:`` YAML key (YAML 1.1 boolean), which is how the live config
+    is actually loaded.
+    """
+    return SemanticConfig(
+        metrics={"sales_amount": {"expr": "SUM(order_amount)"}},
+        dimensions={
+            "customer_name": {"column": "customer_name", "type": "string"},
+            "supplier_name": {"column": "supplier_name", "type": "string"},
+        },
+        data_sources={
+            "orders": {
+                "table": "order_fact",
+                "metrics": ["sales_amount"],
+                "dimensions": [],
+                "joins": {
+                    # `on` parsed as boolean True by PyYAML
+                    "product_dim": {True: "product_id", "type": "inner", "alias": "p"},
+                    "customer_dim": {True: "customer_id", "type": "left", "alias": "c"},
+                    # multi-hop: supplier_dim joins through product_dim's alias `p`
+                    "supplier_dim": {True: "p.supplier_id", "type": "left", "alias": "s"},
+                },
+            },
+            "customers": {"table": "customer_dim", "metrics": [], "dimensions": ["customer_name"]},
+            "suppliers": {"table": "supplier_dim", "metrics": [], "dimensions": ["supplier_name"]},
+        },
+    )
+
+
+class TestP001MissingRequiredJoin:
+    def _ctx(self):
+        return RuleContext(semantic_config=_ecommerce_config(), original_question="按客户名称统计销售额")
+
+    def test_single_hop_join_injected(self):
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["customer_name"],
+        }
+        result = rule.check(dsl, self._ctx())
+        assert result.severity == "Fix"
+        injected = result.after["joins"]
+        assert len(injected) == 1
+        assert injected[0]["table"] == "customer_dim"
+        assert injected[0]["on_field"] == "customer_id"
+        assert injected[0]["join_type"] == "left"
+        assert injected[0]["alias"] == "c"
+
+    def test_fix_applies_join_to_dsl(self):
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["customer_name"],
+        }
+        result = rule.check(dsl, self._ctx())
+        fixed = rule.fix(dsl, result)
+        assert fixed["joins"][0]["table"] == "customer_dim"
+
+    def test_multi_hop_chain_injected_in_dependency_order(self):
+        # supplier_dim joins on p.supplier_id => product_dim must come first
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["supplier_name"],
+        }
+        result = rule.check(dsl, self._ctx())
+        assert result.severity == "Fix"
+        injected = result.after["joins"]
+        tables = [j["table"] for j in injected]
+        assert tables == ["product_dim", "supplier_dim"]
+        assert injected[-1]["on_field"] == "p.supplier_id"
+
+    def test_no_issue_when_single_source(self):
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": [],  # no cross-table dimension
+        }
+        result = rule.check(dsl, self._ctx())
+        assert result.description == ""
+
+    def test_no_issue_when_join_already_present(self):
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["customer_name"],
+            "joins": [{"table": "customer_dim", "on_field": "customer_id", "join_type": "left", "alias": "c"}],
+        }
+        result = rule.check(dsl, self._ctx())
+        assert result.description == ""
+
+    def test_warn_when_no_join_path(self):
+        # supplier_name resolves to supplier_dim, but if no join declared -> Warn
+        cfg = _ecommerce_config()
+        # remove supplier_dim and product_dim from joins to force a no-path case
+        cfg.data_sources["orders"]["joins"] = {
+            "customer_dim": {True: "customer_id", "type": "left", "alias": "c"},
+        }
+        ctx = RuleContext(semantic_config=cfg, original_question="按供应商统计销售额")
+        rule = P001_MissingRequiredJoin()
+        dsl = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": ["supplier_name"],
+        }
+        result = rule.check(dsl, ctx)
+        assert result.severity == "Warn"
+        assert "supplier_dim" in result.candidate_values

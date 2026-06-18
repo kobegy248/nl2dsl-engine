@@ -1,0 +1,63 @@
+test_cases:
+  # Implicit JOIN derivation (Week 3).
+  # JOIN_002 is a multi-hop chain: order_fact -> product_dim -> supplier_dim.
+  # `dimensions` and `limit` are mirrored into planner so the planner scorer
+  # (which reads planner.dimensions/planner.limit) compares cleanly; they also
+  # appear at case-level for DSL construction.
+  - id: JOIN_001
+    query: "按客户名称统计消费金额"
+    difficulty: medium
+    category: join
+    tags: ["join", "cross_table", "customer"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [customer_name]
+      planner:
+        dimensions: [customer_name]
+        joins:
+          - table: customer_dim
+            on_field: customer_id
+            join_type: left
+            alias: c
+        limit: 100
+
+  - id: JOIN_002
+    query: "按供应商统计销售额"
+    difficulty: hard
+    category: join
+    tags: ["join", "cross_table", "multi_hop", "supplier"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [supplier_name]
+      planner:
+        dimensions: [supplier_name]
+        joins:
+          - table: product_dim
+            on_field: product_id
+            join_type: inner
+            alias: p
+          - table: supplier_dim
+            on_field: p.supplier_id
+            join_type: left
+            alias: s
+        limit: 100
+
+  - id: JOIN_003
+    query: "按城市等级统计销售额"
+    difficulty: medium
+    category: join
+    tags: ["join", "cross_table", "customer"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [city_level]
+      planner:
+        dimensions: [city_level]
+        joins:
+          - table: customer_dim
+            on_field: customer_id
+            join_type: left
+            alias: c
+        limit: 100

@@ -90,3 +90,5 @@ class QueryState(TypedDict):
     query_id: str
     started_at: float
     llm_used: bool
+    reference_date: object | None  # datetime.date pinned for relative-time resolution (eval/tests); None in production
+    entity_hints: dict | None  # extracted entities (metrics/dimensions) from routing, to guide LLM generation
