@@ -18,6 +18,7 @@ from nl2dsl.graph.nodes import (
     _semantic_fix_dsl,
     _extract_top_n,
     _fix_metric_format,
+    _auto_fix_data_source,
 )
 from nl2dsl.graph.state import QueryState
 from nl2dsl.permission.row_level import RowLevelSecurity
@@ -707,6 +708,116 @@ class TestPostProcessFilterTree:
         result = _post_process_dsl(dsl_dict)
         children = result["filters"]["children"]
         assert children[1]["operator"] == "="
+
+
+class TestPostProcessOperatorAliases:
+    """Week 2: LLM-style operator aliases (gt/gte/lt/lte/eq/ne) canonicalized."""
+
+    def test_flat_filter_gt_alias(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "filters": [{"field": "pay_amount", "operator": "gt", "value": 5000}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["filters"][0]["operator"] == ">"
+
+    def test_flat_filter_gte_lte_aliases(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "filters": [
+                {"field": "price", "operator": "gte", "value": 8000},
+                {"field": "price", "operator": "lte", "value": 20000},
+            ],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["filters"][0]["operator"] == ">="
+        assert result["filters"][1]["operator"] == "<="
+
+    def test_flat_filter_ne_alias(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "filters": [{"field": "category", "operator": "ne", "value": "手机"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["filters"][0]["operator"] == "!="
+
+    def test_tree_filter_alias_canonicalized(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "filters": {
+                "op": "and",
+                "children": [
+                    {"field": "region", "operator": "eq", "value": "华东"},
+                    {"field": "pay_amount", "operator": "gt", "value": 5000},
+                ],
+            },
+        }
+        result = _post_process_dsl(dsl_dict)
+        children = result["filters"]["children"]
+        assert children[0]["operator"] == "="
+        assert children[1]["operator"] == ">"
+
+    def test_having_alias_canonicalized(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "having": [{"field": "sales_amount", "operator": "gt", "value": 100000}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["having"][0]["operator"] == ">"
+
+    def test_truly_invalid_op_falls_back_to_equals(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "pay_amount", "alias": "sales_amount"}],
+            "filters": [{"field": "region", "operator": "banana", "value": "华东"}],
+        }
+        result = _post_process_dsl(dsl_dict)
+        assert result["filters"][0]["operator"] == "="
+
+
+class TestAutoFixDataSourceDictDimensions:
+    """Regression: LLM emitting dimensions as list-of-dicts must not crash
+    _auto_fix_data_source with 'unhashable type: dict'."""
+
+    def _ds_cfg(self):
+        return {
+            "orders": {"table": "order_fact", "metrics": ["sales_amount"], "dimensions": ["product_name", "category"]},
+            "products": {"table": "product_dim", "metrics": ["max_price"], "dimensions": ["product_name", "category", "price"]},
+        }
+
+    def test_dict_dimensions_with_name_key(self):
+        dsl = {"data_source": "products", "metrics": [{"func": "max", "field": "price", "alias": "max_price"}],
+               "dimensions": [{"name": "product_name"}, {"name": "category"}]}
+        _auto_fix_data_source(dsl, self._ds_cfg())  # must not raise
+        assert dsl["data_source"] == "products"
+
+    def test_dict_dimensions_with_field_key(self):
+        # max_price metric + price dimension are ONLY in 'products'; orders has
+        # zero coverage → auto-switch to products (proves dict dims were parsed).
+        dsl = {"data_source": "orders", "metrics": [{"func": "max", "field": "price", "alias": "max_price"}],
+               "dimensions": [{"field": "price"}]}
+        _auto_fix_data_source(dsl, self._ds_cfg())
+        assert dsl["data_source"] == "products"
+
+    def test_mixed_string_and_dict_dimensions(self):
+        dsl = {"data_source": "orders", "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+               "dimensions": ["product_name", {"name": "category"}]}
+        _auto_fix_data_source(dsl, self._ds_cfg())
+        assert dsl["data_source"] == "orders"
+
+    def test_post_process_dsl_with_dict_dimensions_does_not_raise(self):
+        dsl_dict = {
+            "data_source": "orders",
+            "metrics": [{"func": "sum", "field": "order_amount", "alias": "sales_amount"}],
+            "dimensions": [{"name": "product_name"}],
+        }
+        result = _post_process_dsl(dsl_dict, data_sources_config=self._ds_cfg())
+        assert result["data_source"] == "orders"
 
 
 class TestRestoreMetricFields:

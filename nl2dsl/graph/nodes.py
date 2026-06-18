@@ -557,6 +557,31 @@ def _post_process_dsl(
 
     # 8. Validate filters operator values (support both flat list and tree)
     valid_ops = {"=", "!=", ">", "<", ">=", "<=", "in", "like", "between", "is_null"}
+    # LLMs frequently emit SQL-style / Python-style operator aliases. Map them
+    # to the canonical DSL operators before validation so numeric-comparison
+    # and negation filters are preserved instead of being collapsed to "=".
+    op_aliases = {
+        "eq": "=", "ne": "!=", "neq": "!=",
+        "gt": ">", "gte": ">=", "ge": ">=",
+        "lt": "<", "lte": "<=", "le": "<=",
+        "notin": "not_in", "isnull": "is_null", "is not null": "is_not_null",
+    }
+
+    def _canonical_op(op):
+        if not isinstance(op, str):
+            return "="
+        o = op.strip().lower()
+        if o in valid_ops:
+            return o
+        return op_aliases.get(o, None)
+
+    def _fix_op(node):
+        op = node.get("operator", "")
+        if op in valid_ops:
+            return
+        canonical = _canonical_op(op)
+        node["operator"] = canonical if canonical in valid_ops else "="
+
     filters = dsl_dict.get("filters")
     if filters:
         if isinstance(filters, dict) and filters.get("op") in {"and", "or", "not"}:
@@ -566,17 +591,20 @@ def _post_process_dsl(
                     for child in node.get("children", []):
                         _validate_tree(child)
                 elif isinstance(node, dict) and "field" in node:
-                    op = node.get("operator", "")
-                    if op not in valid_ops:
-                        node["operator"] = "="
+                    _fix_op(node)
 
             _validate_tree(filters)
         elif isinstance(filters, list):
             for f in filters:
                 if isinstance(f, dict):
-                    op = f.get("operator", "")
-                    if op not in valid_ops:
-                        f["operator"] = "="
+                    _fix_op(f)
+
+    # 8b. Apply the same operator canonicalization to having clauses.
+    having = dsl_dict.get("having")
+    if having and isinstance(having, list):
+        for h in having:
+            if isinstance(h, dict):
+                _fix_op(h)
 
     # 9. Fix joins format: LLM may use "type" instead of "join_type" or miss "on_field"
     # Also fix table name if LLM used data_source name instead of actual table name
@@ -701,7 +729,19 @@ def _auto_fix_data_source(dsl_dict: dict, ds_cfg: dict) -> None:
     metrics = dsl_dict.get("metrics", [])
     dims = dsl_dict.get("dimensions", [])
     metric_aliases = {m.get("alias") for m in metrics if isinstance(m, dict) and m.get("alias")}
-    dim_names = set(dims) if isinstance(dims, list) else set()
+    # Dimensions may arrive as a list of names OR a list of dicts
+    # ({"name": "..."} / {"field": "..."} / {"dimension": "..."}). Normalize to
+    # a set of name strings so set intersection below never hits an unhashable
+    # dict (TypeError: unhashable type: 'dict').
+    dim_names: set[str] = set()
+    if isinstance(dims, list):
+        for d in dims:
+            if isinstance(d, str):
+                dim_names.add(d)
+            elif isinstance(d, dict):
+                name = d.get("name") or d.get("field") or d.get("dimension") or d.get("alias")
+                if isinstance(name, str):
+                    dim_names.add(name)
 
     # Score each data_source by how many metrics/dimensions it covers
     best_ds = current_ds
