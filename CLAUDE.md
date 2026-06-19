@@ -192,6 +192,7 @@ LangGraph 节点流程 → [`docs/agent/31-langgraph-workflow.md`](docs/agent/31
 
 不可违反的架构底线：
 
+0. **Codegraph first** — 探索代码、理解架构、查找符号、追踪调用链时，**优先使用 `codegraph_explore`**（一次调用即可获取相关符号的完整源码）。仅在 Codegraph 索引未覆盖或需确认具体细节时，才回退到 Grep/Read。
 1. **Do not bypass DSL** — LLM 只生成结构化 DSL，不生成 SQL。DSL 是唯一的语义契约。
 2. **Do not generate SQL directly from NL** — SQL 由系统从 DSL 构建，确保可校验、可优化、可审计。
 3. **Do not invent metrics** — 所有指标必须在 `configs/metrics.yaml` 中注册，禁止自由文本指标名。
