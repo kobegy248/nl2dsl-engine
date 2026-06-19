@@ -250,6 +250,85 @@ def _aggregate_correlation(rows: list[dict]) -> dict:
     return {"rows": rows, "correlation": correlation}
 
 
+def _find_numeric_key(rows: list[dict]) -> str | None:
+    """Find the first stable numeric result field, excluding internal keys."""
+    for row in rows:
+        for key, value in row.items():
+            if key.startswith("__"):
+                continue
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return key
+            if isinstance(value, str):
+                try:
+                    float(value)
+                    return key
+                except ValueError:
+                    continue
+    return None
+
+
+def _aggregate_proportion(rows: list[dict]) -> dict:
+    """Calculate grouped contribution ratios from successful result rows.
+
+    For the configured total-plus-groups plan, prefer the sub-query containing
+    the most rows as the grouped detail. The denominator is recomputed from
+    those detail rows, avoiding dependence on a potentially duplicated total
+    query shape.
+    """
+    if not rows:
+        return {"rows": [], "total": 0.0}
+
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        groups[row.get("__sub_query_id", "sq-1")].append(row)
+    def detail_score(group_rows: list[dict]) -> tuple[int, int]:
+        # Prefer more rows; on ties prefer rows carrying more descriptive
+        # fields (a grouped-detail row has a dimension + metric, while the
+        # total row usually has only the metric).
+        visible_fields = max(
+            (
+                sum(1 for key in row if not key.startswith("__"))
+                for row in group_rows
+            ),
+            default=0,
+        )
+        return len(group_rows), visible_fields
+
+    detail_rows = max(groups.values(), key=detail_score)
+
+    metric_key = _find_numeric_key(detail_rows)
+    if metric_key is None:
+        return {"rows": detail_rows, "total": 0.0}
+
+    values = [_find_numeric_value(row, metric_key) or 0.0 for row in detail_rows]
+    total = sum(values)
+    output_field = f"{metric_key}_proportion"
+    enriched = []
+    for row, value in zip(detail_rows, values):
+        item = dict(row)
+        item[output_field] = round(value / total, 6) if total else 0.0
+        enriched.append(item)
+    return {
+        "rows": enriched,
+        "total": round(total, 6),
+        "metric": metric_key,
+        "proportion_field": output_field,
+    }
+
+
+def _aggregate_ranking(rows: list[dict]) -> dict:
+    """Sort ranking results by their first numeric metric descending."""
+    metric_key = _find_numeric_key(rows)
+    if metric_key is None:
+        return {"rows": rows, "ranking_metric": None}
+    ranked = sorted(
+        rows,
+        key=lambda row: _find_numeric_value(row, metric_key) or 0.0,
+        reverse=True,
+    )
+    return {"rows": ranked, "ranking_metric": metric_key}
+
+
 class Aggregate:
     """Result merger that combines sub-query results based on intent type."""
 
@@ -257,6 +336,8 @@ class Aggregate:
         "compare": _aggregate_compare,
         "trend": _aggregate_trend,
         "correlation": _aggregate_correlation,
+        "proportion": _aggregate_proportion,
+        "ranking": _aggregate_ranking,
         "single_query": _aggregate_single,
     }
 

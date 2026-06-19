@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, DateTime
-from nl2dsl.dsl.models import DSL, Filter, Aggregation, OrderBy
+from nl2dsl.dsl.models import DSL, Filter, Aggregation, OrderBy, PostProcess
 from nl2dsl.sql_engine.builder import SQLBuilder
 
 
@@ -102,6 +102,24 @@ def test_build_with_order_and_limit(builder):
     assert "ORDER BY" in sql
     assert "DESC" in sql
     assert "LIMIT" in sql
+
+
+def test_post_process_query_does_not_apply_global_limit(builder):
+    dsl = DSL(
+        metrics=[Aggregation(func="sum", field="order_amount", alias="sales_amount")],
+        dimensions=["region", "product_name"],
+        order_by=[OrderBy(field="sales_amount", direction="desc")],
+        limit=1,
+        data_source="orders",
+        post_process=PostProcess(
+            type="group_top_n",
+            metric="sales_amount",
+            group_by=["region"],
+            top_n=1,
+        ),
+    )
+    sql = builder.build(dsl)
+    assert "LIMIT" not in sql
 
 
 class TestConditionTree:

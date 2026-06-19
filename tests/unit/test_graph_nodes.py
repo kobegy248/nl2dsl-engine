@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock
 
-from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy
+from nl2dsl.dsl.models import DSL, Aggregation, Filter, Join, OrderBy, PostProcess
 from nl2dsl.dsl.validator import DSLValidator
 from nl2dsl.exceptions import ValidationError, NL2DSLException
 from nl2dsl.graph.nodes import (
@@ -540,6 +540,28 @@ class TestExecuteSQLNode:
         assert result["data"] == [{"product_name": "iPhone", "sales_amount": 1000}]
         assert result["status"] == "success"
         assert result["trace"]["rows_returned"] == 1
+
+    def test_applies_explicit_post_process(self, nodes, base_state):
+        base_state["sql"] = "SELECT product_name, sales_amount FROM order_fact"
+        base_state["dsl"] = DSL(
+            data_source="orders",
+            metrics=[
+                Aggregation(
+                    func="sum",
+                    field="order_amount",
+                    alias="sales_amount",
+                )
+            ],
+            dimensions=["product_name"],
+            post_process=PostProcess(
+                type="proportion",
+                metric="sales_amount",
+                output_field="sales_share",
+            ),
+        )
+        result = nodes["execute_sql_node"](base_state)
+        assert result["data"][0]["sales_share"] == 1.0
+        assert result["trace"]["post_process"]["type"] == "proportion"
 
     def test_none_sql_raises(self, nodes, base_state):
         base_state["sql"] = None

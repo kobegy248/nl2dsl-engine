@@ -444,8 +444,10 @@ class SQLBuilder:
                     else:
                         raise
 
-        # Limit
-        if dsl.limit:
+        # Post-processing needs the complete grouped result. Applying a global
+        # SQL LIMIT first would turn "top N per group" into "top N overall" and
+        # would also corrupt a proportion denominator.
+        if dsl.limit and dsl.post_process is None:
             stmt = stmt.limit(dsl.limit)
         if dsl.offset:
             stmt = stmt.offset(dsl.offset)

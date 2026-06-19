@@ -12,7 +12,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from nl2dsl.dsl.models import DSL, Aggregation, Filter, OrderBy
+from nl2dsl.dsl.models import DSL, Aggregation, Filter, OrderBy, PostProcess
 from nl2dsl.exceptions import ValidationError
 from nl2dsl.query.time_resolver import resolve_time
 
@@ -160,6 +160,16 @@ class RuleBasedDSLGenerator(DSLGenerator):
         elif "全部" in question or "所有" in question:
             limit = 100
 
+        post_process = self._build_post_process(
+            question=question,
+            metrics=metrics,
+            dimensions=dimensions,
+        )
+        if post_process is not None:
+            # The SQL layer must return the complete grouped result; the
+            # governed post-processor applies the per-group limit afterwards.
+            limit = None
+
         return DSL(
             metrics=metrics,
             dimensions=dimensions,
@@ -169,6 +179,7 @@ class RuleBasedDSLGenerator(DSLGenerator):
             data_source=ds,
             time_field=time_field if time_range else None,
             time_range=time_range,
+            post_process=post_process,
         )
 
     def _resolve_time_field(self, data_source: str) -> str | None:
@@ -188,6 +199,65 @@ class RuleBasedDSLGenerator(DSLGenerator):
         for dim_id, cfg in dims_registry.items():
             if isinstance(cfg, dict) and cfg.get("type") == "date":
                 return dim_id
+        return None
+
+    @staticmethod
+    def _build_post_process(
+        question: str,
+        metrics: list[Aggregation],
+        dimensions: list[str],
+    ) -> PostProcess | None:
+        if not metrics:
+            return None
+        metric = metrics[0].alias or metrics[0].field
+
+        if any(keyword in question for keyword in ("占比", "比例", "贡献度")):
+            return PostProcess(
+                type="proportion",
+                metric=metric,
+                output_field=f"{metric}_proportion",
+            )
+
+        grouped_rank = (
+            len(dimensions) >= 2
+            and any(marker in question for marker in ("各", "每个", "每种"))
+            and any(marker in question for marker in ("最高", "最低", "前", "后"))
+        )
+        if grouped_rank:
+            match = re.search(r"(?:前|最高的?|最低的?|后)\s*(\d+)", question)
+            top_n = int(match.group(1)) if match else 1
+            direction = "asc" if any(k in question for k in ("最低", "最少", "后")) else "desc"
+            group_candidates = (
+                ("品类", "category"),
+                ("地区", "region"),
+                ("区域", "region"),
+                ("渠道", "channel"),
+                ("品牌", "brand"),
+                ("客户", "customer_type"),
+            )
+            group_dimension = next(
+                (
+                    dim
+                    for keyword, dim in group_candidates
+                    if any(
+                        marker in question
+                        for marker in (
+                            f"各{keyword}",
+                            f"每个{keyword}",
+                            f"每种{keyword}",
+                        )
+                    )
+                    and dim in dimensions
+                ),
+                dimensions[0],
+            )
+            return PostProcess(
+                type="group_top_n",
+                metric=metric,
+                group_by=[group_dimension],
+                top_n=top_n,
+                direction=direction,
+            )
         return None
 
     @staticmethod

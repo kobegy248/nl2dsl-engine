@@ -57,6 +57,20 @@ def test_time_range_none():
     assert dsl.time_range is None
 
 
+def test_post_process_from_dict():
+    dsl = DSL(
+        data_source="orders",
+        post_process={
+            "type": "group_top_n",
+            "metric": "sales_amount",
+            "group_by": ["category"],
+            "top_n": 2,
+        },
+    )
+    assert dsl.post_process.type == "group_top_n"
+    assert dsl.post_process.top_n == 2
+
+
 class TestFilterTreeNode:
     """Tests for the new filter tree structure."""
 

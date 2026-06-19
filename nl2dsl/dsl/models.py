@@ -58,6 +58,17 @@ class Join(BaseModel):
     alias: str | None = None
 
 
+class PostProcess(BaseModel):
+    """A governed result transformation applied after SQL execution."""
+
+    type: Literal["group_top_n", "proportion"]
+    metric: str
+    group_by: list[str] | None = None
+    top_n: int | None = Field(default=None, ge=1, le=100)
+    direction: Literal["asc", "desc"] = "desc"
+    output_field: str | None = None
+
+
 class DSL(BaseModel):
     metrics: list[Aggregation] | None = None
     dimensions: list[str] | None = None
@@ -70,6 +81,7 @@ class DSL(BaseModel):
     time_field: str | None = None
     time_range: tuple[str, str] | None = None
     joins: list[Join] | None = None
+    post_process: PostProcess | None = None
 
     @staticmethod
     def _coerce_model_list(v, model_class):

@@ -144,6 +144,23 @@ class TestRuleBasedDSLGenerator:
         assert len(ch_filters) == 1
         assert ch_filters[0].operator == "!="
 
+    def test_group_top_n_post_process(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("查询各品类中销售额最高的产品")
+        assert dsl.post_process.type == "group_top_n"
+        assert dsl.post_process.group_by == ["category"]
+        assert dsl.post_process.metric == "sales_amount"
+        assert dsl.post_process.top_n == 1
+        assert dsl.limit is None
+
+    def test_proportion_post_process(self):
+        gen = RuleBasedDSLGenerator()
+        dsl = gen.generate("查询各品类销售额占总销售额的比例")
+        assert dsl.post_process.type == "proportion"
+        assert dsl.post_process.metric == "sales_amount"
+        assert dsl.post_process.output_field == "sales_amount_proportion"
+        assert dsl.limit is None
+
 
 class TestRetryChain:
     def test_success_no_retry(self):

@@ -58,6 +58,13 @@ class PlannerScorer(Scorer):
         if expected.get("time_range") is not None:
             scores.append(self._score_time_range(expected, actual))
 
+        if expected.get("post_process") is not None:
+            scores.append(
+                1.0
+                if expected.get("post_process") == actual.get("post_process")
+                else 0.0
+            )
+
         return sum(scores) / len(scores) if scores else 1.0
 
     def _score_time_range(self, expected: dict, actual: dict) -> float:

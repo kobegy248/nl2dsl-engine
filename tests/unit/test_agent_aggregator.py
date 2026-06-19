@@ -419,6 +419,60 @@ def test_correlation_zero_variance():
 
 
 # ---------------------------------------------------------------------------
+# Aggregate — proportion / ranking
+# ---------------------------------------------------------------------------
+
+
+def test_proportion_uses_group_detail_rows():
+    agg = Aggregate()
+    results = {
+        "sq-1": QueryResult(sub_query_id="sq-1", data=[{"sales_amount": 100}]),
+        "sq-2": QueryResult(
+            sub_query_id="sq-2",
+            data=[
+                {"category": "A", "sales_amount": 30},
+                {"category": "B", "sales_amount": 70},
+            ],
+        ),
+    }
+    out = agg.run(results, intent="proportion")
+    assert len(out["rows"]) == 2
+    assert out["total"] == 100
+    assert out["rows"][0]["sales_amount_proportion"] == 0.3
+    assert out["rows"][1]["sales_amount_proportion"] == 0.7
+
+
+def test_proportion_prefers_richer_detail_row_on_count_tie():
+    agg = Aggregate()
+    results = {
+        "sq-1": QueryResult(sub_query_id="sq-1", data=[{"sales_amount": 100}]),
+        "sq-2": QueryResult(
+            sub_query_id="sq-2",
+            data=[{"category": "A", "sales_amount": 100}],
+        ),
+    }
+    out = agg.run(results, intent="proportion")
+    assert out["rows"][0]["category"] == "A"
+    assert out["rows"][0]["sales_amount_proportion"] == 1.0
+
+
+def test_ranking_sorts_numeric_metric_descending():
+    agg = Aggregate()
+    results = {
+        "sq-1": QueryResult(
+            sub_query_id="sq-1",
+            data=[
+                {"product": "B", "sales_amount": 50},
+                {"product": "A", "sales_amount": 100},
+            ],
+        ),
+    }
+    out = agg.run(results, intent="ranking")
+    assert [row["product"] for row in out["rows"]] == ["A", "B"]
+    assert out["ranking_metric"] == "sales_amount"
+
+
+# ---------------------------------------------------------------------------
 # Aggregate — edge cases
 # ---------------------------------------------------------------------------
 

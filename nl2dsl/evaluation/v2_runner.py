@@ -137,6 +137,7 @@ class V2BenchmarkRunner:
             "joins": dsl.get("joins", []),
             "time_field": dsl.get("time_field"),
             "time_range": dsl.get("time_range"),
+            "post_process": dsl.get("post_process"),
         }
 
     def run_batch(
@@ -277,5 +278,7 @@ class V2BenchmarkRunner:
                 dsl["time_field"] = planner_info["time_field"]
             if "time_range" in planner_info:
                 dsl["time_range"] = planner_info["time_range"]
+            if "post_process" in planner_info:
+                dsl["post_process"] = planner_info["post_process"]
 
         return dsl

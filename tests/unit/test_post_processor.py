@@ -1,5 +1,12 @@
 import pytest
-from nl2dsl.query.post_processor import extract_top_per_group, should_post_process
+from nl2dsl.dsl.models import PostProcess
+from nl2dsl.query.post_processor import (
+    apply_post_process,
+    calculate_proportion,
+    extract_top_n_per_group,
+    extract_top_per_group,
+    should_post_process,
+)
 
 
 class TestExtractTopPerGroup:
@@ -73,6 +80,52 @@ class TestShouldPostProcess:
             limit=1,
         )
         assert should_post_process(dsl) is False
+
+
+class TestAdvancedPostProcessing:
+    def test_top_two_per_group(self):
+        data = [
+            {"category": "手机", "product": "A", "sales": 100},
+            {"category": "手机", "product": "B", "sales": 80},
+            {"category": "手机", "product": "C", "sales": 60},
+            {"category": "电脑", "product": "D", "sales": 120},
+            {"category": "电脑", "product": "E", "sales": 90},
+        ]
+        result = extract_top_n_per_group(
+            data, ["category"], "sales", top_n=2, order_desc=True
+        )
+        assert [row["product"] for row in result] == ["A", "B", "D", "E"]
+
+    def test_calculate_proportion(self):
+        result = calculate_proportion(
+            [{"category": "A", "sales": 30}, {"category": "B", "sales": 70}],
+            "sales",
+        )
+        assert result[0]["sales_proportion"] == 0.3
+        assert result[1]["sales_proportion"] == 0.7
+
+    def test_zero_total_proportion(self):
+        result = calculate_proportion(
+            [{"category": "A", "sales": 0}, {"category": "B", "sales": 0}],
+            "sales",
+        )
+        assert [row["sales_proportion"] for row in result] == [0.0, 0.0]
+
+    def test_apply_group_top_n_spec(self):
+        spec = PostProcess(
+            type="group_top_n",
+            metric="sales",
+            group_by=["category"],
+            top_n=1,
+        )
+        result = apply_post_process(
+            [
+                {"category": "A", "product": "x", "sales": 1},
+                {"category": "A", "product": "y", "sales": 2},
+            ],
+            spec,
+        )
+        assert result == [{"category": "A", "product": "y", "sales": 2}]
 
     def test_no_trigger_limit_not_one(self):
         from nl2dsl.dsl.models import DSL, OrderBy, Aggregation

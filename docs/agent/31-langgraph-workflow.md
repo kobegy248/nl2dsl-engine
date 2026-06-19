@@ -36,7 +36,7 @@ sandbox_check — EXPLAIN 预检
   ├─ 风险 → human_review（中断等待人工确认）
   └─ 通过 → execute_sql
   ↓
-execute_sql — 数据库执行
+execute_sql — 数据库执行，并按 DSL 配置执行分组 TopN / 占比后处理
   ↓
 成功？
   ├─ 失败 → simplify_dsl → build_sql（重试）
@@ -68,7 +68,7 @@ verify_dsl — LLM 自检（PASS/WARN/FAIL，warning-only）
 | `build_sql` | DSL | 标准 SQL | 是 | 否 |
 | `scan_sql` | 标准 SQL | 扫描结果 | 是 | 否 |
 | `sandbox_check` | SQL + DB | 沙箱结果 | 是 | 否 |
-| `execute_sql` | SQL | 查询结果 | 是 | 否 |
+| `execute_sql` | SQL + DSL.post_process | 查询结果 / 高级分析结果 | 是 | 否 |
 | `verify_dsl` | DSL + 结果 + 原问题 | PASS/WARN/FAIL | 否（warning-only） | **是** |
 | `audit_log` | 完整链路 | 日志记录 | 否 | 否 |
 

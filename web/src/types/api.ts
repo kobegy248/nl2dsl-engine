@@ -27,6 +27,15 @@ export interface TimeRange {
   end?: string;
 }
 
+export interface PostProcess {
+  type: 'group_top_n' | 'proportion';
+  metric: string;
+  group_by?: string[];
+  top_n?: number;
+  direction?: 'asc' | 'desc';
+  output_field?: string;
+}
+
 export interface DSL {
   metrics?: Aggregation[];
   dimensions?: string[];
@@ -38,6 +47,7 @@ export interface DSL {
   offset?: number;
   time_field?: string;
   time_range?: TimeRange;
+  post_process?: PostProcess;
 }
 
 export interface QueryRequest {

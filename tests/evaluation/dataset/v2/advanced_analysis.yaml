@@ -1,0 +1,49 @@
+test_cases:
+  - id: ADV_001
+    query: "查询各品类中销售额最高的产品"
+    difficulty: hard
+    category: ranking
+    tags: ["advanced", "group_top_n", "post_process"]
+    expected:
+      intent: rank
+      metric: sales_amount
+      dimensions: [category, product_name]
+      planner:
+        post_process:
+          type: group_top_n
+          metric: sales_amount
+          group_by: [category]
+          top_n: 1
+          direction: desc
+
+  - id: ADV_002
+    query: "查询各品类销售额占总销售额的比例"
+    difficulty: hard
+    category: aggregation
+    tags: ["advanced", "proportion", "post_process"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [category]
+      planner:
+        post_process:
+          type: proportion
+          metric: sales_amount
+          output_field: sales_amount_proportion
+
+  - id: ADV_003
+    query: "查询每个地区销售额前3的品牌"
+    difficulty: hard
+    category: ranking
+    tags: ["advanced", "group_top_n", "post_process"]
+    expected:
+      intent: rank
+      metric: sales_amount
+      dimensions: [region, brand]
+      planner:
+        post_process:
+          type: group_top_n
+          metric: sales_amount
+          group_by: [region]
+          top_n: 3
+          direction: desc

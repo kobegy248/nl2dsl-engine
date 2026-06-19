@@ -24,6 +24,7 @@ from nl2dsl.llm.prompts import DSL_JSON_SCHEMA_STRICT
 from nl2dsl.optimizer import optimize
 from nl2dsl.optimizer.context import SemanticConfig
 from nl2dsl.query.clarification import ClarificationDetector
+from nl2dsl.query.post_processor import apply_post_process
 from nl2dsl.query.sandbox import QuerySandbox
 from nl2dsl.semantic.resolver import SemanticResolver
 from nl2dsl.sql_engine.builder import SQLBuilder
@@ -1809,6 +1810,18 @@ def create_node_functions(
         if sql is None:
             raise ValidationError("SQL is None, cannot execute")
         data = executor.execute(sql)
+        post_process_trace = None
+        dsl = state.get("dsl")
+        if dsl is not None and dsl.post_process is not None:
+            before_count = len(data)
+            data = apply_post_process(data, dsl.post_process)
+            post_process_trace = {
+                "type": dsl.post_process.type,
+                "rows_before": before_count,
+                "rows_after": len(data),
+                "metric": dsl.post_process.metric,
+                "group_by": dsl.post_process.group_by or [],
+            }
         # Preserve "warning" status from confidence node, but upgrade
         # "pending" / "pending_review" to "success" since execution completed.
         current_status = state.get("status")
@@ -1819,7 +1832,12 @@ def create_node_functions(
         return {
             "data": data,
             "status": new_status,
-            "trace": {"step": "execute_sql", "status": "success", "rows_returned": len(data)},
+            "trace": {
+                "step": "execute_sql",
+                "status": "success",
+                "rows_returned": len(data),
+                "post_process": post_process_trace,
+            },
         }
 
     # -----------------------------------------------------------------------
@@ -1849,6 +1867,7 @@ def create_node_functions(
                 "joins": simplified_joins,
                 "filters": simplified_filters,
                 "order_by": None,
+                "post_process": None,
                 "limit": min(dsl.limit or 10, 10),
             }
         )

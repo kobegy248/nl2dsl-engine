@@ -30,3 +30,27 @@ def test_limit_match(scorer):
         {"dimensions": [], "order_by": None, "limit": 10, "joins": None},
         {"dimensions": [], "order_by": None, "limit": 10, "joins": None},
     ) == 1.0
+
+
+def test_post_process_match(scorer):
+    post_process = {
+        "type": "proportion",
+        "metric": "sales_amount",
+        "output_field": "sales_amount_proportion",
+    }
+    assert scorer.score(
+        {
+            "dimensions": ["region"],
+            "order_by": None,
+            "limit": None,
+            "joins": None,
+            "post_process": post_process,
+        },
+        {
+            "dimensions": ["region"],
+            "order_by": None,
+            "limit": None,
+            "joins": None,
+            "post_process": post_process,
+        },
+    ) == 1.0

@@ -1,3 +1,5 @@
+import re
+
 from nl2dsl.dsl.models import DSL
 from nl2dsl.exceptions import ValidationError
 
@@ -76,6 +78,32 @@ class DSLValidator:
         # Must have metrics or dimensions
         if not dsl.metrics and not dsl.dimensions:
             errors.append("必须指定 metrics 或 dimensions")
+
+        if dsl.post_process:
+            metric_aliases = {m.alias for m in (dsl.metrics or []) if m.alias}
+            dimensions = set(dsl.dimensions or [])
+            spec = dsl.post_process
+
+            if spec.metric not in metric_aliases:
+                errors.append(f"后处理指标 '{spec.metric}' 不在 DSL 输出指标中")
+
+            if spec.type == "group_top_n":
+                if not spec.group_by:
+                    errors.append("group_top_n 必须指定 group_by")
+                else:
+                    missing = [field for field in spec.group_by if field not in dimensions]
+                    if missing:
+                        errors.append(f"group_top_n 分组维度不存在: {missing}")
+                if len(dimensions) < 2:
+                    errors.append("group_top_n 至少需要两个输出维度")
+
+            if spec.type == "proportion" and not dimensions:
+                errors.append("proportion 必须至少指定一个分组维度")
+
+            if spec.output_field and not re.match(
+                r"^[A-Za-z_][A-Za-z0-9_]*$", spec.output_field
+            ):
+                errors.append(f"后处理输出字段名不合法: '{spec.output_field}'")
 
         if errors:
             raise ValidationError("; ".join(errors))

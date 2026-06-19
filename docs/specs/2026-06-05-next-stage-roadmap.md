@@ -128,6 +128,8 @@ NL2DSL 当前已经具备较完整的工程底座：DSL First、Governance First
 
 目标：支持更接近真实 BI 分析的查询模式。
 
+状态：**已完成（2026-06-18）**
+
 重点任务：
 
 - 支持分组 TopN：
@@ -147,6 +149,15 @@ NL2DSL 当前已经具备较完整的工程底座：DSL First、Governance First
 - 分组 TopN 不再退化为全局排序。
 - 占比查询返回比例字段，并能解释分母口径。
 - 新增 DSL 结构有文档、有校验、有测试，不破坏治理链路。
+
+完成结果：
+
+- DSL 新增受控 `post_process` 语义契约。
+- 支持 `group_top_n`，基础 SQL 不再提前应用全局 LIMIT。
+- 支持 `proportion`，以权限和过滤生效后的分组结果之和作为分母。
+- LangGraph 执行节点输出后处理 trace。
+- Agent 增加 proportion / ranking 聚合策略。
+- 新增 SQLite 集成测试和 Evaluation v2 高级分析用例。
 
 ---
 
@@ -247,4 +258,3 @@ NL2DSL 当前已经具备较完整的工程底座：DSL First、Governance First
 - Evaluation Framework 能输出可复现的版本质量报告。
 - 权限、脱敏、SQL 扫描、查询沙箱、审计日志在 trace 中可见。
 - 至少一个业务领域具备生产试点条件。
-

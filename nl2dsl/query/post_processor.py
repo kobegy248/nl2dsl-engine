@@ -9,15 +9,15 @@ from __future__ import annotations
 from itertools import groupby
 from typing import Any
 
-from nl2dsl.dsl.models import DSL
+from nl2dsl.dsl.models import DSL, PostProcess
 
 
 def should_post_process(dsl: DSL) -> bool:
-    """Check if the DSL requires post-processing.
+    """Check if the DSL explicitly or compatibly requires post-processing."""
+    if dsl.post_process is not None:
+        return True
 
-    Trigger: dimensions >= 2 AND limit == 1 AND order_by exists.
-    This typically means "top-1 per group" semantics.
-    """
+    # Backward compatibility for the legacy implicit TOP-1 representation.
     dims = dsl.dimensions or []
     has_multiple_dims = len(dims) >= 2
     limit_is_one = dsl.limit == 1
@@ -62,3 +62,78 @@ def extract_top_per_group(
         result.append(next(group))
 
     return result
+
+
+def extract_top_n_per_group(
+    data: list[dict[str, Any]],
+    group_keys: list[str],
+    order_key: str,
+    top_n: int = 1,
+    order_desc: bool = True,
+) -> list[dict[str, Any]]:
+    """Return the top N rows inside every group."""
+    if not data:
+        return []
+
+    def numeric_value(row: dict[str, Any]) -> float:
+        value = row.get(order_key)
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    grouped: dict[tuple, list[dict[str, Any]]] = {}
+    for row in data:
+        key = tuple(row.get(field) for field in group_keys)
+        grouped.setdefault(key, []).append(row)
+
+    result: list[dict[str, Any]] = []
+    for rows in grouped.values():
+        ordered = sorted(rows, key=numeric_value, reverse=order_desc)
+        result.extend(ordered[:top_n])
+    return result
+
+
+def calculate_proportion(
+    data: list[dict[str, Any]],
+    metric: str,
+    output_field: str | None = None,
+) -> list[dict[str, Any]]:
+    """Add each row's contribution to the metric total.
+
+    The derived value is a 0-1 ratio. The denominator is the sum of the
+    returned grouped metric values, so the calculation remains auditable.
+    """
+    output = output_field or f"{metric}_proportion"
+    values: list[float] = []
+    for row in data:
+        try:
+            values.append(float(row.get(metric) or 0))
+        except (TypeError, ValueError):
+            values.append(0.0)
+
+    total = sum(values)
+    result = []
+    for row, value in zip(data, values):
+        enriched = dict(row)
+        enriched[output] = round(value / total, 6) if total else 0.0
+        result.append(enriched)
+    return result
+
+
+def apply_post_process(
+    data: list[dict[str, Any]],
+    spec: PostProcess,
+) -> list[dict[str, Any]]:
+    """Apply one validated post-processing operation."""
+    if spec.type == "group_top_n":
+        return extract_top_n_per_group(
+            data,
+            group_keys=spec.group_by or [],
+            order_key=spec.metric,
+            top_n=spec.top_n or 1,
+            order_desc=spec.direction == "desc",
+        )
+    if spec.type == "proportion":
+        return calculate_proportion(data, spec.metric, spec.output_field)
+    return data
