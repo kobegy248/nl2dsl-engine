@@ -37,7 +37,7 @@ def test_audit_detail_returns_full_trace(mock_api_client, mock_engine):
     question = _make_one_query(mock_api_client, uuid.uuid4().hex[:8])
     query_id = _find_query_id(mock_engine, question)
 
-    resp = mock_api_client.get(f"/api/v1/admin/audit/queries/{query_id}")
+    resp = mock_api_client.get(f"/api/v1/admin/audit/queries/{query_id}", params={"tenant_id": "t001"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "success"
@@ -55,11 +55,18 @@ def test_audit_detail_returns_full_trace(mock_api_client, mock_engine):
 
 
 def test_audit_detail_404_when_missing(mock_api_client):
-    resp = mock_api_client.get("/api/v1/admin/audit/queries/does-not-exist")
+    resp = mock_api_client.get("/api/v1/admin/audit/queries/does-not-exist", params={"tenant_id": "t001"})
     assert resp.status_code == 404
     data = resp.json()
     assert data["status"] == "error"
     assert data["error_code"] == "NOT_FOUND"
+
+
+def test_audit_detail_requires_tenant(mock_api_client):
+    """详情接口缺少 tenant_id 时拒绝（400），与列表接口租户边界一致。"""
+    resp = mock_api_client.get("/api/v1/admin/audit/queries/does-not-exist")
+    assert resp.status_code == 400
+    assert resp.json()["error_code"] == "VALIDATION_ERROR"
 
 
 def test_audit_detail_legacy_record_returns_empty_trace(mock_api_client, mock_engine):
@@ -75,7 +82,7 @@ def test_audit_detail_legacy_record_returns_empty_trace(mock_api_client, mock_en
         )
         conn.commit()
 
-    resp = mock_api_client.get(f"/api/v1/admin/audit/queries/{legacy_id}")
+    resp = mock_api_client.get(f"/api/v1/admin/audit/queries/{legacy_id}", params={"tenant_id": "t-old"})
     assert resp.status_code == 200
     item = resp.json()["item"]
     assert item["trace"] == []
@@ -92,7 +99,7 @@ def test_audit_list_basic(mock_api_client, mock_engine):
     _make_one_query(mock_api_client, sentinel)
     _make_one_query(mock_api_client, sentinel)
 
-    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"q": sentinel})
+    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"q": sentinel, "tenant_id": "t001"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "success"
@@ -113,7 +120,7 @@ def test_audit_list_user_filter(mock_api_client, mock_engine):
 
     resp = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "user_id": "u-alpha"},
+        params={"q": sentinel, "user_id": "u-alpha", "tenant_id": "t001"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -137,7 +144,7 @@ def test_audit_list_status_filter(mock_api_client, mock_engine):
 
     resp = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "status": "error"},
+        params={"q": sentinel, "status": "error", "tenant_id": "t001"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -153,11 +160,11 @@ def test_audit_list_pagination(mock_api_client, mock_engine):
 
     page1 = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "limit": 2, "offset": 0},
+        params={"q": sentinel, "limit": 2, "offset": 0, "tenant_id": "t001"},
     ).json()
     page2 = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "limit": 2, "offset": 2},
+        params={"q": sentinel, "limit": 2, "offset": 2, "tenant_id": "t001"},
     ).json()
 
     assert page1["total"] == 4
@@ -188,7 +195,7 @@ def test_audit_list_time_window(mock_api_client, mock_engine):
 
     resp = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "start_time": latest},
+        params={"q": sentinel, "start_time": latest, "tenant_id": "t001"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -198,7 +205,7 @@ def test_audit_list_time_window(mock_api_client, mock_engine):
 
     resp = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": sentinel, "end_time": latest},
+        params={"q": sentinel, "end_time": latest, "tenant_id": "t001"},
     )
     assert resp.status_code == 200
     for it in resp.json()["items"]:
@@ -211,7 +218,7 @@ def test_audit_list_sql_injection_safe(mock_api_client, mock_engine):
 
     resp = mock_api_client.get(
         "/api/v1/admin/audit/queries",
-        params={"q": malicious, "limit": 10},
+        params={"q": malicious, "limit": 10, "tenant_id": "t001"},
     )
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
@@ -222,16 +229,16 @@ def test_audit_list_sql_injection_safe(mock_api_client, mock_engine):
 
 
 def test_audit_list_invalid_limit_400(mock_api_client):
-    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"limit": 0})
+    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"limit": 0, "tenant_id": "t001"})
     assert resp.status_code == 400
     assert resp.json()["error_code"] == "VALIDATION_ERROR"
 
-    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"limit": 1000})
+    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"limit": 1000, "tenant_id": "t001"})
     assert resp.status_code == 400
 
 
 def test_audit_list_invalid_offset_400(mock_api_client):
     """spec §6.1#7: offset=-1 应返回 400 VALIDATION_ERROR。"""
-    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"offset": -1})
+    resp = mock_api_client.get("/api/v1/admin/audit/queries", params={"offset": -1, "tenant_id": "t001"})
     assert resp.status_code == 400
     assert resp.json()["error_code"] == "VALIDATION_ERROR"

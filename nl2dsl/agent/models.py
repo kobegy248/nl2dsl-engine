@@ -50,6 +50,9 @@ class AgentResult(BaseModel):
     confidence: float | None = None
     plan: Plan | None = None
     error: str | None = None
+    # Agent 编排 Trace：记录 agent/plan/子查询开始结束/聚合/解释等真实步骤，
+    # 供审计与质量分析器判定复杂查询 Trace 完整性。
+    trace: list[dict] | None = None
 
 
 class AgentState(TypedDict):

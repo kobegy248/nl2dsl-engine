@@ -70,7 +70,10 @@ def test_full_pipeline(pipeline):
 
     resolver = SemanticResolver(registry)
     resolved = resolver.resolve(dsl)
-    assert resolved.metrics[0].field == "SUM(order_amount)"
+    # 设计契约：Resolver 将注册 expr（SUM(order_amount)）拆分为 func + 裸列名，
+    # 聚合函数由 SQLBuilder 在构建 SQL 时应用（与 value_map 翻译同一下沉策略）。
+    assert resolved.metrics[0].func == "sum"
+    assert resolved.metrics[0].field == "order_amount"
 
     builder = SQLBuilder(engine, {"orders": "order_fact"})
     sql = builder.build(resolved)
@@ -86,7 +89,11 @@ def test_full_pipeline(pipeline):
 
 
 def test_pipeline_with_value_map_filter(pipeline):
-    """value_map: 华东 -> HD."""
+    """value_map: 华东 -> HD.
+
+    设计契约：SemanticResolver 保留语义值（"华东"），由 SQLBuilder 在构建 WHERE
+    时翻译为物理编码（"HD"），命中存编码的 region_code 列。
+    """
     engine = pipeline["engine"]
     registry = pipeline["registry"]
 
@@ -100,11 +107,25 @@ def test_pipeline_with_value_map_filter(pipeline):
 
     resolver = SemanticResolver(registry)
     resolved = resolver.resolve(dsl)
-    assert resolved.filters[0].value == "HD"
-    assert resolved.filters[0].field == "region_code"
+    # Resolver 保留语义值，不翻译；field 保持语义维度名
+    assert resolved.filters[0].value == "华东"
+    assert resolved.filters[0].field == "region"
 
-    builder = SQLBuilder(engine, {"orders": "order_fact"})
+    value_maps = {
+        name: cfg["value_map"]
+        for name, cfg in registry["dimensions"].items()
+        if cfg.get("value_map")
+    }
+    builder = SQLBuilder(
+        engine,
+        {"orders": "order_fact"},
+        dimension_mapping={k: v["column"] for k, v in registry["dimensions"].items()},
+        value_maps=value_maps,
+    )
     sql = builder.build(resolved)
+    # 翻译发生在 builder：WHERE 用编码 HD，而非中文华东
+    assert "'HD'" in sql
+    assert "华东" not in sql
 
     executor = SQLExecutor(engine)
     result = executor.execute(sql)

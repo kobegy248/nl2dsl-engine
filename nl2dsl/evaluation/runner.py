@@ -29,7 +29,7 @@ class EvaluationRunner:
 
         from nl2dsl.evaluation.runner import EvaluationRunner
         from nl2dsl.evaluation.scoring import ScoringEngine
-        from tests.e2e.conftest import create_app
+        from nl2dsl.api_factory import create_app
 
         app = create_app(...)
         client = TestClient(app)

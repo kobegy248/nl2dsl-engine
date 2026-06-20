@@ -23,12 +23,12 @@ from nl2dsl.evaluation.dataset import DatasetLoader
 from nl2dsl.evaluation.report import ReportGenerator
 from nl2dsl.evaluation.runner import EvaluationRunner
 from nl2dsl.evaluation.scoring import ScoringEngine
-from nl2dsl.utils.logger import get_logger
-from tests.e2e.mock_data import (
+from nl2dsl.testing.sample_data import (
     create_mock_bank_database,
     create_mock_database,
     create_mock_supply_chain_database,
 )
+from nl2dsl.utils.logger import get_logger
 
 logger = get_logger("evaluation.cli")
 
@@ -37,17 +37,17 @@ def _load_config_for_domain(domain: str):
     """Load registry dict and permissions for a given domain."""
     import yaml
 
-    fixtures_dir = Path(__file__).parent.parent.parent / "tests" / "e2e" / "fixtures"
+    samples_dir = Path(__file__).parent / "samples"
 
     prefix = "" if domain == "ecommerce" else f"{domain}_"
-    metrics_path = fixtures_dir / f"{prefix}metrics_test.yaml"
-    perm_path = fixtures_dir / f"{prefix}permissions_test.yaml"
+    metrics_path = samples_dir / f"{prefix}metrics.yaml"
+    perm_path = samples_dir / f"{prefix}permissions.yaml"
 
     # Fallback for missing files
     if not metrics_path.exists() and domain != "ecommerce":
-        metrics_path = fixtures_dir / "metrics_test.yaml"
+        metrics_path = samples_dir / "metrics.yaml"
     if not perm_path.exists() and domain != "ecommerce":
-        perm_path = fixtures_dir / "permissions_test.yaml"
+        perm_path = samples_dir / "permissions.yaml"
 
     with open(metrics_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -81,21 +81,20 @@ def _create_client_for_domain(domain: str):
 
     registry, permissions, sensitive_columns, masking_rules = _load_config_for_domain(domain)
 
-    # Initialize LLM client if API key is available
+    # Initialize LLM client from the active provider (switchable via
+    # NL2DSL_LLM_PROVIDER / set_active_provider).
     llm_client = None
     try:
-        from nl2dsl.llm.client import LLMClient
-        from nl2dsl.config import settings
+        from nl2dsl.llm.providers import get_llm_client, active_provider
 
-        if settings.llm_api_key:
-            llm_client = LLMClient(
-                api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url,
-                model=settings.llm_model,
+        llm_client = get_llm_client()
+        if llm_client is not None:
+            logger.info(
+                "LLM client initialized for domain=%s provider=%s model=%s",
+                domain, active_provider(), llm_client.model_name,
             )
-            logger.info("LLM client initialized for domain=%s model=%s", domain, settings.llm_model)
         else:
-            logger.warning("LLM API key not configured, running without LLM")
+            logger.warning("Active LLM provider not configured, running without LLM")
     except Exception as exc:
         logger.error("Failed to initialize LLM client: %s", exc)
 

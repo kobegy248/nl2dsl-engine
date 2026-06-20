@@ -1,0 +1,138 @@
+metrics:
+  sales_amount:
+    expr: SUM(pay_amount)
+    description: "销售额（实付金额合计）"
+  gmv:
+    expr: SUM(order_amount)
+    description: "成交总额（GMV）"
+  order_count:
+    expr: COUNT(id)
+    description: "订单数量"
+  avg_order_value:
+    expr: AVG(pay_amount)
+    description: "客单价（平均订单金额）"
+  total_discount:
+    expr: SUM(discount_amount)
+    description: "优惠总额"
+  total_quantity:
+    expr: SUM(quantity)
+    description: "销售数量"
+  min_amount:
+    expr: MIN(pay_amount)
+    description: "最小金额"
+  max_amount:
+    expr: MAX(pay_amount)
+    description: "最大金额"
+  total_stock:
+    expr: SUM(stock_quantity)
+    description: "总库存量"
+  avg_stock:
+    expr: AVG(stock_quantity)
+    description: "平均库存量"
+  total_available:
+    expr: SUM(available_quantity)
+    description: "可用库存总量"
+  total_reserved:
+    expr: SUM(reserved_quantity)
+    description: "预留库存总量"
+  stock_product_count:
+    expr: COUNT(DISTINCT product_id)
+    description: "有库存的商品种类数"
+  avg_days_supply:
+    expr: AVG(days_of_supply)
+    description: "平均库存天数"
+
+dimensions:
+  product_name:
+    column: product_name
+    description: "产品名称"
+  category:
+    column: category
+    description: "品类分类"
+  brand:
+    column: brand
+    description: "品牌"
+  region:
+    column: region_code
+    description: "地区"
+    value_map:
+      "华东": "HD"
+      "华南": "HN"
+      "华北": "HB"
+      "西南": "XN"
+  channel:
+    column: channel_code
+    description: "销售渠道"
+    value_map:
+      "线上": "online"
+      "线下": "offline"
+      "分销": "distribute"
+  customer_type:
+    column: customer_type
+    description: "客户类型"
+  order_date:
+    column: order_date
+    description: "订单日期"
+  warehouse_name:
+    column: warehouse_name
+    description: "仓库/门店名称"
+  warehouse_type:
+    column: warehouse_type
+    description: "仓库类型"
+  date_id:
+    column: date_id
+    description: "日期ID"
+  date_str:
+    column: date_str
+    description: "日期"
+  supplier_name:
+    column: supplier_name
+    description: "供应商名称"
+  customer_name:
+    column: customer_name
+    description: "客户名称"
+  tier_level:
+    column: tier_level
+    description: "城市等级"
+  credit_rating:
+    column: credit_rating
+    description: "信用等级"
+  is_weekend:
+    column: is_weekend
+    description: "是否周末"
+  is_holiday:
+    column: is_holiday
+    description: "是否节假日"
+
+data_sources:
+  orders:
+    table: order_fact
+    metrics: [sales_amount, gmv, order_count, avg_order_value, total_discount, total_quantity, min_amount, max_amount]
+    dimensions: [product_name, category, brand, region, channel, customer_type, order_date, supplier_name, customer_name, tier_level, credit_rating, is_weekend, is_holiday]
+    time_field: order_date
+    joins:
+      product_dim:
+        on: product_id
+        type: left
+        alias: p
+      customer_dim:
+        on: customer_id
+        type: left
+        alias: c
+      region_dim:
+        on: region_code
+        type: left
+        alias: r
+      date_dim:
+        on: date_id
+        type: left
+        alias: d
+      supplier_dim:
+        on: p.supplier_id
+        type: left
+        alias: s
+  inventory:
+    table: inventory_fact
+    metrics: [total_stock, avg_stock, total_available, total_reserved, stock_product_count]
+    dimensions: [product_name, brand, category, region, warehouse_name, warehouse_type, date_id, date_str]
+    time_field: date_str

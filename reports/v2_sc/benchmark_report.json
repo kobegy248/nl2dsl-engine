@@ -1,0 +1,256 @@
+{
+  "by_domain": {
+    "supply_chain": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 10,
+      "total": 10
+    }
+  },
+  "by_matrix": [
+    {
+      "generator": "rule",
+      "optimizer": "off",
+      "overall_score": 1.0,
+      "passed": 10,
+      "total": 10,
+      "unavailable": 0
+    }
+  ],
+  "by_tag": {
+    "avg": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 2,
+      "total": 2
+    },
+    "basic": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 3,
+      "total": 3
+    },
+    "delivery": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "dimension": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 5,
+      "total": 5
+    },
+    "inventory": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 4,
+      "total": 4
+    },
+    "lead_time": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "material": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "min": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "order_by": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "performance": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "purchase": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 3,
+      "total": 3
+    },
+    "region": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "shipping": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "sum": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 7,
+      "total": 7
+    },
+    "supplier": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "top_n": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "transport": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "warehouse": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    }
+  },
+  "cases": {
+    "supply_chain|sc_001|rule|off": {
+      "case_id": "sc_001",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_002|rule|off": {
+      "case_id": "sc_002",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_003|rule|off": {
+      "case_id": "sc_003",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_004|rule|off": {
+      "case_id": "sc_004",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_005|rule|off": {
+      "case_id": "sc_005",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_006|rule|off": {
+      "case_id": "sc_006",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_007|rule|off": {
+      "case_id": "sc_007",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_008|rule|off": {
+      "case_id": "sc_008",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_009|rule|off": {
+      "case_id": "sc_009",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "supply_chain|sc_010|rule|off": {
+      "case_id": "sc_010",
+      "domain": "supply_chain",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    }
+  },
+  "dataset_hash": "36552810ee9dccbe0622c37581c44aaae42c46ceceb0714213d8c38163462630",
+  "failed_cases": [],
+  "generated_at": "2026-06-20T07:49:28.344983",
+  "optimizer_stats": null,
+  "schema_version": "1.0",
+  "summary": {
+    "avg_latency_ms": 0.0,
+    "by_dimension": {
+      "filter": 1.0,
+      "governance": 1.0,
+      "intent": 1.0,
+      "metric": 1.0,
+      "planner": 1.0
+    },
+    "execution_errors": 0,
+    "failed": 0,
+    "overall_score": 1.0,
+    "p50_latency_ms": 0.0,
+    "p95_latency_ms": 0.0,
+    "passed": 10,
+    "recursion_errors": 0,
+    "total_cases": 10,
+    "unavailable": 0
+  }
+}

@@ -140,6 +140,43 @@ class TestRouteAfterValidate:
         state = make_state(status="error", dsl_attempts=[{"source": "other"}])
         assert route_after_validate(state) == "error"
 
+    def test_terminates_when_correction_makes_no_progress(self):
+        """Rule mode (no LLM): correct_dsl appends no generation attempt, so
+        generation_attempts stalls at 1. Without the validation-failure cap
+        this looped forever (GRAPH_RECURSION_LIMIT). It must terminate."""
+        state = make_state(
+            status="error",
+            dsl_attempts=[
+                {"source": "rule_based", "valid": True},
+                {"source": "validation", "valid": False},
+                {"source": "validation", "valid": False},
+                {"source": "validation", "valid": False},
+            ],
+        )
+        assert route_after_validate(state) == "error"
+
+    def test_validation_failures_grow_each_round_until_terminate(self):
+        """Each validate round appends a validation-failure record; after
+        max_retries the route must give up rather than retry again."""
+        one_fail = make_state(
+            status="error",
+            dsl_attempts=[
+                {"source": "rule_based", "valid": True},
+                {"source": "validation", "valid": False},
+            ],
+        )
+        assert route_after_validate(one_fail) == "retry"
+        three_fails = make_state(
+            status="error",
+            dsl_attempts=[
+                {"source": "rule_based", "valid": True},
+                {"source": "validation", "valid": False},
+                {"source": "validation", "valid": False},
+                {"source": "validation", "valid": False},
+            ],
+        )
+        assert route_after_validate(three_fails) == "error"
+
 
 # ---------------------------------------------------------------------------
 # detect_complexity
@@ -305,6 +342,17 @@ class TestRouteAfterExecute:
     def test_returns_end_on_pending_review(self):
         state = make_state(status="pending_review")
         assert route_after_execute(state) == "end"
+
+    def test_execution_retry_terminates_after_simplify_counter_grows(self):
+        """Execution retries are counted by simplify_dsl records. One retry is
+        allowed; the second execute failure must terminate (no infinite
+        execute -> simplify_dsl -> build_sql -> execute loop)."""
+        first_fail = make_state(
+            status="error",
+            dsl_attempts=[{"source": "rule_based"}, {"source": "simplified"}],
+        )
+        # Already used the single allowed execution retry -> must end.
+        assert route_after_execute(first_fail) == "end"
 
 
 # ---------------------------------------------------------------------------

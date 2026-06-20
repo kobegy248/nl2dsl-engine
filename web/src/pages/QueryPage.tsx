@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, message, Segmented } from 'antd';
+import { Alert, Card, message, Segmented } from 'antd';
 import QueryInput from '../components/query/QueryInput';
 import ResultTable from '../components/query/ResultTable';
 import ResultChart from '../components/query/ResultChart';
@@ -8,6 +8,7 @@ import QueryProgress from '../components/query/QueryProgress';
 import Loading from '../components/common/Loading';
 import ErrorAlert from '../components/common/ErrorAlert';
 import { queryAPI } from '../api/query';
+import { useTenant } from '../context/TenantContext';
 import type { QueryResponse } from '../types/api';
 
 export default function QueryPage() {
@@ -16,6 +17,7 @@ export default function QueryPage() {
   const [error, setError] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'table' | 'bar' | 'line'>('table');
   const [progressEvents, setProgressEvents] = useState<{ node: string; status: string }[]>([]);
+  const { tenantId } = useTenant();
 
   const handleQuery = async (question: string) => {
     setLoading(true);
@@ -30,12 +32,16 @@ export default function QueryPage() {
       const { data } = await queryAPI.query({
         question,
         user_id: 'web_user',
-        tenant_id: 'default',
+        tenant_id: tenantId,
       });
-      if (data.status !== 'success' || !data.data) {
+      const usableStatus = data.status === 'success' || data.status === 'warning';
+      if (!usableStatus || !data.data) {
         throw new Error(data.status === 'clarification' ? '查询存在歧义' : '查询执行失败，请重试');
       }
       setResult(data);
+      if (data.status === 'warning') {
+        message.warning('查询已完成，但存在非阻断警告，请结合 DSL 和 SQL 核对结果。');
+      }
       setProgressEvents([
         { node: 'clarification', status: 'success' },
         { node: 'dsl', status: 'success' },
@@ -73,6 +79,14 @@ export default function QueryPage() {
 
       {result && (
         <>
+          {result.status === 'warning' && (
+            <Alert
+              type="warning"
+              showIcon
+              message="查询结果可用，但存在非阻断警告"
+              description="请结合 DSL、SQL 和执行链路核对结果口径。"
+            />
+          )}
           {result.data && (
             <Card
               title={
@@ -105,7 +119,7 @@ export default function QueryPage() {
             <Card className="mt-4">
               <ResultTabs
                 dsl={result.dsl}
-                sql={result.sql}
+                sql={result.sql ?? ''}
                 trace={[]}
               />
             </Card>

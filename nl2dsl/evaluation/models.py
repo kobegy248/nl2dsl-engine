@@ -189,6 +189,7 @@ class V2TestCase:
     category: str = "basic"
     tags: list[str] = field(default_factory=list)
     expected: dict = field(default_factory=dict)
+    domain: str = "ecommerce"
 
 
 @dataclass

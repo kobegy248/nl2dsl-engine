@@ -148,7 +148,16 @@ class V2DatasetLoader:
         return cases
 
     def _load_file(self, path: Path) -> list[V2TestCase]:
-        """从单个 YAML 文件加载 V2 测试用例。"""
+        """从单个 YAML 文件加载 V2 测试用例。
+
+        domain 解析优先级：
+        1. 单个用例的 ``domain``
+        2. YAML 顶层 ``domain``
+        3. 默认 ``ecommerce``
+
+        注意：数据集的**结构目录名**（如版本目录 ``v2``）不是业务 domain，
+        不得作为 domain 回退，否则会把版本目录误当成 ecommerce/bank 等真实领域。
+        """
         try:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
         except Exception as exc:
@@ -162,11 +171,16 @@ class V2DatasetLoader:
         if not isinstance(test_cases, list):
             return []
 
+        yaml_domain = data.get("domain")
+
         cases: list[V2TestCase] = []
         for raw in test_cases:
             if not isinstance(raw, dict):
                 continue
             try:
+                # 仅接受显式声明的业务 domain；缺失时默认 ecommerce。
+                # 不使用目录名（如 v2）作为 domain。
+                domain = raw.get("domain") or yaml_domain or "ecommerce"
                 tc = V2TestCase(
                     id=raw.get("id", ""),
                     query=raw.get("query", ""),
@@ -174,6 +188,7 @@ class V2DatasetLoader:
                     category=raw.get("category", "basic"),
                     tags=raw.get("tags", []),
                     expected=raw.get("expected", {}),
+                    domain=domain,
                 )
                 cases.append(tc)
             except Exception as exc:

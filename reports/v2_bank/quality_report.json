@@ -1,0 +1,56 @@
+{
+  "audit": {
+    "field_completeness": {
+      "dsl": 0.0,
+      "sql": 0.0,
+      "trace": 0.0
+    },
+    "latency": {
+      "avg_ms": 0.0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0
+    },
+    "path_completeness": {},
+    "path_distribution": {},
+    "status_distribution": {},
+    "total_queries": 0,
+    "trace_completeness": 0.0
+  },
+  "evaluation": {
+    "available": true,
+    "by_dimension": {
+      "filter": 0.5,
+      "governance": 0.5,
+      "intent": 0.5,
+      "metric": 0.5,
+      "planner": 0.5
+    },
+    "by_matrix": [
+      {
+        "generator": "rule",
+        "optimizer": "off",
+        "overall_score": 0.5,
+        "passed": 5,
+        "total": 10,
+        "unavailable": 0
+      }
+    ],
+    "failed": 5,
+    "failed_cases": 5,
+    "optimizer_stats": null,
+    "overall_score": 0.5,
+    "passed": 5,
+    "total_cases": 10,
+    "unavailable": 0
+  },
+  "feedback": {
+    "audit_link_rate": 0.0,
+    "candidates": 0,
+    "corrected_dsl_coverage": 0.0,
+    "issue_type_top": [],
+    "negative_rate": 0.0,
+    "total": 0
+  },
+  "generated_at": "2026-06-20T07:49:19.129169",
+  "schema_version": "1.0"
+}

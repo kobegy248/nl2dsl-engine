@@ -50,7 +50,7 @@ export default function AuditLogTable({ onViewDetail }: Props) {
       key: 'action',
       width: 100,
       render: (_: unknown, record: AuditItem) => (
-        <Button size="small" type="link" onClick={() => onViewDetail(record.query_id || record.id)}>
+        <Button size="small" type="link" onClick={() => onViewDetail(record.query_id || record.id || '')}>
           详情
         </Button>
       ),
@@ -61,7 +61,7 @@ export default function AuditLogTable({ onViewDetail }: Props) {
     <Table
       dataSource={data?.items || []}
       columns={columns}
-      rowKey={(record) => record.query_id || record.id}
+      rowKey={(record) => record.query_id || record.id || ''}
       pagination={{
         current: page,
         pageSize,

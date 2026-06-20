@@ -1,0 +1,960 @@
+{
+  "by_domain": {
+    "ecommerce": {
+      "failed": 26,
+      "overall_score": 0.8160894660894665,
+      "passed": 18,
+      "total": 44
+    }
+  },
+  "by_matrix": [
+    {
+      "generator": "rule",
+      "optimizer": "on",
+      "overall_score": 0.8160894660894665,
+      "passed": 9,
+      "total": 22,
+      "unavailable": 0
+    },
+    {
+      "generator": "rule",
+      "optimizer": "off",
+      "overall_score": 0.8160894660894665,
+      "passed": 9,
+      "total": 22,
+      "unavailable": 0
+    }
+  ],
+  "by_tag": {
+    "absolute_year": {
+      "failed": 2,
+      "overall_score": 0.7714285714285716,
+      "passed": 0,
+      "total": 2
+    },
+    "advanced": {
+      "failed": 0,
+      "overall_score": 0.8285714285714288,
+      "passed": 6,
+      "total": 6
+    },
+    "aggregation": {
+      "failed": 0,
+      "overall_score": 1.0000000000000002,
+      "passed": 8,
+      "total": 8
+    },
+    "and": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "between": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "cross_table": {
+      "failed": 6,
+      "overall_score": 0.7380952380952381,
+      "passed": 0,
+      "total": 6
+    },
+    "customer": {
+      "failed": 4,
+      "overall_score": 0.7500000000000001,
+      "passed": 0,
+      "total": 4
+    },
+    "dimension": {
+      "failed": 0,
+      "overall_score": 1.0000000000000002,
+      "passed": 2,
+      "total": 2
+    },
+    "filter": {
+      "failed": 8,
+      "overall_score": 0.7923280423280424,
+      "passed": 4,
+      "total": 12
+    },
+    "greater_than": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "group_top_n": {
+      "failed": 0,
+      "overall_score": 0.8285714285714287,
+      "passed": 4,
+      "total": 4
+    },
+    "having": {
+      "failed": 2,
+      "overall_score": 0.6111111111111112,
+      "passed": 0,
+      "total": 2
+    },
+    "join": {
+      "failed": 6,
+      "overall_score": 0.7380952380952381,
+      "passed": 0,
+      "total": 6
+    },
+    "month": {
+      "failed": 4,
+      "overall_score": 0.7714285714285716,
+      "passed": 0,
+      "total": 4
+    },
+    "multi_condition": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "multi_hop": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "negation": {
+      "failed": 0,
+      "overall_score": 1.0000000000000002,
+      "passed": 2,
+      "total": 2
+    },
+    "not_equal": {
+      "failed": 0,
+      "overall_score": 1.0000000000000002,
+      "passed": 2,
+      "total": 2
+    },
+    "numeric": {
+      "failed": 6,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 6
+    },
+    "post_process": {
+      "failed": 0,
+      "overall_score": 0.8285714285714288,
+      "passed": 6,
+      "total": 6
+    },
+    "proportion": {
+      "failed": 0,
+      "overall_score": 0.8285714285714287,
+      "passed": 2,
+      "total": 2
+    },
+    "range": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "ranking": {
+      "failed": 2,
+      "overall_score": 0.6428571428571429,
+      "passed": 0,
+      "total": 2
+    },
+    "recent_days": {
+      "failed": 2,
+      "overall_score": 0.7714285714285716,
+      "passed": 0,
+      "total": 2
+    },
+    "region": {
+      "failed": 0,
+      "overall_score": 1.0000000000000002,
+      "passed": 2,
+      "total": 2
+    },
+    "relative": {
+      "failed": 6,
+      "overall_score": 0.7714285714285715,
+      "passed": 0,
+      "total": 6
+    },
+    "standalone_month": {
+      "failed": 2,
+      "overall_score": 0.7714285714285716,
+      "passed": 0,
+      "total": 2
+    },
+    "supplier": {
+      "failed": 2,
+      "overall_score": 0.7142857142857144,
+      "passed": 0,
+      "total": 2
+    },
+    "time": {
+      "failed": 10,
+      "overall_score": 0.7714285714285715,
+      "passed": 0,
+      "total": 10
+    },
+    "top_n": {
+      "failed": 2,
+      "overall_score": 0.6428571428571429,
+      "passed": 0,
+      "total": 2
+    }
+  },
+  "cases": {
+    "ecommerce|ADV_001|rule|off": {
+      "case_id": "ADV_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_001|rule|on": {
+      "case_id": "ADV_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_002|rule|off": {
+      "case_id": "ADV_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_002|rule|on": {
+      "case_id": "ADV_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_003|rule|off": {
+      "case_id": "ADV_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_003|rule|on": {
+      "case_id": "ADV_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_001|rule|off": {
+      "case_id": "BASIC_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_001|rule|on": {
+      "case_id": "BASIC_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_002|rule|off": {
+      "case_id": "BASIC_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_002|rule|on": {
+      "case_id": "BASIC_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_003|rule|off": {
+      "case_id": "BASIC_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_003|rule|on": {
+      "case_id": "BASIC_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_004|rule|off": {
+      "case_id": "BASIC_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 1,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_004|rule|on": {
+      "case_id": "BASIC_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_001|rule|off": {
+      "case_id": "FILTER_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_001|rule|on": {
+      "case_id": "FILTER_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_002|rule|off": {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.6111111111111112,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_002|rule|on": {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.6111111111111112,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_003|rule|off": {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_003|rule|on": {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_004|rule|off": {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_004|rule|on": {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_005|rule|off": {
+      "case_id": "FILTER_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_005|rule|on": {
+      "case_id": "FILTER_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_006|rule|off": {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_006|rule|on": {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_001|rule|off": {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7857142857142858,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_001|rule|on": {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7857142857142858,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_002|rule|off": {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_002|rule|on": {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_003|rule|off": {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_003|rule|on": {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|RANK_001|rule|off": {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.6428571428571429,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|RANK_001|rule|on": {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.6428571428571429,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_001|rule|off": {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_001|rule|on": {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_002|rule|off": {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_002|rule|on": {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_003|rule|off": {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_003|rule|on": {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_004|rule|off": {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_004|rule|on": {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_005|rule|off": {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_005|rule|on": {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    }
+  },
+  "dataset_hash": "0f783ce36ea311a8163c46eb3194e0d94eb6e6c2ac7c3dbc2f0bac9135019c01",
+  "failed_cases": [
+    {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.6111111111111112,
+      "query": "销售额大于10万的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.6111111111111112,
+      "query": "销售额大于10万的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "query": "价格大于5000的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "query": "价格大于5000的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "query": "价格在5000到20000之间的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "query": "价格在5000到20000之间的商品",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "query": "华东地区线上渠道价格大于5000的销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "query": "华东地区线上渠道价格大于5000的销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7857142857142858,
+      "query": "按客户名称统计消费金额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7857142857142858,
+      "query": "按客户名称统计消费金额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "query": "按供应商统计销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "query": "按供应商统计销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "query": "按城市等级统计销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "query": "按城市等级统计销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.6428571428571429,
+      "query": "销售额最高的10个商品",
+      "status": "success"
+    },
+    {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.6428571428571429,
+      "query": "销售额最高的10个商品",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "query": "本月销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "query": "本月销售额",
+      "status": "warning"
+    },
+    {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "query": "上月订单量",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "query": "上月订单量",
+      "status": "warning"
+    },
+    {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "query": "最近7天销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "query": "最近7天销售额",
+      "status": "warning"
+    },
+    {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "query": "1月份销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "query": "1月份销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "query": "2024年销售额",
+      "status": "success"
+    },
+    {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "error": null,
+      "generator": "rule",
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "query": "2024年销售额",
+      "status": "success"
+    }
+  ],
+  "generated_at": "2026-06-19T17:10:53.669418",
+  "optimizer_stats": {
+    "avg_elapsed_ms": 0.09523809523809523,
+    "avg_fixes": 0.0,
+    "avg_rejections": 0.0,
+    "avg_warnings": 0.14285714285714285
+  },
+  "regression": {
+    "baseline_overall": 0.8160894660894665,
+    "case_regressions": [
+      {
+        "baseline": 1.0,
+        "case_id": "ADV_001",
+        "current": 0.8285714285714287,
+        "drop": 0.17142857142857126,
+        "key": "ecommerce|ADV_001|rule|on"
+      }
+    ],
+    "compatibility": [],
+    "current_overall": 0.8160894660894665,
+    "dimension_regressions": [],
+    "missing_cases": [],
+    "new_failures": [],
+    "overall_delta": 0.0,
+    "passed": false,
+    "reasons": []
+  },
+  "schema_version": "1.0",
+  "summary": {
+    "avg_latency_ms": 0.022727272727272728,
+    "by_dimension": {
+      "filter": 0.8181818181818182,
+      "governance": 1.0,
+      "intent": 0.9545454545454546,
+      "metric": 1.0,
+      "planner": 0.5659090909090908
+    },
+    "failed": 26,
+    "overall_score": 0.8160894660894665,
+    "p50_latency_ms": 0.0,
+    "p95_latency_ms": 0.0,
+    "passed": 18,
+    "total_cases": 44,
+    "unavailable": 0
+  }
+}

@@ -1,0 +1,486 @@
+{
+  "by_dimension": {
+    "filter": 0.8181818181818182,
+    "governance": 1.0,
+    "intent": 0.9545454545454546,
+    "metric": 1.0,
+    "planner": 0.5659090909090908
+  },
+  "cases": {
+    "ecommerce|ADV_001|rule|off": {
+      "case_id": "ADV_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_001|rule|on": {
+      "case_id": "ADV_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_002|rule|off": {
+      "case_id": "ADV_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_002|rule|on": {
+      "case_id": "ADV_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_003|rule|off": {
+      "case_id": "ADV_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|ADV_003|rule|on": {
+      "case_id": "ADV_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.8285714285714287,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_001|rule|off": {
+      "case_id": "BASIC_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_001|rule|on": {
+      "case_id": "BASIC_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_002|rule|off": {
+      "case_id": "BASIC_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_002|rule|on": {
+      "case_id": "BASIC_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_003|rule|off": {
+      "case_id": "BASIC_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_003|rule|on": {
+      "case_id": "BASIC_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_004|rule|off": {
+      "case_id": "BASIC_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|BASIC_004|rule|on": {
+      "case_id": "BASIC_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_001|rule|off": {
+      "case_id": "FILTER_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_001|rule|on": {
+      "case_id": "FILTER_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_002|rule|off": {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.6111111111111112,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_002|rule|on": {
+      "case_id": "FILTER_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.6111111111111112,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_003|rule|off": {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_003|rule|on": {
+      "case_id": "FILTER_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_004|rule|off": {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_004|rule|on": {
+      "case_id": "FILTER_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_005|rule|off": {
+      "case_id": "FILTER_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_005|rule|on": {
+      "case_id": "FILTER_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 1.0000000000000002,
+      "passed": true,
+      "status": "success"
+    },
+    "ecommerce|FILTER_006|rule|off": {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|FILTER_006|rule|on": {
+      "case_id": "FILTER_006",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_001|rule|off": {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7857142857142858,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_001|rule|on": {
+      "case_id": "JOIN_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7857142857142858,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_002|rule|off": {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_002|rule|on": {
+      "case_id": "JOIN_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_003|rule|off": {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|JOIN_003|rule|on": {
+      "case_id": "JOIN_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7142857142857144,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|RANK_001|rule|off": {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.6428571428571429,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|RANK_001|rule|on": {
+      "case_id": "RANK_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.6428571428571429,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_001|rule|off": {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_001|rule|on": {
+      "case_id": "TIME_001",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 1,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_002|rule|off": {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_002|rule|on": {
+      "case_id": "TIME_002",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_003|rule|off": {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_003|rule|on": {
+      "case_id": "TIME_003",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "warning"
+    },
+    "ecommerce|TIME_004|rule|off": {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_004|rule|on": {
+      "case_id": "TIME_004",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_005|rule|off": {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    },
+    "ecommerce|TIME_005|rule|on": {
+      "case_id": "TIME_005",
+      "domain": "ecommerce",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "on",
+      "overall": 0.7714285714285716,
+      "passed": false,
+      "status": "success"
+    }
+  },
+  "dataset_hash": "0f783ce36ea311a8163c46eb3194e0d94eb6e6c2ac7c3dbc2f0bac9135019c01",
+  "generated_at": "2026-06-19T17:04:56.991490",
+  "git_commit": "7191fe306162826cdc90bd00c3f5cedd470a45f3",
+  "matrix": {
+    "generator": "rule",
+    "optimizer": "all"
+  },
+  "matrix_combos": [
+    {
+      "generator": "rule",
+      "optimizer": "off"
+    },
+    {
+      "generator": "rule",
+      "optimizer": "on"
+    }
+  ],
+  "schema_version": "1.0",
+  "summary": {
+    "avg_latency_ms": 0.022727272727272728,
+    "by_dimension": {
+      "filter": 0.8181818181818182,
+      "governance": 1.0,
+      "intent": 0.9545454545454546,
+      "metric": 1.0,
+      "planner": 0.5659090909090908
+    },
+    "failed": 26,
+    "overall_score": 0.8160894660894665,
+    "p50_latency_ms": 0.0,
+    "p95_latency_ms": 0.0,
+    "passed": 18,
+    "total_cases": 44,
+    "unavailable": 0
+  }
+}

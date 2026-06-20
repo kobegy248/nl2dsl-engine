@@ -9,13 +9,41 @@ _VALID_AGG_FUNCS = {"sum", "avg", "count", "min", "max"}
 
 
 class SQLBuilder:
-    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None):
+    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None, metrics: dict | None = None, value_maps: dict[str, dict] | None = None):
         self._engine = engine
         self._metadata = MetaData()
         self._metadata.reflect(bind=engine)
         self._table_mapping = table_mapping
         self._data_sources = data_sources or {}
         self._dimension_mapping = dimension_mapping or {}
+        # Metrics registry: {metric_name: {"expr": "SUM(col)", ...}}. When a
+        # metric's alias (or field) is a registered metric, the registered
+        # expression is authoritative — the LLM's `field` guess is ignored.
+        # This makes the builder correct even when SemanticResolver has not run
+        # (e.g. a caller that goes generate_dsl -> build directly), and is
+        # idempotent when it has (resolver already expanded to the same expr).
+        self._metrics = metrics or {}
+        # Value maps per dimension: {dim_name: {semantic_value: physical_code}}.
+        # SemanticResolver keeps semantic values (e.g. "华东") in the DSL by
+        # design; the builder is responsible for translating them to the
+        # physical codes (e.g. "HD") when emitting WHERE conditions, so that
+        # filters hit columns that store codes. See resolver._map_single_value.
+        self._value_maps = value_maps or {}
+
+    def _metric_expr(self, metric) -> str | None:
+        """Return the registered expression for a metric, keyed by alias then field.
+
+        `alias` is the Semantic First contract (the registered metric name); we
+        fall back to `field` for outputs that put the metric name in `field`.
+        Returns None when neither is a registered metric — callers then use the
+        raw `field` as a physical column.
+        """
+        for key in (getattr(metric, "alias", None), getattr(metric, "field", None)):
+            if key and key in self._metrics:
+                expr = self._metrics[key].get("expr")
+                if expr:
+                    return expr
+        return None
 
     def _parse_expr(self, expr: str) -> tuple[str, str]:
         """Parse 'SUM(order_amount)' -> ('sum', 'order_amount').
@@ -98,13 +126,31 @@ class SQLBuilder:
         # Leaf node
         return self._build_leaf_condition(tables, node)
 
+    def _translate_filter_value(self, field: str, value):
+        """Translate a filter value via the dimension's value_map.
+
+        ``field`` is the semantic dimension name (e.g. "region"). If a
+        value_map is registered for it, semantic values (e.g. "华东") are
+        mapped to physical codes (e.g. "HD"); values absent from the map pass
+        through unchanged. List values are translated element-wise. Operators
+        that carry no domain value (is_null) or use raw values (between, like,
+        numeric comparisons) are unaffected — only `=`, `!=`, and `in` involve
+        enumerable domain values that benefit from translation.
+        """
+        value_map = self._value_maps.get(field)
+        if not value_map:
+            return value
+        if isinstance(value, list):
+            return [value_map.get(v, v) for v in value]
+        return value_map.get(value, value)
+
     def _build_leaf_condition(self, tables: dict[str, object], f) -> object:
         """Build a single filter condition (leaf node)."""
         col = self._resolve_column(tables, f.field)
         if f.operator == "=":
-            return col == f.value
+            return col == self._translate_filter_value(f.field, f.value)
         elif f.operator == "!=":
-            return col != f.value
+            return col != self._translate_filter_value(f.field, f.value)
         elif f.operator == ">":
             return col > f.value
         elif f.operator == "<":
@@ -114,7 +160,7 @@ class SQLBuilder:
         elif f.operator == "<=":
             return col <= f.value
         elif f.operator == "in":
-            return col.in_(f.value)
+            return col.in_(self._translate_filter_value(f.field, f.value))
         elif f.operator == "like":
             return col.like(f"%{f.value}%")
         elif f.operator == "between":
@@ -135,7 +181,9 @@ class SQLBuilder:
             for child in node.children:
                 self._collect_columns_from_tree(child, columns)
         else:
-            columns.add(node.field)
+            # Semantic dim name -> physical column (so cross-table permission
+            # filters trigger the right join).
+            columns.add(self._dimension_mapping.get(node.field, node.field))
 
     def _collect_referenced_columns(self, dsl: DSL) -> set[str]:
         """Collect all physical column names referenced in the DSL."""
@@ -150,29 +198,33 @@ class SQLBuilder:
         # Metrics — only simple column references need table resolution
         if dsl.metrics:
             for metric in dsl.metrics:
-                if "(" in metric.field:
-                    func_name, inner = self._parse_expr(metric.field)
+                # Registered metric expr is authoritative; fall back to raw field.
+                field = self._metric_expr(metric) or metric.field
+                if "(" in field:
+                    func_name, inner = self._parse_expr(field)
                     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
                         columns.add(inner)
                 else:
-                    columns.add(metric.field)
+                    columns.add(field)
 
-        # Filters
+        # Filters — map semantic dim names to physical so cross-table filters
+        # (e.g. permission-injected org_name -> org_nm in a joined table) add
+        # the required join. Metric-alias filter fields pass through unchanged.
         if dsl.filters:
             if isinstance(dsl.filters, list):
                 for f in dsl.filters:
-                    columns.add(f.field)
+                    columns.add(self._dimension_mapping.get(f.field, f.field))
             else:
                 self._collect_columns_from_tree(dsl.filters, columns)
 
         # Time field
         if dsl.time_field:
-            columns.add(dsl.time_field)
+            columns.add(self._dimension_mapping.get(dsl.time_field, dsl.time_field))
 
         # Order by
         if dsl.order_by:
             for ob in dsl.order_by:
-                columns.add(ob.field)
+                columns.add(self._dimension_mapping.get(ob.field, ob.field))
 
         return columns
 
@@ -337,8 +389,13 @@ class SQLBuilder:
 
         if dsl.metrics:
             for metric in dsl.metrics:
-                if "(" in metric.field:
-                    func_name, inner = self._parse_expr(metric.field)
+                # Registered metric expr is authoritative (Semantic First): when
+                # the metric's alias/field is a registered metric, expand from
+                # its registered expression and ignore the LLM's `field` guess.
+                # This keeps the builder correct even without SemanticResolver.
+                field = self._metric_expr(metric) or metric.field
+                if "(" in field:
+                    func_name, inner = self._parse_expr(field)
                     agg_fn = getattr(func, func_name)
                     # Simple column name vs complex expression (CASE WHEN etc.)
                     if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
@@ -348,7 +405,7 @@ class SQLBuilder:
                         columns.append(agg_fn(text(inner)).label(metric.alias or metric.field))
                 else:
                     agg_fn = getattr(func, metric.func)
-                    col = self._resolve_column(tables, metric.field)
+                    col = self._resolve_column(tables, field)
                     columns.append(agg_fn(col).label(metric.alias or metric.field))
 
         # Build FROM clause with joins

@@ -135,16 +135,24 @@ def test_get_metrics(client):
 
 
 def test_post_feedback(client):
+    # 反馈要求 query_id 对应审计记录存在：先发起一次真实查询
+    q = client.post("/api/v1/query", json={
+        "question": "查询销售额", "user_id": "u001", "tenant_id": "t001",
+    })
+    assert q.status_code == 200
+    query_id = q.json()["query_id"]
+
     response = client.post("/api/v1/feedback", json={
-        "query_id": "q-12345",
+        "query_id": query_id,
         "user_id": "u001",
+        "tenant_id": "t001",
         "corrected_dsl": {"data_source": "orders"},
         "comment": "The result looks good",
     })
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "received"
-    assert data["query_id"] == "q-12345"
+    assert data["query_id"] == query_id
 
 
 def test_get_enums(client):
@@ -181,7 +189,7 @@ def test_query_execute_invalid_dsl_returns_400(client):
 
 
 def test_get_audit_query_not_found_returns_404(client):
-    response = client.get("/api/v1/admin/audit/queries/nonexistent-query-id")
+    response = client.get("/api/v1/admin/audit/queries/nonexistent-query-id?tenant_id=t001")
     assert response.status_code == 404
     data = response.json()
     assert data["status"] == "error"
@@ -189,7 +197,7 @@ def test_get_audit_query_not_found_returns_404(client):
 
 
 def test_list_audit_queries_limit_out_of_range(client):
-    response = client.get("/api/v1/admin/audit/queries?limit=999")
+    response = client.get("/api/v1/admin/audit/queries?tenant_id=t001&limit=999")
     assert response.status_code == 400
     data = response.json()
     assert data["status"] == "error"
@@ -197,12 +205,12 @@ def test_list_audit_queries_limit_out_of_range(client):
 
 
 def test_list_audit_queries_limit_zero(client):
-    response = client.get("/api/v1/admin/audit/queries?limit=0")
+    response = client.get("/api/v1/admin/audit/queries?tenant_id=t001&limit=0")
     assert response.status_code == 400
 
 
 def test_list_audit_queries_negative_offset(client):
-    response = client.get("/api/v1/admin/audit/queries?offset=-1")
+    response = client.get("/api/v1/admin/audit/queries?tenant_id=t001&offset=-1")
     assert response.status_code == 400
     data = response.json()
     assert data["status"] == "error"
@@ -250,7 +258,7 @@ def test_resume_nonexistent_query_returns_404(client):
 
 
 def test_list_audit_queries_defaults(client):
-    response = client.get("/api/v1/admin/audit/queries")
+    response = client.get("/api/v1/admin/audit/queries?tenant_id=t001")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
@@ -261,11 +269,17 @@ def test_list_audit_queries_defaults(client):
 
 
 def test_list_audit_queries_with_filters(client):
-    response = client.get("/api/v1/admin/audit/queries?user_id=u001&limit=5")
+    response = client.get("/api/v1/admin/audit/queries?tenant_id=t001&user_id=u001&limit=5")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
     assert data["limit"] == 5
+
+
+def test_list_audit_queries_requires_tenant(client):
+    """未限定 tenant 的管理查询必须被拒绝。"""
+    response = client.get("/api/v1/admin/audit/queries")
+    assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------

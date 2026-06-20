@@ -2,6 +2,7 @@ import { Drawer, Timeline, Tag } from 'antd';
 import Loading from '../common/Loading';
 import JsonViewer from '../common/JsonViewer';
 import { useAuditDetail } from '../../hooks/useAudit';
+import type { TraceStep } from '../../types/api';
 
 interface Props {
   id: string | null;
@@ -46,7 +47,7 @@ export default function AuditTraceDetail({ id, open, onClose }: Props) {
           <div>
             <h3 className="font-medium">执行链路</h3>
             <Timeline
-              items={(data.trace || []).map((t) => ({
+              items={(data.trace || []).map((t: TraceStep) => ({
                 color: statusColor[t.status] || 'gray',
                 children: (
                   <div>

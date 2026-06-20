@@ -193,21 +193,40 @@ class TestBuildGraphInvocation:
         trace_steps = [t["step"] for t in (result.get("trace") or [])]
         assert "human_review" in trace_steps
 
-    def test_error_in_validation_subgraph(self, mock_services):
-        """If LLM is unavailable, generate_dsl fails with validation error."""
-        # Disable LLM entirely — no mock fallback anymore
+    def test_no_llm_falls_back_to_rule_generator(self, mock_services):
+        """Without LLM, generate_dsl falls back to the rule-based generator.
+
+        P0 (bank / supply_chain infinite-recursion fix): the graph no longer
+        fails when ``llm_client`` is absent. Instead ``generate_dsl`` routes
+        through ``RuleBasedDSLGenerator`` so a matchable query produces a valid
+        DSL and the pipeline completes — this is also the path the evaluation
+        ``--generator rule`` mode drives (it forces ``llm_client=None``).
+        """
+        # Disable LLM entirely — rule-based fallback must take over.
         mock_services["llm_client"] = None
         mock_services["clarification_detector"].detect.return_value = []
+        mock_services["row_security"].inject.side_effect = lambda dsl, uid: dsl
+        mock_services["col_security"].check.return_value = None
+        mock_services["resolver"].resolve.side_effect = lambda dsl: dsl
+        mock_services["sql_builder"].build.return_value = (
+            "SELECT product_name, SUM(order_amount) FROM orders GROUP BY product_name LIMIT 10"
+        )
+        mock_services["scanner"].scan.return_value = None
+        mock_services["sandbox"].check.return_value = SandboxResult(
+            passed=True, risks=[], sample_rows=[]
+        )
 
         graph = build_graph(**mock_services)
 
         state = make_minimal_state(question="查询销售额")
         result = graph.invoke(state)
 
-        # Without LLM, generate_dsl raises ValidationError
-        # which propagates through the pipeline
-        assert result["status"] == "error"
-        assert result["error_code"] == "VALIDATION_ERROR"
+        # Rule-based fallback produced a valid DSL and the pipeline succeeded
+        # without ever touching an LLM.
+        assert result["status"] == "success"
+        assert result["llm_used"] is False
+        assert result["dsl"] is not None
+        assert result["dsl"].data_source == "orders"
 
     def test_complex_query_routes_through_scan(self, mock_services):
         """Complex queries should still route to scan_sql."""

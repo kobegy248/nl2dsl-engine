@@ -27,22 +27,38 @@ print(report.to_json())
 
 ## CLI 评估
 
+第五周起，V2 CLI 改为**真实查询链路**评测：actual DSL 来自真实 `/api/v1/query`，
+Optimizer 的开关通过 `--optimizer on|off|all` 显式控制。OFF 时图中不注册
+`optimize_dsl` 节点，Trace 中也不会出现该步骤。
+
 ```bash
-# 启用 Optimizer
-python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset --optimizer on
+# Optimizer ON（rule 生成 + 优化）
+python -m nl2dsl.evaluation.v2_cli \
+  --dataset tests/evaluation/dataset/v2 --generator rule --optimizer on
 
-# 对比模式：Baseline vs Optimized
-python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset --compare
+# 矩阵全量（rule/llm × on/off）
+python -m nl2dsl.evaluation.v2_cli \
+  --dataset tests/evaluation/dataset/v2 --generator all --optimizer all
 
-# 仅启用特定规则
-python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset --optimizer on --rules M001,F001,P003
-
-# 禁用特定规则（A/B 测试）
-python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset --optimizer on --disable-rules A001,A002
-
-# 输出优化详情
-python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset --optimizer on --verbose-optimizer
+# Baseline 保存 + 回归门禁
+python -m nl2dsl.evaluation.v2_cli --dataset ... --generator rule --optimizer on \
+  --save-baseline reports/baselines/rule-optimizer-on.json
+python -m nl2dsl.evaluation.v2_cli --dataset ... --generator rule --optimizer on \
+  --baseline reports/baselines/rule-optimizer-on.json --fail-on-regression
 ```
+
+报告中的 `optimizer_stats`（avg_fixes / avg_warnings / avg_rejections /
+avg_elapsed_ms）从真实 Trace 的 `optimize_dsl` 步骤聚合。Optimizer 关闭时该统计为
+`null`。
+
+> **矩阵结果按组合身份保存（修复）**：报告 `cases` 以
+> `domain + case_id + generator + optimizer` 为键，同一用例四种组合互不覆盖；
+> `by_matrix` 列出每个组合的总数 / 通过 / 不可用 / 整体分数。Baseline 比较前校验
+> `dataset_hash` 与 `matrix_combos`，禁止跨模式比较，不兼容即门禁失败。
+
+> 注：旧版的 `--rules` / `--disable-rules` / `--compare` / `--verbose-optimizer`
+> 单规则 A/B 开关在第五周重构中移除。需要按规则子集评估时，可直接调用
+> `nl2dsl.optimizer.optimize(..., enabled_rules=..., disabled_rules=...)`。
 
 ## 规则分类
 

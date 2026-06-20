@@ -1,0 +1,37 @@
+users:
+  b001:
+    tenant_id: "t001"
+    row_filters:
+      org_name:
+        operator: "in"
+        value: ["北京分行", "北京朝阳支行", "北京海淀支行"]
+    allowed_dimensions: [customer_name, customer_status, customer_type, risk_level, account_type, currency, org_name]
+
+  b002:
+    tenant_id: "t001"
+    row_filters:
+      org_name:
+        operator: "in"
+        value: ["上海分行", "上海浦东支行", "上海徐汇支行"]
+    allowed_dimensions: [customer_name, customer_status, customer_type, risk_level, account_type, currency, org_name]
+
+  b003:
+    tenant_id: "t001"
+    row_filters: {}
+    allowed_dimensions: [customer_name, customer_status, customer_type, risk_level, account_type, currency, account_status, org_name]
+
+sensitive_columns:
+  cust_nm:
+    level: "high"
+    description: "客户姓名"
+  acct_no:
+    level: "high"
+    description: "账户号码"
+  cif_no:
+    level: "medium"
+    description: "客户编号"
+
+masking_rules:
+  cust_nm: "{x[0]}**"
+  acct_no: "****{x[-4:]}"
+  cif_no: "C****{x[-3:]}"

@@ -77,18 +77,41 @@ class PlannerScorer(Scorer):
             return 0.0
         return 1.0 if e_range == a_range else 0.0
 
+    @staticmethod
+    def _normalize_order_by(value) -> list[tuple[str, str | None]]:
+        """将 order_by 归一化为 (field, direction) 列表。
+
+        兼容三种来源格式：单 dict、dict 列表、字符串列表。
+        """
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, (list, tuple)):
+            return []
+        out: list[tuple[str, str | None]] = []
+        for item in value:
+            if isinstance(item, dict):
+                out.append((item.get("field", ""), item.get("direction")))
+            elif isinstance(item, str):
+                out.append((item, None))
+        return out
+
     def _score_order_by(self, expected, actual) -> float:
-        if expected is None and actual is None:
+        e_list = self._normalize_order_by(expected)
+        a_list = self._normalize_order_by(actual)
+        if not e_list and not a_list:
             return 1.0
-        if expected is None or actual is None:
+        if not e_list or not a_list:
             return 0.0
-        e_field = self._resolver.resolve_dimension(expected.get("field", ""))
-        a_field = self._resolver.resolve_dimension(actual.get("field", ""))
+        # 比较主排序键（第一个）
+        e_field = self._resolver.resolve_dimension(e_list[0][0])
+        a_field = self._resolver.resolve_dimension(a_list[0][0])
         if e_field != a_field:
             return 0.0
         # 方向：如果预期有明确方向，则必须匹配
-        e_dir = expected.get("direction")
-        a_dir = actual.get("direction")
+        e_dir = e_list[0][1]
+        a_dir = a_list[0][1]
         if e_dir and a_dir:
             return 1.0 if e_dir == a_dir else 0.0
         # 如果预期没有明确方向，任何方向均可

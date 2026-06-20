@@ -1,0 +1,224 @@
+metrics:
+  total_balance:
+    expr: SUM(acct_bal)
+    description: "账户总余额"
+  available_balance:
+    expr: SUM(avl_bal)
+    description: "账户可用余额"
+  frozen_amount:
+    expr: SUM(frz_amt)
+    description: "冻结金额合计"
+  account_count:
+    expr: COUNT(DISTINCT acct_no)
+    description: "账户数量"
+  avg_balance:
+    expr: AVG(acct_bal)
+    description: "账户平均余额"
+  customer_count:
+    expr: COUNT(DISTINCT cif_no)
+    description: "客户数量"
+  txn_count:
+    expr: COUNT(txn_seq_no)
+    description: "交易笔数"
+  txn_amount:
+    expr: SUM(txn_amt)
+    description: "交易金额合计"
+  inflow_amount:
+    expr: "SUM(CASE WHEN dr_cr_flg = '2' THEN txn_amt ELSE 0 END)"
+    description: "资金流入金额"
+  outflow_amount:
+    expr: "SUM(CASE WHEN dr_cr_flg = '1' THEN txn_amt ELSE 0 END)"
+    description: "资金流出金额"
+  product_hold_amount:
+    expr: SUM(hold_amt)
+    description: "产品持有金额合计"
+  agreement_count:
+    expr: COUNT(agt_no)
+    description: "合约数量"
+
+dimensions:
+  # -- t_cif_base columns --
+  customer_name:
+    column: cust_nm
+    description: "客户姓名"
+  customer_status:
+    column: cust_sts_cd
+    description: "客户状态"
+  customer_type:
+    column: cust_type_cd
+    description: "客户类型"
+  risk_level:
+    column: risk_lvl_cd
+    description: "风险等级"
+  register_date:
+    column: reg_dt
+    description: "注册日期"
+  manager_employee_no:
+    column: mgr_emp_no
+    description: "客户经理编号"
+
+  # -- t_acct_main columns --
+  account_type:
+    column: acct_type_cd
+    description: "账户类型"
+  currency:
+    column: ccyc_cd
+    description: "币种"
+  account_status:
+    column: acct_sts_cd
+    description: "账户状态"
+  open_date:
+    column: open_dt
+    description: "开户日期"
+  maturity_date:
+    column: mat_dt
+    description: "到期日期"
+
+  # -- t_txn_dtl columns --
+  transaction_date:
+    column: txn_dt
+    description: "交易日期"
+  transaction_type:
+    column: txn_type_cd
+    description: "交易类型代码"
+  debit_credit_flag:
+    column: dr_cr_flg
+    description: "借贷标志"
+  channel_code:
+    column: chl_cd
+    description: "渠道代码"
+  reversal_flag:
+    column: rvsl_flg
+    description: "冲正标志"
+
+  # -- t_org_hier columns --
+  org_code:
+    column: org_cd
+    description: "机构代码"
+  org_name:
+    column: org_nm
+    description: "机构名称"
+  org_level:
+    column: org_lvl
+    description: "机构层级"
+  parent_org_code:
+    column: parent_org_cd
+    description: "上级机构代码"
+
+  # -- t_prod_info columns --
+  product_code:
+    column: prod_cd
+    description: "产品代码"
+  product_name:
+    column: prod_nm
+    description: "产品名称"
+  product_level1_name:
+    column: prod_lvl1_nm
+    description: "产品一级类目"
+  product_level2_name:
+    column: prod_lvl2_nm
+    description: "产品二级类目"
+  product_status:
+    column: prod_sts_cd
+    description: "产品状态"
+  min_purchase_amount:
+    column: min_pur_amt
+    description: "最低购买金额"
+  expected_yield_rate:
+    column: exp_yld_rate
+    description: "预期收益率"
+
+  # -- t_cust_prod_agt columns --
+  agreement_no:
+    column: agt_no
+    description: "合约编号"
+  hold_amount:
+    column: hold_amt
+    description: "持有金额"
+  sign_amount:
+    column: sign_amt
+    description: "签约金额"
+  sign_date:
+    column: sign_dt
+    description: "签约日期"
+  due_date:
+    column: due_dt
+    description: "到期日期"
+  agreement_status:
+    column: agt_sts_cd
+    description: "合约状态"
+
+  # -- t_chl_mapping columns --
+  channel_name:
+    column: chl_nm
+    description: "渠道名称"
+
+  # -- t_txn_type_dict columns --
+  transaction_type_name:
+    column: txn_type_nm
+    description: "交易类型名称"
+
+data_sources:
+  customer_accounts:
+    table: t_acct_main
+    metrics: [total_balance, available_balance, frozen_amount, account_count, avg_balance]
+    dimensions: [account_type, currency, account_status, open_date, maturity_date, org_code, org_name, org_level, customer_name, customer_status, customer_type, risk_level, register_date, manager_employee_no]
+    joins:
+      t_cif_base:
+        on: cif_no
+        type: left
+        alias: c
+      t_org_hier:
+        on: org_cd
+        type: left
+        alias: o
+
+  transactions:
+    table: t_txn_dtl
+    metrics: [txn_count, txn_amount, inflow_amount, outflow_amount]
+    dimensions: [transaction_date, transaction_type, debit_credit_flag, channel_code, channel_name, reversal_flag, transaction_type_name]
+    joins:
+      t_acct_main:
+        on: acct_no
+        type: left
+        alias: a
+      t_cif_base:
+        on: cif_no
+        type: left
+        alias: c
+      t_chl_mapping:
+        on: chl_cd
+        type: left
+        alias: ch
+      t_txn_type_dict:
+        on: txn_type_cd
+        type: left
+        alias: tt
+
+  agreements:
+    table: t_cust_prod_agt
+    metrics: [product_hold_amount, agreement_count]
+    dimensions: [agreement_status, sign_date, due_date, product_code, product_name, product_level1_name, product_level2_name, product_status, min_purchase_amount, expected_yield_rate]
+    joins:
+      t_cif_base:
+        on: cif_no
+        type: left
+        alias: c
+      t_prod_info:
+        on: prod_cd
+        type: left
+        alias: p
+      t_acct_main:
+        on: acct_no
+        type: left
+        alias: a
+
+  customers:
+    table: t_cif_base
+    metrics: [customer_count]
+    dimensions: [customer_name, customer_status, customer_type, risk_level, register_date, manager_employee_no, org_code, org_name, org_level]
+    joins:
+      t_org_hier:
+        on: org_cd
+        type: left
+        alias: o

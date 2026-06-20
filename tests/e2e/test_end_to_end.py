@@ -617,9 +617,14 @@ class TestManagementEndpoints:
         assert "order_count" in metric_names
 
     def test_feedback_endpoint(self, mock_api_client):
+        q = mock_api_client.post("/api/v1/query", json={
+            "question": "查询销售额", "user_id": "u001", "tenant_id": "t001",
+        })
+        query_id = q.json()["query_id"]
         response = mock_api_client.post("/api/v1/feedback", json={
-            "query_id": "q-test-001",
+            "query_id": query_id,
             "user_id": "u001",
+            "tenant_id": "t001",
             "corrected_dsl": {"data_source": "orders"},
             "comment": "测试反馈",
         })

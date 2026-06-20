@@ -943,6 +943,23 @@ class TestFixMetricFormat:
         assert result["func"] == "avg"
         assert result["field"] == "pay_amount"
 
+    def test_normalizes_uppercase_func(self):
+        """LLM 常返回大写 SUM/COUNT；必须归一化为小写枚举，否则 DSL 校验崩溃。"""
+        m = {"func": "SUM", "field": "order_amount", "alias": "sales_amount"}
+        result = _fix_metric_format(m)
+        assert result["func"] == "sum"
+
+    def test_normalizes_mixed_case_func(self):
+        m = {"func": "Count", "field": "id", "alias": "order_count"}
+        result = _fix_metric_format(m)
+        assert result["func"] == "count"
+
+    def test_falls_back_when_func_not_legal_enum(self):
+        """非法 func（非枚举值）时回退到 registry/默认，不让非法值流入 DSL。"""
+        m = {"func": "total", "alias": "sales_amount"}
+        result = _fix_metric_format(m)
+        assert result["func"] == "sum"
+
     def test_maps_whitespace_alias_via_metric_map(self):
         """Whitespace-padded alias is normalized and overwritten."""
         m = {"alias": "  sales_amount  "}

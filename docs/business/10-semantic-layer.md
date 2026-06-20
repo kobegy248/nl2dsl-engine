@@ -299,3 +299,31 @@ if len(values) > 100:
 ## 10.5 指标展开
 
 DSL 中的 `metric: "gmv"` → Semantic Layer 自动展开为 `SUM(pay_amount)`。
+
+### 10.5.1 指标契约：alias 权威，field 由系统解析
+
+DSL 指标结构为 `{func, field, alias}`，其中：
+
+- `alias` 是指标的**唯一权威标识**，必须是语义层【可用指标】清单中注册过的名字。
+- `field` 是原始字段名。LLM 可能猜错物理列（例如把 `pay_amount` 写成
+  `order_amount`），系统不信任该猜测。
+- 物理列由系统按 `alias` 对应的注册 `expr` 解析，**禁止发明未注册的物理列名**。
+
+### 10.5.2 双层展开（Resolver + SQLBuilder）
+
+指标到物理列的展开在两处独立完成，互为兜底：
+
+1. **SemanticResolver**（`resolve_semantic` 节点）：按 `alias` 查注册表，把
+   `field` 覆盖为 `expr` 解析出的物理列。
+2. **SQLBuilder**：构造时注入 metrics 注册表；build 时若 metric 的 `alias`
+   （或 `field`）是注册指标，**权威地**用其 `expr` 展开，忽略 LLM 的 `field`
+   猜测。
+
+SQLBuilder 自带展开是为了在 **SemanticResolver 未运行**的调用路径（例如直接
+`generate_dsl → build` 的集成测试、或绕过 resolve 的子链路）下仍能产出正确 SQL，
+而非把 `field` 当物理列直接查表导致 `Column not found`。Resolver 已展开时，
+SQLBuilder 再展开一次结果相同（幂等）。
+
+> 该设计修复了"LLM 幻觉物理列名 + 链路绕过 resolver"导致的
+> `Column 'order_amount' not found` 类失败：指标口径由注册表决定，不由 LLM 的
+> `field` 猜测决定。

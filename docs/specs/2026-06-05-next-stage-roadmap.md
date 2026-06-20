@@ -165,24 +165,86 @@ NL2DSL 当前已经具备较完整的工程底座：DSL First、Governance First
 
 目标：让系统具备持续改进能力，而不是靠人工感觉判断“准不准”。
 
+状态：**已实现（2026-06-19）**
+
+设计入口：
+
+- `docs/specs/2026-06-19-week5-quality-feedback-observability-design.md`
+- `docs/superpowers/plans/2026-06-19-week5-quality-feedback-observability-plan.md`
+- `docs/superpowers/plans/2026-06-19-week5-claude-implementation-prompt.md`
+
 重点任务：
 
-- 打通 optimizer on/off 的评估对比。
-- 打通 fallback / LLM on/off 的评估对比。
-- 按 domain 输出独立评估结果，例如 ecommerce、bank、supply_chain。
-- 将复杂查询失败样本、用户反馈、审计 trace 关联起来。
+- 打通 optimizer on/off 的评估对比。✅
+- 打通 fallback / LLM on/off 的评估对比。✅（LLM 不可用标记 `unavailable`，不静默退化）
+- 按 domain 输出独立评估结果，例如 ecommerce、bank、supply_chain。✅（domain/tag 过滤 + 报告分组）
+- 将复杂查询失败样本、用户反馈、审计 trace 关联起来。✅（query_id 透出 + FeedbackStore 与 Audit 共库）
 - 设计反馈处理流程：
-  - 高频纠错模式提取。
-  - corrected_dsl 转为评测用例。
-  - 反馈样本进入 RAG few-shot 或语义层配置更新。
-- 输出一份固定格式的质量报告。
+  - 高频纠错模式提取。✅（issue_type Top N 统计）
+  - corrected_dsl 转为评测用例。✅（候选 YAML 导出，人工审核后入库）
+  - 反馈样本进入 RAG few-shot 或语义层配置更新。⏸️（明确不做自动修改，需人工审核）
+- 输出一份固定格式的质量报告。✅（`nl2dsl.quality.cli`）
 
 验收标准：
 
-- 一条命令能生成当前版本评估报告。
-- 能看到 optimizer 开启前后的收益对比。
-- 每个修复都能对应至少一个新增或更新的 evaluation case。
-- 反馈数据能追溯到原始查询、生成 DSL、最终 SQL 和执行结果。
+- 一条命令能生成当前版本评估报告。✅（`python -m nl2dsl.evaluation.v2_cli`）
+- 能看到 optimizer 开启前后的收益对比。✅（`--optimizer all` 矩阵 + `optimizer_stats`）
+- 每个修复都能对应至少一个新增或更新的 evaluation case。✅（候选导出 + 测试覆盖）
+- 反馈数据能追溯到原始查询、生成 DSL、最终 SQL 和执行结果。✅（反馈详情 API 关联审计）
+
+关键产出命令：
+
+```bash
+python -m nl2dsl.evaluation.v2_cli --dataset tests/evaluation/dataset/v2 \
+  --generator rule --optimizer off --save-baseline reports/baselines/rule-optimizer-off.json
+python -m nl2dsl.evaluation.v2_cli --dataset ... --baseline ... --fail-on-regression
+python -m nl2dsl.feedback.exporter --db-url sqlite:///data/nl2dsl.db \
+  --output reports/feedback/candidates.yaml --tenant-id t001
+python -m nl2dsl.quality.cli --evaluation reports/v2/benchmark_report.json --output reports/quality
+```
+
+第五周代码审阅整改（2026-06-19，修复）：
+
+- **tenant_id 强校验**：`FeedbackRequest.tenant_id` 必填非空白（422），Store 层防御性
+  校验，审计有 tenant 时缺失 / 为空 / 不一致一律拒绝。
+- **正式入口统一**：`nl2dsl/api.py` 改为薄入口，唯一通过 `create_app()` 创建 app；
+  生产 / 测试同一实现，默认数据库 `FeedbackStore` 与 Audit 共 Engine。
+- **Query ID 与 Audit 完整关联**：`/query/execute`、SSE 最终结果均写审计，使用同一
+  `query_id`；SSE `done` 事件携带 `query_id`。
+- **矩阵复合键**：`domain + case_id + generator + optimizer`，四组合互不覆盖；
+  Baseline 按 `dataset_hash`（含 expected/domain/tags）+ `matrix_combos` 校验兼容性，
+  缺失组合视为回退，不静默跳过。
+- **多领域真实路由**：`v2` 目录名不再当作 domain；`EvaluationExecutor` 按 `case.domain`
+  路由到对应 `DomainContext`，未知领域明确失败，不回退 ecommerce。
+- **Trace 完整率按路径**：定义 success / optimizer / clarification / agent / error /
+  unknown 最小节点集合，unknown 与空 Trace 默认不完整，单 agent 节点不计完整。
+- **正式 CLI 不依赖 tests**：样例数据迁移至 `nl2dsl.testing.sample_data`；Feedback
+  Exporter `--db-url` 必填；`--help` 不触发数据库 / 模型初始化。
+- **管理 API 租户边界**：`/admin/feedback`、`/admin/audit/queries` 列表必须限定
+  `tenant_id`。
+
+第五周第二轮代码审阅整改（2026-06-19，修复）：
+
+- **P0 详情接口租户隔离**：`/admin/feedback/{id}`、`/admin/audit/queries/{id}` 详情
+  接口强制非空 `tenant_id`（缺失 / 空白 → 400）；租户校验下沉到
+  `FeedbackStore.get` / `AuditLogger.get_query`（SQL 层 `AND tenant_id`），跨租户
+  统一 404，不泄露记录是否存在与其它租户内容。
+- **P1 `/query/execute` 全失败审计**：统一 try/except/finally 覆盖领域解析 / DSL 解析 /
+  graph / SQL 全流程，成功 / clarification / 业务错误 / 未预期异常均写同一 `query_id`
+  审计；失败响应体携带 `query_id`，错误信息经 `_safe_error_message` 抹除密钥 / 连接串。
+- **P1 简单 SSE 最终状态与异常审计**：合并所有 update chunk 得真实最终状态（不再用
+  最后一个 chunk）；`result` 事件含 query_id/status/dsl/sql/data/error；`astream()`
+  抛异常输出结构化 `error` 事件 + error 审计，不吞异常伪装 success。
+- **P1 Agent Trace 生产与完整率一致**：`AgentOrchestrator` 真实生产
+  agent/plan/sub_query_start/sub_query_end/aggregation/explanation 步骤；质量分析器
+  识别实际步骤名（`sub_query_end` 等），单 agent 节点判不完整；普通复杂查询与复杂 SSE
+  Trace 核心步骤一致；子查询失败在 Trace 体现，不伪装成功。
+- **P1 Baseline 身份校验 fail-closed**：`schema_version` / `dataset_hash` /
+  `matrix_combos` 任一缺失 / 为空 / 格式错或不支持 schema → 门禁失败（“Baseline 不兼容
+  或损坏”），不默认零分放行；`matrix_combos=[]` 与缺失严格区分。
+- **P1 默认 V2 CLI 多领域**：`build_default_executor_config()` 默认构造 ecommerce / bank /
+  supply_chain 三领域 `ExecutorConfig.domains`，各自独立 engine / registry / 权限 / 评测
+  身份；用例按 `case.domain` 路由，未知领域明确失败；`--config` 显式覆盖退化为单领域。
 
 ---
 

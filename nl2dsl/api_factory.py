@@ -14,7 +14,7 @@ import yaml
 from fastapi import FastAPI, Query, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, ValidationError as PydanticValidationError
 from sqlalchemy import Engine, MetaData, Table, Column, Integer, String, Float, DateTime
 
 from nl2dsl.audit.logger import AuditLogger
@@ -46,6 +46,19 @@ from langgraph.checkpoint.memory import InMemorySaver
 # ---------------------------------------------------------------------------
 # Domain-specific system prompt builder
 # ---------------------------------------------------------------------------
+
+
+def _extract_value_maps(dimensions: dict) -> dict[str, dict]:
+    """从 registry dimensions 提取 {dim_name: value_map}，供 SQLBuilder 翻译过滤值。
+
+    SemanticResolver 保留语义值（如"华东"），由 SQLBuilder 在构建 WHERE 时翻译
+    为物理编码（如"HD"）。仅收集非空 value_map。
+    """
+    return {
+        name: cfg.get("value_map")
+        for name, cfg in dimensions.items()
+        if isinstance(cfg, dict) and cfg.get("value_map")
+    }
 
 def _build_domain_system_prompt(registry_dict: dict | None) -> str:
     """Build a domain-specific system prompt from registry configuration.
@@ -251,6 +264,7 @@ class QueryRequest(BaseModel):
     question: str
     user_id: str
     tenant_id: str
+    domain: str = Field(default="ecommerce", description="业务领域")
     data_source: str | None = None
 
 
@@ -263,12 +277,14 @@ class QueryResponse(BaseModel):
     clarification: dict | None = None
     explanation: str | None = None
     confidence: float | None = None
+    query_id: str | None = None
 
 
 class DSLExecuteRequest(BaseModel):
     dsl: dict
     user_id: str
     tenant_id: str
+    domain: str = Field(default="ecommerce", description="业务领域")
 
 
 class DSLExecuteResponse(BaseModel):
@@ -276,24 +292,89 @@ class DSLExecuteResponse(BaseModel):
     data: list[dict] | None = None
     sql: str | None = None
     execution_time_ms: int = 0
+    query_id: str | None = None
 
 
 class DSLGenerateResponse(BaseModel):
     status: str
     dsl: dict | None = None
     execution_time_ms: int = 0
+    query_id: str | None = None
+
+
+# 统一的反馈 issue_type 枚举
+FEEDBACK_ISSUE_TYPES = {
+    "intent", "metric", "dimension", "filter", "time", "join",
+    "ranking", "proportion", "permission", "result", "other",
+}
+
+
+def _validate_non_blank(value: str, field_name: str) -> str:
+    """通用非空白校验：返回去除首尾空白后的值，空白则抛 ValueError（→ 422）。"""
+    if value is None or not str(value).strip():
+        raise ValueError(f"{field_name} 不能为空")
+    return str(value).strip()
+
+
+def _safe_error_message(exc: Exception, max_len: int = 300) -> str:
+    """对未预期异常生成安全的审计/响应信息。
+
+    记录异常类型与截断后的信息，便于排查；同时抹除常见的密钥与数据库连接串
+    模式，避免在审计日志或错误响应中泄露敏感凭据。
+    """
+    import re
+
+    raw = f"{type(exc).__name__}: {exc}"
+    # 抹除 `user:pass@host` 形式的连接串凭据
+    raw = re.sub(r"://[^/\s:]+:[^/\s@]+@", "://***:***@", raw)
+    # 抹除形如 password=xxx / api_key=xxx 的明文凭据
+    raw = re.sub(r"(?i)(password|api[_-]?key|secret|token)\s*=\s*\S+", r"\1=***", raw)
+    if len(raw) > max_len:
+        raw = raw[:max_len] + "…"
+    return raw
+
+
+def _json_dumps_key(obj) -> str:
+    """生成可用于去重比较的稳定 JSON 串（dict 不可哈希，用此替代集合成员判定）。"""
+    import json
+
+    try:
+        return json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(obj)
 
 
 class FeedbackRequest(BaseModel):
     query_id: str
     user_id: str
+    # tenant_id 必填且不得为空白：租户隔离不能由调用方置空绕过。
+    tenant_id: str
+    is_correct: bool = True
+    issue_type: str | None = None
     corrected_dsl: dict | None = None
     comment: str = ""
+
+    @field_validator("tenant_id")
+    @classmethod
+    def _tenant_id_non_blank(cls, v: str) -> str:
+        return _validate_non_blank(v, "tenant_id")
+
+    @field_validator("user_id")
+    @classmethod
+    def _user_id_non_blank(cls, v: str) -> str:
+        return _validate_non_blank(v, "user_id")
+
+    @field_validator("query_id")
+    @classmethod
+    def _query_id_non_blank(cls, v: str) -> str:
+        return _validate_non_blank(v, "query_id")
 
 
 class FeedbackResponse(BaseModel):
     status: str
     query_id: str
+    feedback_id: str | None = None
+    deduplicated: bool = False
 
 
 class SchemaResponse(BaseModel):
@@ -360,6 +441,7 @@ class StreamRequest(BaseModel):
     question: str
     user_id: str
     tenant_id: str
+    domain: str = Field(default="ecommerce", description="业务领域")
     data_source: str | None = None
 
 
@@ -381,6 +463,10 @@ def create_app(
     masking_rules: dict | None = None,
     enable_clarification: bool = False,
     llm_client=None,
+    enable_optimizer: bool = True,
+    generator_mode: str | None = None,
+    feedback_store=None,
+    app_domain: str = "ecommerce",
 ) -> FastAPI:
     """Create a FastAPI app with custom configuration.
 
@@ -390,6 +476,16 @@ def create_app(
         permissions: User permissions dict.
         sensitive_columns: Sensitive columns config.
         masking_rules: Masking rules dict.
+        enable_clarification: Whether to run clarification detection.
+        llm_client: LLM client for DSL generation (may be None).
+        enable_optimizer: 显式控制 Semantic Optimizer。False 时图中不注册
+            ``optimize_dsl`` 节点，Trace 中也不会出现该步骤。
+        generator_mode: ``"rule"`` 强制使用规则生成器（llm_client 置空）；
+            ``"llm"`` 使用 llm_client；``None`` 保持兼容（有 client 用 LLM，
+            无 client 静默回退规则）。评测执行器在 ``llm`` 模式无 client 时
+            自行返回 unavailable，不进入此处。
+        feedback_store: 可选的 :class:`FeedbackStore`。未提供时使用 JSONL
+            ``FeedbackCollector``（兼容旧路径）。
 
     Returns:
         Configured FastAPI application.
@@ -400,41 +496,18 @@ def create_app(
 
     _nl2dsl_engine = Engine()
 
-    # Override db_engine if provided
-    if engine is not None:
-        _nl2dsl_engine.register("db_engine", engine)
+    # 是否注入了任何覆盖项。无覆盖时走“正式生产路径”，直接复用 Engine 已构建
+    # 的真实 DomainContext（含 RAG / Optimizer / 权限 / checkpointer），避免
+    # 重建图丢失治理与检索能力。有覆盖时走“测试/注入路径”，按注入项重建。
+    _has_overrides = (
+        registry_dict is not None
+        or engine is not None
+        or permissions is not None
+        or sensitive_columns is not None
+        or masking_rules is not None
+    )
 
-    # Override registry and dependent components if provided
-    if registry_dict is not None:
-        _nl2dsl_engine.register("registry_dict", registry_dict)
-        _nl2dsl_engine.register("validator", DSLValidator(registry_dict))
-        _nl2dsl_engine.register("resolver", SemanticResolver(registry_dict))
-        _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
-        _nl2dsl_engine.register("sql_builder", SQLBuilder(
-            _db_engine,
-            {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()},
-            registry_dict.get("data_sources", {}),
-            {k: v.get("column", k) for k, v in registry_dict.get("dimensions", {}).items()},
-        ))
-    elif engine is not None:
-        # Engine was provided but registry_dict was not — rebuild sql_builder
-        # with the new engine so metadata reflects the test database.
-        _default_registry = _nl2dsl_engine.registry.get("registry_dict")
-        if _default_registry:
-            _nl2dsl_engine.register("sql_builder", SQLBuilder(
-                engine,
-                {k: v.get("table", k) for k, v in _default_registry.get("data_sources", {}).items()},
-                _default_registry.get("data_sources", {}),
-                {k: v.get("column", k) for k, v in _default_registry.get("dimensions", {}).items()},
-            ))
-
-    # Override permission components
-    _nl2dsl_engine.register("row_security", RowLevelSecurity(permissions or {}))
-    _nl2dsl_engine.register("col_security", ColumnLevelSecurity(sensitive_columns or {}, masking_rules or {}))
-
-    # Clarification detector: real detector when enabled (so trend/growth
-    # queries missing time context clarify on the api_factory/E2E path too),
-    # otherwise a no-op to preserve pre-LangGraph behavior.
+    # Clarification detector: real detector when enabled, otherwise no-op.
     class _NoOpClarificationDetector:
         def detect(self, question: str) -> list:
             return []
@@ -443,90 +516,173 @@ def create_app(
         clarification_detector = ClarificationDetector()
     else:
         clarification_detector = _NoOpClarificationDetector()
-    _nl2dsl_engine.register("clarification_detector", clarification_detector)
-
-    # Registry used for registry-aware entity extraction in the agent route.
-    _route_registry = registry_dict or _nl2dsl_engine.registry.get("registry_dict") or {}
-
-    # Services used directly by routes
-    feedback_collector = FeedbackCollector()
-    _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
-    audit_logger = AuditLogger(_db_engine)
 
     # Cache AgentController to avoid re-loading intents.yaml on every request
     _agent_controller = AgentController()
 
-    # Build a fresh LangGraph StateGraph with the overridden components.
-    # Do NOT use _nl2dsl_engine.build() which returns a pre-built graph
-    # using default components from _load_defaults().
-    _validator = _nl2dsl_engine.registry.get("validator")
-    _resolver = _nl2dsl_engine.registry.get("resolver")
-    _sql_builder = _nl2dsl_engine.registry.get("sql_builder")
-    _row_security = _nl2dsl_engine.registry.get("row_security")
-    _col_security = _nl2dsl_engine.registry.get("col_security")
-    _scanner = SQLScanner()
-    _sandbox = QuerySandbox(_db_engine)
-    _executor = SQLExecutor(_db_engine)
+    # Services used directly by routes
+    feedback_collector = FeedbackCollector()
 
-    # Build SemanticConfig for the optimizer from the registry dict
-    _optimizer_config = None
-    if registry_dict:
-        from nl2dsl.optimizer.context import SemanticConfig
-        _optimizer_config = SemanticConfig.from_registry_dict(registry_dict)
+    if not _has_overrides:
+        # ------------------------------------------------------------------
+        # 正式生产路径：复用 Engine 真实 DomainContext
+        # ------------------------------------------------------------------
+        _db_engine = _nl2dsl_engine.registry.get("db_engine")
+        audit_logger = AuditLogger(_db_engine)
+        _route_registry = _nl2dsl_engine.registry.get("registry_dict") or {}
+        # 正式 API 默认使用数据库 FeedbackStore（与 Audit 共用 Engine）。
+        from nl2dsl.feedback.store import FeedbackStore
+        if feedback_store is None:
+            feedback_store = FeedbackStore(_db_engine, audit_logger)
+        elif feedback_store is False:
+            feedback_store = None
 
-    query_graph = build_graph(
-        llm_client=llm_client,
-        rag_retriever=None,
-        validator=_validator,
-        row_security=_row_security,
-        col_security=_col_security,
-        resolver=_resolver,
-        sql_builder=_sql_builder,
-        scanner=_scanner,
-        sandbox=_sandbox,
-        executor=_executor,
-        clarification_detector=clarification_detector,
-        registry_dict=registry_dict or {},
-        llm_system_prompt=DSL_SYSTEM_PROMPT,
-        checkpointer=None,
-        optimizer_semantic_config=_optimizer_config,
-    )
+        _graph_llm_client = llm_client
 
-    # Build DomainContext for AgentOrchestrator
-    def _get_or_build_domain_context(domain: str = "ecommerce") -> DomainContext:
-        """Build a DomainContext for the given domain.
+        def _get_domain_graph(domain: str):
+            ctx = _nl2dsl_engine._domains.get(domain)
+            if ctx is None:
+                raise NotFoundError(f"未知业务领域：domain={domain}")
+            return ctx.graph
 
-        Uses the same components as the query_graph for consistency.
-        """
-        return DomainContext(
-            domain=domain,
-            registry_dict=registry_dict or {},
+        def _build_domains_dict() -> dict[str, DomainContext]:
+            return dict(_nl2dsl_engine._domains)
+
+        def _domain_registry(domain: str) -> dict:
+            ctx = _nl2dsl_engine._domains.get(domain)
+            if ctx is None:
+                raise NotFoundError(f"未知业务领域：domain={domain}")
+            return ctx.registry_dict or {}
+
+        query_graph = _get_domain_graph("ecommerce")  # 默认引用，部分路由直接使用
+    else:
+        # ------------------------------------------------------------------
+        # 测试 / 注入路径：按注入项重建图与组件
+        # ------------------------------------------------------------------
+        # Override db_engine if provided
+        if engine is not None:
+            _nl2dsl_engine.register("db_engine", engine)
+
+        # Override registry and dependent components if provided
+        if registry_dict is not None:
+            _nl2dsl_engine.register("registry_dict", registry_dict)
+            _nl2dsl_engine.register("validator", DSLValidator(registry_dict))
+            _nl2dsl_engine.register("resolver", SemanticResolver(registry_dict))
+            _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
+            _nl2dsl_engine.register("sql_builder", SQLBuilder(
+                _db_engine,
+                {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()},
+                registry_dict.get("data_sources", {}),
+                {k: v.get("column", k) for k, v in registry_dict.get("dimensions", {}).items()},
+                registry_dict.get("metrics", {}),
+                _extract_value_maps(registry_dict.get("dimensions", {})),
+            ))
+        elif engine is not None:
+            # Engine was provided but registry_dict was not — rebuild sql_builder
+            # with the new engine so metadata reflects the test database.
+            _default_registry = _nl2dsl_engine.registry.get("registry_dict")
+            if _default_registry:
+                _nl2dsl_engine.register("sql_builder", SQLBuilder(
+                    engine,
+                    {k: v.get("table", k) for k, v in _default_registry.get("data_sources", {}).items()},
+                    _default_registry.get("data_sources", {}),
+                    {k: v.get("column", k) for k, v in _default_registry.get("dimensions", {}).items()},
+                    _default_registry.get("metrics", {}),
+                    _extract_value_maps(_default_registry.get("dimensions", {})),
+                ))
+
+        # Override permission components
+        _nl2dsl_engine.register("row_security", RowLevelSecurity(permissions or {}))
+        _nl2dsl_engine.register("col_security", ColumnLevelSecurity(sensitive_columns or {}, masking_rules or {}))
+        _nl2dsl_engine.register("clarification_detector", clarification_detector)
+
+        # Registry used for registry-aware entity extraction in the agent route.
+        _route_registry = registry_dict or _nl2dsl_engine.registry.get("registry_dict") or {}
+
+        _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
+        audit_logger = AuditLogger(_db_engine)
+
+        # 正式 API 默认使用数据库 FeedbackStore（与 Audit 共用 Engine）。
+        from nl2dsl.feedback.store import FeedbackStore
+        if feedback_store is None:
+            feedback_store = FeedbackStore(_db_engine, audit_logger)
+        elif feedback_store is False:
+            # 显式禁用数据库存储，回退到 JSONL 兼容路径
+            feedback_store = None
+
+        # Build a fresh LangGraph StateGraph with the overridden components.
+        _validator = _nl2dsl_engine.registry.get("validator")
+        _resolver = _nl2dsl_engine.registry.get("resolver")
+        _sql_builder = _nl2dsl_engine.registry.get("sql_builder")
+        _row_security = _nl2dsl_engine.registry.get("row_security")
+        _col_security = _nl2dsl_engine.registry.get("col_security")
+        _scanner = SQLScanner()
+        _sandbox = QuerySandbox(_db_engine)
+        _executor = SQLExecutor(_db_engine)
+
+        # Build SemanticConfig for the optimizer from the registry dict.
+        # enable_optimizer=False 时显式关闭：不传 semantic config → 图中不注册
+        # optimize_dsl 节点 → Trace 中不会出现该步骤。
+        _optimizer_config = None
+        if registry_dict and enable_optimizer:
+            from nl2dsl.optimizer.context import SemanticConfig
+            _optimizer_config = SemanticConfig.from_registry_dict(registry_dict)
+
+        # generator_mode="rule" 强制使用规则生成器（即使传入了 llm_client）。
+        _graph_llm_client = llm_client
+        if generator_mode == "rule":
+            _graph_llm_client = None
+
+        # 注入路径只服务于单一业务领域（其 registry 即 app_domain）。
+        _app_domain = app_domain
+
+        query_graph = build_graph(
+            llm_client=_graph_llm_client,
+            rag_retriever=None,
             validator=_validator,
-            resolver=_resolver,
-            sql_builder=_sql_builder,
-            sandbox=_sandbox,
-            executor=_executor,
             row_security=_row_security,
             col_security=_col_security,
-            rag_retriever=None,
-            graph=query_graph,
+            resolver=_resolver,
+            sql_builder=_sql_builder,
+            scanner=_scanner,
+            sandbox=_sandbox,
+            executor=_executor,
+            clarification_detector=clarification_detector,
+            registry_dict=registry_dict or {},
+            llm_system_prompt=DSL_SYSTEM_PROMPT,
+            checkpointer=None,
+            optimizer_semantic_config=_optimizer_config,
         )
 
-    def _build_domains_dict() -> dict[str, DomainContext]:
-        """Build domains dict using the app's configured components.
+        def _get_domain_graph(domain: str):
+            if domain != _app_domain:
+                raise NotFoundError(f"未知业务领域：domain={domain}（当前 app 仅服务 {_app_domain}）")
+            return query_graph
 
-        Always builds fresh DomainContexts from the components configured in
-        create_app to ensure test-injected overrides are respected.
-        """
-        domains: dict[str, DomainContext] = {}
-        # Use the domain names discovered by the engine, but build fresh
-        # DomainContexts with the overridden components from this create_app call.
-        domain_names = ["ecommerce"]
-        if hasattr(_nl2dsl_engine, '_domains') and _nl2dsl_engine._domains:
-            domain_names = list(_nl2dsl_engine._domains.keys())
-        for domain_name in domain_names:
-            domains[domain_name] = _get_or_build_domain_context(domain_name)
-        return domains
+        def _domain_registry(domain: str) -> dict:
+            if domain != _app_domain:
+                raise NotFoundError(f"未知业务领域：domain={domain}（当前 app 仅服务 {_app_domain}）")
+            return registry_dict or {}
+
+        # Build DomainContext for AgentOrchestrator（仅 app_domain）
+        def _get_or_build_domain_context(domain: str = "ecommerce") -> DomainContext:
+            return DomainContext(
+                domain=domain,
+                registry_dict=registry_dict or {},
+                validator=_validator,
+                resolver=_resolver,
+                sql_builder=_sql_builder,
+                sandbox=_sandbox,
+                executor=_executor,
+                row_security=_row_security,
+                col_security=_col_security,
+                rag_retriever=None,
+                graph=query_graph,
+            )
+
+        def _build_domains_dict() -> dict[str, DomainContext]:
+            """注入路径仅构建 app_domain 对应的 DomainContext。"""
+            return {_app_domain: _get_or_build_domain_context(_app_domain)}
 
     # -----------------------------------------------------------------------
     # Helpers
@@ -545,18 +701,32 @@ def create_app(
                     "items": [a.model_dump() for a in ambiguities] if ambiguities else [],
                 },
                 execution_time_ms=elapsed,
+                query_id=query_id,
             )
 
         if status == "error":
             raise ValidationError(result.get("error", "Unknown error"))
 
-        if status == "warning" or status == "pending_review":
+        if status == "warning":
             return QueryResponse(
-                status=status,
+                status="warning",
+                data=result.get("data"),
+                dsl=result.get("dsl").model_dump() if result.get("dsl") else None,
+                sql=result.get("sql"),
+                execution_time_ms=elapsed,
+                explanation=result.get("explanation"),
+                confidence=result.get("confidence"),
+                query_id=query_id,
+            )
+
+        if status == "pending_review":
+            return QueryResponse(
+                status="pending_review",
                 data=[],
                 dsl=result.get("dsl").model_dump() if result.get("dsl") else None,
                 sql=result.get("sql"),
                 execution_time_ms=elapsed,
+                query_id=query_id,
             )
 
         # success
@@ -569,6 +739,7 @@ def create_app(
             execution_time_ms=elapsed,
             explanation=result.get("explanation"),
             confidence=result.get("confidence"),
+            query_id=query_id,
         )
 
     def _build_trace(result: dict) -> list[dict]:
@@ -579,6 +750,59 @@ def create_app(
         if isinstance(trace, list):
             return trace
         return [trace] if trace else []
+
+    def _merge_update_chunks(chunks: list) -> dict:
+        """将 ``stream_mode="updates"`` 产生的多个 chunk 合并为最终状态。
+
+        每个 chunk 形如 ``{node_name: {field: value, ...}}``（部分版本也可能是
+        扁平的 state dict）。按“后写覆盖”合并标量字段；``trace`` /
+        ``dsl_attempts`` 作为列表累加。这样不必依赖 checkpointer 的
+        ``aget_state``（注入/测试路径无 checkpointer），也能拿到真实的最终状态，
+        而不是把最后一个 update chunk 当成完整状态。
+        """
+        merged: dict = {"trace": [], "dsl_attempts": []}
+
+        def _append_list(field: str, v) -> None:
+            """累加 trace / dsl_attempts：v 可能是单个 dict、list 或 None。
+
+            节点在 updates 模式下返回的 trace 可能是单个 dict（如
+            ``{"step": "build_sql", ...}``）也可能是 list，统一收进列表并按
+            JSON 串去重（dict 不可哈希，不能直接用 set）。
+            """
+            if v is None:
+                return
+            if isinstance(v, dict):
+                v = [v]
+            elif not isinstance(v, list):
+                return
+            bucket = merged.setdefault(field, [])
+            seen = {_json_dumps_key(e) for e in bucket}
+            for entry in v:
+                key = _json_dumps_key(entry)
+                if key not in seen:
+                    bucket.append(entry)
+                    seen.add(key)
+
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            # 兼容两种 chunk 形态：{node: update} 或 扁平 update
+            if len(chunk) == 1:
+                only_value = next(iter(chunk.values()))
+                if isinstance(only_value, dict):
+                    items = only_value.items()
+                else:
+                    items = chunk.items()
+            else:
+                items = chunk.items()
+            for k, v in items:
+                if v is None:
+                    continue
+                if k in ("trace", "dsl_attempts"):
+                    _append_list(k, v)
+                else:
+                    merged[k] = v
+        return merged
 
     # -----------------------------------------------------------------------
     # Routes
@@ -615,20 +839,34 @@ def create_app(
         )
 
         config = {"configurable": {"thread_id": query_id}}
-        result = await query_graph.ainvoke(state, config)
+        result = await _get_domain_graph(req.domain).ainvoke(state, config)
 
         elapsed = int((time.time() - start) * 1000)
         dsl = result.get("dsl")
+        # 审计：/query/dsl 同样记录，便于反馈关联
+        audit_logger.log(
+            query_id=query_id,
+            user_id=req.user_id,
+            tenant_id=req.tenant_id,
+            question=req.question,
+            dsl_json=dsl.model_dump() if dsl else None,
+            status=result.get("status", "success"),
+            execution_time_ms=elapsed,
+            trace_json=_build_trace(result),
+        )
         return DSLGenerateResponse(
             status="success",
             dsl=dsl.model_dump() if dsl else None,
             execution_time_ms=elapsed,
+            query_id=query_id,
         )
 
     @app.post("/api/v1/query")
     async def query(req: QueryRequest) -> QueryResponse:
         start = time.time()
         query_id = str(uuid.uuid4())
+        # 领域校验：未知 domain 立即失败，不静默回退 ecommerce。
+        _get_domain_graph(req.domain)
 
         try:
             # Step 0: Clarification check (only when enabled)
@@ -653,6 +891,7 @@ def create_app(
                             "items": [a.model_dump() for a in ambiguities],
                         },
                         execution_time_ms=int((time.time() - start) * 1000),
+                        query_id=query_id,
                     )
 
             # Step 1: Route via AgentController (intent classification + routing)
@@ -664,13 +903,13 @@ def create_app(
             if isinstance(execution_plan, (ComplexExecutionPlan, ExplorationPlan)):
                 # Complex query: use AgentOrchestrator
                 domains = _build_domains_dict()
-                orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
+                orchestrator = AgentOrchestrator(domains=domains, llm_client=_graph_llm_client)
 
                 agent_result = await orchestrator.run(
                     question=req.question,
                     user_id=req.user_id,
                     tenant_id=req.tenant_id,
-                    domain="ecommerce",
+                    domain=req.domain,
                     sse_callback=None,
                 )
 
@@ -685,7 +924,7 @@ def create_app(
                     status=agent_result.status,
                     execution_time_ms=elapsed,
                     rows_returned=len(agent_result.data) if agent_result.data else 0,
-                    trace_json=[{"step": "agent", "status": agent_result.status, "intent": getattr(getattr(execution_plan, 'plan', None), 'intent', 'exploration')}],
+                    trace_json=agent_result.trace or [{"step": "agent", "status": agent_result.status, "intent": getattr(getattr(execution_plan, 'plan', None), 'intent', 'exploration')}],
                     error_code=None,
                     error_message=agent_result.error,
                 )
@@ -704,6 +943,7 @@ def create_app(
                     execution_time_ms=elapsed,
                     explanation=agent_result.explanation,
                     confidence=agent_result.confidence,
+                    query_id=query_id,
                 )
 
             # Simple query: continue with existing graph flow
@@ -732,7 +972,7 @@ def create_app(
             )
 
             config = {"configurable": {"thread_id": query_id}}
-            result = await query_graph.ainvoke(state, config)
+            result = await _get_domain_graph(req.domain).ainvoke(state, config)
             elapsed = int((time.time() - start) * 1000)
 
             trace_entries = _build_trace(result)
@@ -775,47 +1015,130 @@ def create_app(
             raise
 
     @app.post("/api/v1/query/execute")
-    async def query_execute(req: DSLExecuteRequest) -> DSLExecuteResponse:
+    async def query_execute(req: DSLExecuteRequest):
+        """执行已构建的 DSL。
+
+        第二轮审阅 P1：整个执行流程（领域解析 → DSL 解析 → graph 执行 → SQL
+        构建扫描执行）统一用 try/except/finally 覆盖，确保成功 / clarification
+        / 业务错误 / 未预期异常都写入同一条 query_id 对应的 error Audit，不再
+        有“异常跳过审计”的盲区。失败响应体携带 query_id，便于客户端关联审计
+        与反馈。
+        """
         start = time.time()
         query_id = str(uuid.uuid4())
 
-        dsl = DSL(**req.dsl)
+        # 贯穿 try/except/finally 的状态变量，保证 finally 能写出准确审计。
+        status: str = "error"
+        error_code: str | None = None
+        error_message: str | None = None
+        result_dsl = None
+        parsed_dsl: DSL | None = None
+        sql: str | None = None
+        data = None
+        trace_entries: list = []
+        # 错误响应状态码：业务错误默认 400，按异常类型调整。
+        http_status = 400
 
-        state = QueryState(
-            question="",
-            user_id=req.user_id,
-            tenant_id=req.tenant_id,
-            data_source=None,
-            ambiguities=None,
-            dsl=dsl,
-            dsl_attempts=None,
-            sql=None,
-            sandbox_result=None,
-            complexity=None,
-            data=None,
-            status="pending",
-            error=None,
-            error_code=None,
-            trace=None,
-            query_id=query_id,
-            started_at=start,
-            llm_used=False,
-        )
+        try:
+            # 领域校验：未知 domain 立即失败（NotFoundError → 404）。
+            graph = _get_domain_graph(req.domain)
 
-        config = {"configurable": {"thread_id": query_id}}
-        result = await query_graph.ainvoke(state, config)
+            # DSL Schema 解析：非法结构抛 pydantic ValidationError → 422。
+            parsed_dsl = DSL(**req.dsl)
 
-        elapsed = int((time.time() - start) * 1000)
+            state = QueryState(
+                question="",
+                user_id=req.user_id,
+                tenant_id=req.tenant_id,
+                data_source=None,
+                ambiguities=None,
+                dsl=parsed_dsl,
+                dsl_attempts=None,
+                sql=None,
+                sandbox_result=None,
+                complexity=None,
+                data=None,
+                status="pending",
+                error=None,
+                error_code=None,
+                trace=None,
+                query_id=query_id,
+                started_at=start,
+                llm_used=False,
+            )
 
-        status = result.get("status", "error")
+            config = {"configurable": {"thread_id": query_id}}
+            result = await graph.ainvoke(state, config)
+
+            trace_entries = _build_trace(result)
+            status = result.get("status", "error")
+            result_dsl = result.get("dsl")
+            sql = result.get("sql")
+            data = result.get("data")
+            error_code = result.get("error_code")
+            error_message = result.get("error")
+
+            if status == "clarification":
+                # clarification 不是错误，但仍需审计（status=clarification）。
+                pass
+            elif status == "error":
+                # graph 返回 error 状态：业务错误，400。
+                http_status = 400
+                if not error_message:
+                    error_message = "Query execution failed"
+        except NL2DSLException as exc:
+            status = "error"
+            error_code = exc.error_code
+            error_message = exc.message
+            http_status = exc.status_code
+        except PydanticValidationError as exc:
+            # DSL Schema 解析失败：客户端错误，422。仍写 error Audit。
+            status = "error"
+            error_code = "DSL_SCHEMA_ERROR"
+            error_message = _safe_error_message(exc)
+            http_status = 422
+        except Exception as exc:  # noqa: BLE001 — 兜底：任何未预期异常都要审计
+            status = "error"
+            error_code = "INTERNAL_ERROR"
+            error_message = _safe_error_message(exc)
+            http_status = 500
+        finally:
+            elapsed = int((time.time() - start) * 1000)
+            # 成功时优先用最终 dsl；解析/执行失败回退到已解析的 dsl（若有）。
+            dsl_for_audit = result_dsl if result_dsl is not None else parsed_dsl
+            audit_logger.log(
+                query_id=query_id,
+                user_id=req.user_id,
+                tenant_id=req.tenant_id,
+                question="(execute)",
+                dsl_json=dsl_for_audit.model_dump() if dsl_for_audit else None,
+                sql_text=sql,
+                status=status,
+                execution_time_ms=elapsed,
+                rows_returned=len(data) if data else 0,
+                trace_json=trace_entries,
+                error_code=error_code,
+                error_message=error_message,
+            )
+
         if status == "error":
-            raise ValidationError(result.get("error", "Query execution failed"))
+            # 失败响应体携带 query_id，便于客户端关联审计 / 提交反馈。
+            return JSONResponse(
+                status_code=http_status,
+                content={
+                    "status": "error",
+                    "error_code": error_code,
+                    "message": error_message,
+                    "query_id": query_id,
+                },
+            )
 
         return DSLExecuteResponse(
             status="success",
-            data=result.get("data"),
-            sql=result.get("sql"),
-            execution_time_ms=elapsed,
+            data=data,
+            sql=sql,
+            execution_time_ms=int((time.time() - start) * 1000),
+            query_id=query_id,
         )
 
     @app.post("/api/v1/query/stream")
@@ -828,6 +1151,9 @@ def create_app(
         """
         query_id = str(uuid.uuid4())
         import json
+        # 领域校验：未知 domain 立即失败。
+        graph = _get_domain_graph(req.domain)
+        start = time.time()
 
         # Step 1: Route via AgentController (intent classification + routing)
         from nl2dsl.agent.orchestrator import AgentOrchestrator
@@ -837,7 +1163,7 @@ def create_app(
         if isinstance(execution_plan, (ComplexExecutionPlan, ExplorationPlan)):
             # Complex query: use AgentOrchestrator with real-time SSE streaming
             domains = _build_domains_dict()
-            orchestrator = AgentOrchestrator(domains=domains, llm_client=llm_client)
+            orchestrator = AgentOrchestrator(domains=domains, llm_client=_graph_llm_client)
 
             async def agent_event_generator():
                 import asyncio
@@ -852,8 +1178,23 @@ def create_app(
                             question=req.question,
                             user_id=req.user_id,
                             tenant_id=req.tenant_id,
-                            domain="ecommerce",
+                            domain=req.domain,
                             sse_callback=sse_callback,
+                        )
+                        elapsed = int((time.time() - start) * 1000)
+                        # 审计：SSE 复杂查询最终结果，使用同一 query_id。
+                        audit_logger.log(
+                            query_id=query_id,
+                            user_id=req.user_id,
+                            tenant_id=req.tenant_id,
+                            question=req.question,
+                            dsl_json=agent_result.dsl,
+                            sql_text=agent_result.sql,
+                            status=agent_result.status,
+                            execution_time_ms=elapsed,
+                            rows_returned=len(agent_result.data) if agent_result.data else 0,
+                            trace_json=agent_result.trace or [{"step": "agent", "status": agent_result.status}],
+                            error_message=agent_result.error,
                         )
                         await queue.put({
                             "event": "result",
@@ -864,10 +1205,23 @@ def create_app(
                                 "sql": agent_result.sql,
                                 "explanation": agent_result.explanation,
                                 "confidence": agent_result.confidence,
+                                "trace": agent_result.trace,
+                                "query_id": query_id,
                             },
                         })
                     except Exception as exc:
-                        await queue.put({"event": "error", "data": {"error": str(exc)}})
+                        elapsed = int((time.time() - start) * 1000)
+                        audit_logger.log(
+                            query_id=query_id,
+                            user_id=req.user_id,
+                            tenant_id=req.tenant_id,
+                            question=req.question,
+                            status="error",
+                            execution_time_ms=elapsed,
+                            error_message=str(exc),
+                            trace_json=[],
+                        )
+                        await queue.put({"event": "error", "data": {"error": str(exc), "query_id": query_id}})
                     finally:
                         await queue.put(None)  # sentinel
 
@@ -882,7 +1236,8 @@ def create_app(
                     payload = event.get("data", {})
                     yield f"event: {event_type}\ndata: {json.dumps(payload, default=str)}\n\n"
 
-                yield "event: done\ndata: {}\n\n"
+                # 最终 done 事件必须携带 query_id，便于客户端关联审计/反馈。
+                yield f"event: done\ndata: {json.dumps({'query_id': query_id})}\n\n"
 
             return StreamingResponse(
                 agent_event_generator(),
@@ -914,9 +1269,77 @@ def create_app(
         config = {"configurable": {"thread_id": query_id}}
 
         async def event_generator():
-            async for chunk in query_graph.astream(state, config, stream_mode="updates"):
-                yield f"event: update\ndata: {json.dumps(chunk, default=str)}\n\n"
-            yield "event: done\ndata: {}\n\n"
+            chunks: list = []
+            stream_error: str | None = None
+            stream_error_code: str | None = None
+            try:
+                async for chunk in graph.astream(state, config, stream_mode="updates"):
+                    chunks.append(chunk)
+                    yield f"event: update\ndata: {json.dumps(chunk, default=str)}\n\n"
+            except Exception as exc:  # noqa: BLE001 — astream 抛异常必须输出 error 事件并审计
+                stream_error = _safe_error_message(exc)
+                stream_error_code = "INTERNAL_ERROR"
+
+            elapsed = int((time.time() - start) * 1000)
+
+            if stream_error is not None:
+                # astream 抛异常：写 error Audit，输出结构化 error 事件，正常结束流。
+                audit_logger.log(
+                    query_id=query_id,
+                    user_id=req.user_id,
+                    tenant_id=req.tenant_id,
+                    question=req.question,
+                    status="error",
+                    execution_time_ms=elapsed,
+                    error_code=stream_error_code,
+                    error_message=stream_error,
+                    trace_json=[],
+                )
+                yield f"event: error\ndata: {json.dumps({'query_id': query_id, 'error': stream_error, 'error_code': stream_error_code}, default=str, ensure_ascii=False)}\n\n"
+                yield f"event: done\ndata: {json.dumps({'query_id': query_id})}\n\n"
+                return
+
+            # 合并所有 update chunk 得到真实最终状态，而不是用最后一个 chunk。
+            final_state = _merge_update_chunks(chunks)
+            status = final_state.get("status") or "success"
+            dsl_obj = final_state.get("dsl")
+            dsl_out = dsl_obj.model_dump() if hasattr(dsl_obj, "model_dump") else dsl_obj
+            sql_out = final_state.get("sql")
+            data_out = final_state.get("data")
+            trace_out = _build_trace(final_state)
+            error_out = final_state.get("error")
+            error_code_out = final_state.get("error_code")
+
+            # 审计：SSE 简单查询最终结果（成功 / clarification / error 均记录）。
+            audit_logger.log(
+                query_id=query_id,
+                user_id=req.user_id,
+                tenant_id=req.tenant_id,
+                question=req.question,
+                dsl_json=dsl_out,
+                sql_text=sql_out,
+                status=status,
+                execution_time_ms=elapsed,
+                rows_returned=len(data_out) if data_out else 0,
+                trace_json=trace_out,
+                error_code=error_code_out,
+                error_message=error_out,
+            )
+
+            # result 事件至少包含 query_id / status / dsl / sql / data / error。
+            result_payload = {
+                "query_id": query_id,
+                "status": status,
+                "dsl": dsl_out,
+                "sql": sql_out,
+                "data": data_out,
+                "rows_returned": len(data_out) if data_out else 0,
+            }
+            if status == "error":
+                result_payload["error"] = error_out
+                result_payload["error_code"] = error_code_out
+            yield f"event: result\ndata: {json.dumps(result_payload, default=str, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'query_id': query_id})}\n\n"
 
         return StreamingResponse(
             event_generator(),
@@ -961,31 +1384,51 @@ def create_app(
         )
 
     @app.get("/api/v1/schema")
-    async def get_schema() -> SchemaResponse:
+    async def get_schema(domain: str = Query(default="ecommerce")) -> SchemaResponse:
+        rd = _domain_registry(domain)
         data_sources = [
             {"name": k, "table": v.get("table", k), "metrics": v.get("metrics", []), "dimensions": v.get("dimensions", [])}
-            for k, v in registry_dict.get("data_sources", {}).items()
+            for k, v in rd.get("data_sources", {}).items()
         ]
         metrics = [
             {"name": k, "expr": v.get("expr", ""), "description": v.get("description", "")}
-            for k, v in registry_dict.get("metrics", {}).items()
+            for k, v in rd.get("metrics", {}).items()
         ]
         dimensions = [
             {"name": k, "column": v.get("column", k), "description": v.get("description", "")}
-            for k, v in registry_dict.get("dimensions", {}).items()
+            for k, v in rd.get("dimensions", {}).items()
         ]
         return SchemaResponse(data_sources=data_sources, metrics=metrics, dimensions=dimensions)
 
     @app.get("/api/v1/metrics")
-    async def get_metrics() -> MetricsResponse:
+    async def get_metrics(domain: str = Query(default="ecommerce")) -> MetricsResponse:
+        rd = _domain_registry(domain)
         metrics = [
             {"name": k, "expr": v.get("expr", ""), "description": v.get("description", "")}
-            for k, v in registry_dict.get("metrics", {}).items()
+            for k, v in rd.get("metrics", {}).items()
         ]
         return MetricsResponse(metrics=metrics)
 
     @app.post("/api/v1/feedback")
     async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
+        # 默认走数据库 FeedbackStore：校验 Audit 关联 + 去重。
+        if feedback_store is not None:
+            feedback_id, deduplicated = feedback_store.submit(
+                query_id=req.query_id,
+                user_id=req.user_id,
+                tenant_id=req.tenant_id,
+                is_correct=req.is_correct,
+                issue_type=req.issue_type,
+                corrected_dsl=req.corrected_dsl,
+                comment=req.comment,
+            )
+            return FeedbackResponse(
+                status="received",
+                query_id=req.query_id,
+                feedback_id=feedback_id,
+                deduplicated=deduplicated,
+            )
+        # 兼容路径：JSONL collector（无校验、无去重）
         feedback_collector.collect(
             query_id=req.query_id,
             user_id=req.user_id,
@@ -993,6 +1436,66 @@ def create_app(
             comment=req.comment,
         )
         return FeedbackResponse(status="received", query_id=req.query_id)
+
+    @app.get("/api/v1/admin/feedback")
+    async def list_feedback(
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        query_id: str | None = None,
+        review_status: str | None = None,
+        is_correct: bool | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ):
+        if feedback_store is None:
+            return {"status": "success", "total": 0, "limit": limit, "offset": offset, "items": []}
+        # 管理 API 必须限定租户范围，禁止未限定 tenant 的全量查询。
+        if not tenant_id or not tenant_id.strip():
+            raise ValidationError("管理接口必须提供 tenant_id 以限定租户范围")
+        if not (1 <= limit <= 200):
+            raise ValidationError("limit must be between 1 and 200")
+        records, total = feedback_store.list(
+            user_id=user_id, tenant_id=tenant_id, query_id=query_id,
+            review_status=review_status, is_correct=is_correct,
+            limit=limit, offset=offset,
+        )
+        items = []
+        for rec in records:
+            item = rec.to_dict(include_dsl=False)
+            # 关联审计摘要（不复制 SQL/Trace，仅必要元数据）
+            audit = audit_logger.get_query(rec.query_id) or {}
+            item["audit_summary"] = {
+                "question": audit.get("question"),
+                "status": audit.get("status"),
+                "execution_time_ms": audit.get("execution_time_ms"),
+            }
+            items.append(item)
+        return {"status": "success", "total": total, "limit": limit, "offset": offset, "items": items}
+
+    @app.get("/api/v1/admin/feedback/{feedback_id}")
+    async def get_feedback(feedback_id: str, tenant_id: str | None = None):
+        # 详情接口必须要求非空 tenant_id，与列表接口保持一致的租户边界。
+        # 未提供或空白一律拒绝（400），不泄露记录是否存在。
+        if not tenant_id or not tenant_id.strip():
+            raise ValidationError("管理接口必须提供 tenant_id 以限定租户范围")
+        tenant_id = tenant_id.strip()
+        if feedback_store is None:
+            raise NotFoundError(f"feedback not found: {feedback_id}")
+        # 租户校验下沉到 Store：跨租户记录直接当作不存在，返回 404。
+        rec = feedback_store.get(feedback_id, tenant_id=tenant_id)
+        if rec is None:
+            raise NotFoundError(f"feedback not found: {feedback_id}")
+        item = rec.to_dict()
+        # 审计摘要同样按同一 tenant_id 过滤，杜绝跨租户数据进入响应。
+        audit = audit_logger.get_query(rec.query_id, tenant_id=tenant_id) or {}
+        # 返回原始问题与原始 DSL 便于联合排查；SQL/Trace 仍以审计接口为来源。
+        item["audit_summary"] = {
+            "question": audit.get("question"),
+            "status": audit.get("status"),
+            "dsl": audit.get("dsl"),
+            "execution_time_ms": audit.get("execution_time_ms"),
+        }
+        return {"status": "success", "item": item}
 
     @app.get("/api/v1/admin/enums")
     async def get_enums() -> EnumsResponse:
@@ -1003,8 +1506,14 @@ def create_app(
         return RefreshEnumsResponse(status="refreshed")
 
     @app.get("/api/v1/admin/audit/queries/{query_id}")
-    async def get_audit_query(query_id: str) -> AuditQueryDetailResponse:
-        row = audit_logger.get_query(query_id)
+    async def get_audit_query(query_id: str, tenant_id: str | None = None) -> AuditQueryDetailResponse:
+        # 详情接口必须要求非空 tenant_id，与列表接口保持一致的租户边界。
+        # 未提供或空白一律拒绝（400），不泄露记录是否存在。
+        if not tenant_id or not tenant_id.strip():
+            raise ValidationError("管理接口必须提供 tenant_id 以限定租户范围")
+        tenant_id = tenant_id.strip()
+        # 租户校验下沉到 Logger：跨租户记录直接当作不存在，返回 404。
+        row = audit_logger.get_query(query_id, tenant_id=tenant_id)
         if row is None:
             raise NotFoundError(f"audit record not found: query_id={query_id}")
         row["created_at"] = str(row.get("created_at") or "")
@@ -1012,8 +1521,8 @@ def create_app(
 
     @app.get("/api/v1/admin/audit/queries")
     async def list_audit_queries(
-        user_id: str | None = None,
         tenant_id: str | None = None,
+        user_id: str | None = None,
         status_: str | None = Query(None, alias="status"),
         start_time: str | None = None,
         end_time: str | None = None,
@@ -1021,6 +1530,9 @@ def create_app(
         limit: int = 20,
         offset: int = 0,
     ) -> AuditQueryListResponse:
+        # 管理 API 必须限定租户范围，禁止未限定 tenant 的全量查询。
+        if not tenant_id or not tenant_id.strip():
+            raise ValidationError("管理接口必须提供 tenant_id 以限定租户范围")
         if not (1 <= limit <= 100):
             raise ValidationError("limit must be between 1 and 100")
         if offset < 0:

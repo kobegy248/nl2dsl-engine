@@ -71,13 +71,27 @@ class AuditLogger:
             result = conn.execute(text(sql))
             return [dict(row._mapping) for row in result]
 
-    def get_query(self, query_id: str) -> dict | None:
-        """Return one audit record (with dsl/sql/trace decoded), or None."""
+    def get_query(self, query_id: str, *, tenant_id: str | None = None) -> dict | None:
+        """Return one audit record (with dsl/sql/trace decoded), or None.
+
+        当传入 ``tenant_id`` 时，在 SQL 层直接加上租户过滤：记录不存在或属于
+        其他租户都返回 ``None``，调用方无需先取出跨租户数据再判断。这是详情
+        接口租户隔离的下沉点，避免 API 层泄露跨租户记录是否存在。
+        """
         with self._engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT * FROM nl2dsl_audit_log WHERE query_id = :qid"),
-                {"qid": query_id},
-            )
+            if tenant_id:
+                result = conn.execute(
+                    text(
+                        "SELECT * FROM nl2dsl_audit_log "
+                        "WHERE query_id = :qid AND tenant_id = :tenant_id"
+                    ),
+                    {"qid": query_id, "tenant_id": tenant_id},
+                )
+            else:
+                result = conn.execute(
+                    text("SELECT * FROM nl2dsl_audit_log WHERE query_id = :qid"),
+                    {"qid": query_id},
+                )
             row = result.first()
         if row is None:
             return None

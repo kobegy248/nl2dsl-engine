@@ -52,6 +52,37 @@ class RuleBasedDSLGenerator(DSLGenerator):
         self._registry = registry or {}
 
     def generate(self, question: str, data_source: str | None = None) -> DSL:
+        """Generate DSL from natural language question.
+
+        Registry-aware dispatch (P0: bank / supply_chain infinite-recursion fix):
+
+        - When the registry is the ecommerce sample registry, use the ecommerce
+          keyword rules (unchanged) — preserves existing ecommerce behaviour.
+        - For any other domain (bank / supply_chain / ...), select
+          ``data_source`` / metric alias / dimension **from that domain's
+          registry** via description keyword matching, so the generated DSL is
+          valid and executable against the domain's schema. Never invents
+          ecommerce metrics / dimensions / data_source for a non-ecommerce
+          domain (the prior hardcoding made bank/supply_chain DSL fail
+          validation and triggered the validate<->correct_dsl infinite loop).
+        """
+        registry = self._registry or {}
+        if self._is_ecommerce_registry(registry):
+            return self._generate_ecommerce(question, data_source)
+        return self._generate_registry_driven(question, data_source)
+
+    @staticmethod
+    def _is_ecommerce_registry(registry: dict) -> bool:
+        data_sources = registry.get("data_sources", {}) or {}
+        metrics = registry.get("metrics", {}) or {}
+        # No data_sources (mock / test default / partial registry) -> original
+        # ecommerce keyword behaviour. The registry-driven path needs real
+        # data_sources to select from.
+        if not data_sources:
+            return True
+        return "orders" in data_sources and "sales_amount" in metrics
+
+    def _generate_ecommerce(self, question: str, data_source: str | None = None) -> DSL:
         ds = data_source or "orders"
         metrics = []
         dimensions = []
@@ -177,6 +208,291 @@ class RuleBasedDSLGenerator(DSLGenerator):
             order_by=order_by or None,
             limit=limit,
             data_source=ds,
+            time_field=time_field if time_range else None,
+            time_range=time_range,
+            post_process=post_process,
+        )
+
+    # ------------------------------------------------------------------
+    # Registry-driven generation (non-ecommerce domains: bank / supply_chain)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _func_of_expr(expr: str) -> str:
+        """Derive the aggregation func from a registered metric expr.
+
+        ``SUM(x)`` -> ``sum``, ``COUNT(DISTINCT x)`` -> ``count``,
+        ``AVG(x)`` -> ``avg``, ``MIN/MAX`` likewise. Complex exprs
+        (``SUM(CASE WHEN ...)``) still yield their outer func. Falls back to
+        ``sum`` when the expr is empty / unparseable.
+        """
+        m = re.match(r"^\s*([A-Za-z_]+)\s*\(", expr or "")
+        if not m:
+            return "sum"
+        fn = m.group(1).lower()
+        return fn if fn in {"sum", "avg", "count", "min", "max"} else "sum"
+
+    @staticmethod
+    def _make_aggregation(alias: str, metrics_cfg: dict) -> Aggregation:
+        """Build an Aggregation whose alias is a registered metric.
+
+        ``field`` is the inner column of a simple expr (``SUM(acct_bal)`` ->
+        ``acct_bal``); for complex exprs (``CASE WHEN``) it falls back to the
+        alias. The SQLBuilder treats the registered ``expr`` (looked up by
+        alias) as authoritative, so ``field`` is only a fallback.
+        """
+        cfg = metrics_cfg.get(alias, {}) or {}
+        expr = cfg.get("expr") or ""
+        func = RuleBasedDSLGenerator._func_of_expr(expr)
+        field = alias
+        m = re.match(
+            r"^[A-Za-z_]+\(\s*(?:DISTINCT\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\)$",
+            expr, re.IGNORECASE,
+        )
+        if m:
+            field = m.group(1)
+        return Aggregation(func=func, field=field, alias=alias)
+
+    @staticmethod
+    def _desc_clean(desc: str) -> str:
+        """Strip parentheticals from a registry description for matching."""
+        return re.sub(r"[（(].*?[)）]", "", desc or "").strip()
+
+    @classmethod
+    def _score_terms(cls, question: str, desc: str) -> int:
+        """Score overlap between question and a description's n-gram terms.
+
+        Exact description substring scores highest (len*3); individual 3-gram
+        and 2-gram overlaps add len each. Longer matched terms outweigh
+        shorter ones so a specific match beats a generic one.
+        """
+        q = question
+        desc_clean = cls._desc_clean(desc)
+        score = 0
+        if desc_clean and desc_clean in q:
+            score += len(desc_clean) * 3
+        seen: set[str] = set()
+        for n in (3, 2):
+            for i in range(len(desc_clean) - n + 1):
+                term = desc_clean[i:i + n]
+                if len(term) >= 2 and term not in seen:
+                    seen.add(term)
+                    if term in q:
+                        score += len(term)
+        return score
+
+    def _score_metric(self, question: str, alias: str, cfg: dict) -> int:
+        desc = (cfg.get("description") or "").strip()
+        expr = cfg.get("expr") or ""
+        q = question
+        score = self._score_terms(q, desc)
+        if alias and alias in q:
+            score += len(alias)
+        func = self._func_of_expr(expr)
+        # Func hints disambiguate metrics with overlapping description terms.
+        if func == "avg" and ("平均" in q or "avg" in q.lower()):
+            score += 4
+        if func == "min" and ("最低" in q or "最少" in q):
+            score += 4
+        if func == "max" and ("最高" in q or "最多" in q):
+            score += 4
+        if func == "count" and "笔数" in q:
+            score += 3
+        # Amount/price semantic boost: when the question asks for a monetary
+        # amount, prefer metrics whose description carries an amount keyword.
+        if any(a in q for a in ("金额", "余额", "成本")) and any(
+            a in desc for a in ("金额", "余额", "成本", "持有")
+        ):
+            score += 6
+        return score
+
+    def _score_dim(self, question: str, dim: str, cfg: dict) -> int:
+        desc = (cfg.get("description") or "").strip()
+        score = self._score_terms(question, desc)
+        if dim and dim in question:
+            score += len(dim)
+        return score
+
+    def _choose_data_source(
+        self, question: str, data_sources: dict, metrics_cfg: dict, dims_cfg: dict,
+    ) -> str:
+        """Pick the data_source whose metrics/dimensions best match the question.
+
+        Falls back to the first data_source (registry-defined default) when no
+        keyword matches — never to ecommerce's ``orders``.
+        """
+        if not data_sources:
+            return "orders"
+        best_ds: str | None = None
+        best_score = 0
+        for name, cfg in data_sources.items():
+            score = 0
+            for m in (cfg.get("metrics") or []):
+                score += self._score_metric(question, m, metrics_cfg.get(m, {}) or {})
+            for d in (cfg.get("dimensions") or []):
+                score += self._score_dim(question, d, dims_cfg.get(d, {}) or {})
+            if score > best_score:
+                best_score = score
+                best_ds = name
+        if best_ds is not None and best_score > 0:
+            return best_ds
+        return next(iter(data_sources))
+
+    def _choose_metrics(
+        self, question: str, ds_metric_names: list[str], metrics_cfg: dict,
+    ) -> list[Aggregation]:
+        scored = [
+            (self._score_metric(question, name, metrics_cfg.get(name, {}) or {}), name)
+            for name in ds_metric_names
+        ]
+        scored = [(s, n) for s, n in scored if s > 0]
+        if not scored:
+            # Default: first metric of the data_source (registry-defined,
+            # never an ecommerce metric).
+            return [self._make_aggregation(ds_metric_names[0], metrics_cfg)] if ds_metric_names else []
+        # Stable order: by score desc, then registry order.
+        order_index = {n: i for i, n in enumerate(ds_metric_names)}
+        scored.sort(key=lambda x: (-x[0], order_index[x[1]]))
+        chosen = [scored[0][1]]
+        # Multi-metric when the question explicitly joins two metrics with
+        # 和/与/, and the second-best scores reasonably close to the top.
+        if len(scored) >= 2 and any(sep in question for sep in ("和", "与", "，", ",")):
+            if scored[1][0] * 5 >= scored[0][0] * 2:
+                chosen.append(scored[1][1])
+        return [self._make_aggregation(n, metrics_cfg) for n in chosen]
+
+    def _reachable_dims(
+        self, ds_cfg: dict, data_sources: dict,
+    ) -> list[str]:
+        """Dimensions usable from a data_source: its own dims plus dims of any
+        data_source whose physical table is the primary table or a declared
+        join target (mirror of DSLValidator._dim_reachable_via_joins)."""
+        reachable_tables: set[str] = {ds_cfg.get("table", "")}
+        joins = ds_cfg.get("joins", {}) or {}
+        if isinstance(joins, dict):
+            reachable_tables.update(joins.keys())
+        reachable_tables.discard("")
+        seen: list[str] = []
+        for cfg in data_sources.values():
+            if cfg.get("table") in reachable_tables:
+                for d in (cfg.get("dimensions") or []):
+                    if d not in seen:
+                        seen.append(d)
+        return seen
+
+    def _choose_dimensions(
+        self, question: str, ds_cfg: dict, data_sources: dict, dims_cfg: dict,
+    ) -> list[str]:
+        """Pick the grouping dimension for the question.
+
+        Pure aggregate questions (``查询客户数量`` / ``总库存量``) yield no
+        dimensions. Grouping (``各账户类型`` / ``按供应商``) or ranking
+        (``交易笔数最多的客户``) questions yield exactly the best-matching
+        dimension — not every dimension whose description shares a noun with
+        the metric (that would wrongly group ``查询客户数量`` by customer_*).
+        Candidates include join-reachable dimensions (e.g. ``customer_name``
+        from a joined customer table). Display-name dimensions (alias
+        ``*_name`` / description 含 名称/姓名) win ties; the noun following a
+        ranking cue's ``的`` (``最多的客户`` -> ``客户``) gets an extra boost.
+        """
+        group_cue = any(c in question for c in ("各", "每个", "每种", "按"))
+        # "前" alone is too broad ("提前期" contains it); require 前+digit or
+        # the english "top" marker.
+        ranking_cue = any(k in question for k in ("最多", "最高", "最低", "最少")) or bool(
+            re.search(r"前\d", question)
+        ) or "top" in question.lower()
+        candidates = self._reachable_dims(ds_cfg, data_sources)
+        if not (group_cue or ranking_cue) or not candidates:
+            return []
+        # Noun targeted by a ranking cue: substring after the last "的".
+        rank_target = ""
+        if ranking_cue and "的" in question:
+            rank_target = question.rsplit("的", 1)[-1].strip()
+        order_index = {d: i for i, d in enumerate(candidates)}
+        scored: list[tuple[int, str]] = []
+        for d in candidates:
+            cfg = dims_cfg.get(d, {}) or {}
+            s = self._score_dim(question, d, cfg)
+            if s > 0 and (
+                d.endswith("_name")
+                or "名称" in (cfg.get("description") or "")
+                or "姓名" in (cfg.get("description") or "")
+            ):
+                s += 1
+            if rank_target and rank_target in (cfg.get("description") or ""):
+                s += 3
+            scored.append((s, d))
+        scored.sort(key=lambda x: (-x[0], order_index[x[1]]))
+        if scored and scored[0][0] > 0:
+            return [scored[0][1]]
+        # Grouping cue present but no dim matched — default to the first
+        # direct dim of the data_source (registry-defined).
+        direct = ds_cfg.get("dimensions") or []
+        return [direct[0]] if direct else []
+
+    def _build_dimension_filters(
+        self, question: str, ds_dim_names: list[str], dims_cfg: dict,
+    ) -> list[Filter]:
+        """Emit value_map filters for any data_source dimension whose mapped
+        value appears in the question (e.g. 华东 -> region_name='HD')."""
+        filters: list[Filter] = []
+        for d in ds_dim_names:
+            vm = (dims_cfg.get(d, {}) or {}).get("value_map") or {}
+            for semantic_value, code in vm.items():
+                if semantic_value in question:
+                    op = "!=" if _is_negated(question, semantic_value) else "="
+                    filters.append(Filter(field=d, operator=op, value=code))
+        return filters
+
+    def _generate_registry_driven(
+        self, question: str, data_source: str | None = None,
+    ) -> DSL:
+        """Generate a registry-valid DSL for a non-ecommerce domain.
+
+        Every metric alias / dimension / data_source is selected from the
+        domain's registry, so the DSL passes validation and executes against
+        the domain's schema (no ecommerce hardcoding).
+        """
+        registry = self._registry or {}
+        data_sources = registry.get("data_sources", {}) or {}
+        metrics_cfg = registry.get("metrics", {}) or {}
+        dims_cfg = registry.get("dimensions", {}) or {}
+
+        ds_name = self._choose_data_source(question, data_sources, metrics_cfg, dims_cfg)
+        ds_cfg = data_sources.get(ds_name, {}) or {}
+        ds_metric_names = ds_cfg.get("metrics", []) or []
+        ds_dim_names = ds_cfg.get("dimensions", []) or []
+
+        metrics = self._choose_metrics(question, ds_metric_names, metrics_cfg)
+        dimensions = self._choose_dimensions(question, ds_cfg, data_sources, dims_cfg)
+        filters = self._build_dimension_filters(question, ds_dim_names, dims_cfg)
+
+        # Time range from the data_source's declared time_field.
+        time_field = ds_cfg.get("time_field") or self._resolve_time_field(ds_name)
+        time_range = None
+        if time_field:
+            resolved = resolve_time(question, time_field)
+            if resolved is not None:
+                time_range = resolved.time_range
+
+        # Order by only when the question asks for ranking.
+        order_by: list[OrderBy] = []
+        if metrics and any(k in question for k in ("最多", "最高", "最低", "最少", "前", "top")):
+            alias = metrics[0].alias or metrics[0].field
+            direction = "asc" if any(k in question for k in ("最低", "最少", "后")) else "desc"
+            order_by.append(OrderBy(field=alias, direction=direction))
+
+        limit = 100 if ("全部" in question or "所有" in question) else 10
+
+        post_process = self._build_post_process(question=question, metrics=metrics, dimensions=dimensions)
+
+        return DSL(
+            metrics=metrics or None,
+            dimensions=dimensions or None,
+            filters=filters or None,
+            order_by=order_by or None,
+            limit=limit,
+            data_source=ds_name,
             time_field=time_field if time_range else None,
             time_range=time_range,
             post_process=post_process,

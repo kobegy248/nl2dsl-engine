@@ -263,6 +263,9 @@ class AgentOrchestrator:
         """
         domain_context = self._get_domain_context(domain)
 
+        # Agent 编排 Trace：记录真实步骤，供审计与质量分析器判定完整性。
+        trace: list[dict] = [{"step": "agent", "status": "start"}]
+
         # ------------------------------------------------------------------
         # Step 1: Extract entities
         # ------------------------------------------------------------------
@@ -271,7 +274,8 @@ class AgentOrchestrator:
         except Exception as exc:
             logger.error("[orchestrator] Entity extraction failed: %s", exc, exc_info=True)
             await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "entity_extraction"})
-            return AgentResult(status="error", error=f"Entity extraction failed: {exc}")
+            trace.append({"step": "entity_extraction", "status": "error", "error": str(exc)})
+            return AgentResult(status="error", error=f"Entity extraction failed: {exc}", trace=trace)
 
         # ------------------------------------------------------------------
         # Step 2: Route via AgentController
@@ -281,7 +285,8 @@ class AgentOrchestrator:
         except Exception as exc:
             logger.error("[orchestrator] Controller routing failed: %s", exc, exc_info=True)
             await self._emit_event(sse_callback, "error", {"error": str(exc), "step": "route"})
-            return AgentResult(status="error", error=f"Routing failed: {exc}")
+            trace.append({"step": "route", "status": "error", "error": str(exc)})
+            return AgentResult(status="error", error=f"Routing failed: {exc}", trace=trace)
 
         # ------------------------------------------------------------------
         # Step 3: Dispatch based on execution plan type
@@ -293,6 +298,7 @@ class AgentOrchestrator:
                 sub_queries=[SubQuery(id="sq-1", description=question, depends_on=[])],
                 reasoning="Simple execution plan: single metric + single dimension",
             )
+            trace.append({"step": "plan", "status": "success", "intent": plan.intent, "sub_query_count": len(plan.sub_queries)})
             await self._emit_event(sse_callback, "plan", {"plan": plan})
             return await self._run_simple_path(
                 question=question,
@@ -301,11 +307,13 @@ class AgentOrchestrator:
                 user_id=user_id,
                 tenant_id=tenant_id,
                 sse_callback=sse_callback,
+                trace=trace,
             )
 
         if isinstance(execution_plan, ComplexExecutionPlan):
             # Use the plan embedded in the ComplexExecutionPlan
             plan = execution_plan.plan
+            trace.append({"step": "plan", "status": "success", "intent": plan.intent, "sub_query_count": len(plan.sub_queries)})
             await self._emit_event(sse_callback, "plan", {"plan": plan})
             return await self._run_complex_path(
                 question=question,
@@ -314,6 +322,7 @@ class AgentOrchestrator:
                 user_id=user_id,
                 tenant_id=tenant_id,
                 sse_callback=sse_callback,
+                trace=trace,
             )
 
         # ExplorationPlan (and any other): delegate to simple path as MVP placeholder
@@ -322,6 +331,7 @@ class AgentOrchestrator:
             sub_queries=[SubQuery(id="sq-1", description=question, depends_on=[])],
             reasoning="Exploration plan: delegated to simple path (MVP)",
         )
+        trace.append({"step": "plan", "status": "success", "intent": plan.intent, "sub_query_count": len(plan.sub_queries)})
         await self._emit_event(sse_callback, "plan", {"plan": plan})
         return await self._run_exploration_path(
             question=question,
@@ -330,6 +340,7 @@ class AgentOrchestrator:
             user_id=user_id,
             tenant_id=tenant_id,
             sse_callback=sse_callback,
+            trace=trace,
         )
 
     async def _run_simple_path(
@@ -340,10 +351,13 @@ class AgentOrchestrator:
         user_id: str,
         tenant_id: str,
         sse_callback: callable | None,
+        trace: list[dict] | None = None,
     ) -> AgentResult:
         """Execute a single-query question directly through the graph."""
+        trace = trace if trace is not None else []
         sub_query = plan.sub_queries[0]
 
+        trace.append({"step": "sub_query_start", "sub_query_id": sub_query.id, "description": sub_query.description})
         await self._emit_event(
             sse_callback,
             "sub_query_start",
@@ -366,6 +380,7 @@ class AgentOrchestrator:
                 exc,
                 exc_info=True,
             )
+            trace.append({"step": "sub_query_end", "sub_query_id": sub_query.id, "status": "error", "error": str(exc)})
             await self._emit_event(
                 sse_callback,
                 "sub_query_result",
@@ -379,6 +394,7 @@ class AgentOrchestrator:
                 status="error",
                 error=f"Query execution failed: {exc}",
                 plan=plan,
+                trace=trace,
             )
 
         data = graph_result.get("data") or []
@@ -389,6 +405,8 @@ class AgentOrchestrator:
         dsl_model = graph_result.get("dsl")
         dsl_dict = dsl_model.model_dump() if dsl_model is not None else None
         sql = graph_result.get("sql")
+        # 子查询执行证据：记录执行状态（含 graph 内 build_sql/execute_sql 摘要）。
+        trace.append({"step": "sub_query_end", "sub_query_id": sub_query.id, "status": status})
 
         await self._emit_event(
             sse_callback,
@@ -408,6 +426,7 @@ class AgentOrchestrator:
                 error=error_msg,
                 plan=plan,
                 confidence=confidence,
+                trace=trace,
             )
 
         if status == "clarification":
@@ -422,10 +441,12 @@ class AgentOrchestrator:
                 error=clarification_msg,
                 plan=plan,
                 confidence=confidence,
+                trace=trace,
             )
 
         # Generate explanation
         explanation = self._generate_explanation(plan, question, data)
+        trace.append({"step": "explanation", "status": "success"})
         await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
         return AgentResult(
@@ -436,6 +457,7 @@ class AgentOrchestrator:
             explanation=explanation,
             confidence=confidence,
             plan=plan,
+            trace=trace,
         )
 
     async def _run_complex_path(
@@ -446,10 +468,13 @@ class AgentOrchestrator:
         user_id: str,
         tenant_id: str,
         sse_callback: callable | None,
+        trace: list[dict] | None = None,
     ) -> AgentResult:
         """Execute a complex query by dispatching sub-queries, aggregating, and explaining."""
+        trace = trace if trace is not None else []
         # Emit sub_query_start for each sub-query
         for sq in plan.sub_queries:
+            trace.append({"step": "sub_query_start", "sub_query_id": sq.id, "description": sq.description})
             await self._emit_event(
                 sse_callback,
                 "sub_query_start",
@@ -483,6 +508,7 @@ class AgentOrchestrator:
                 exc,
                 exc_info=True,
             )
+            trace.append({"step": "dispatch", "status": "error", "error": str(exc)})
             await self._emit_event(
                 sse_callback,
                 "error",
@@ -492,10 +518,12 @@ class AgentOrchestrator:
                 status="error",
                 error=f"Dispatch failed: {exc}",
                 plan=plan,
+                trace=trace,
             )
 
-        # Emit sub_query_result for each result
+        # Emit sub_query_result for each result + 记录子查询执行状态
         for sq_id, result in sub_results.items():
+            trace.append({"step": "sub_query_end", "sub_query_id": sq_id, "status": result.status})
             await self._emit_event(
                 sse_callback,
                 "sub_query_result",
@@ -520,15 +548,18 @@ class AgentOrchestrator:
                 for r in non_executable
             )
             logger.error("[orchestrator] All sub-queries blocked: %s", messages)
+            trace.append({"step": "aggregation", "status": "skipped", "reason": "all_subqueries_blocked"})
             return AgentResult(
                 status="error",
                 error=f"All sub-queries blocked: {messages}",
                 plan=plan,
+                trace=trace,
             )
 
         # Aggregate results (including success and warning sub-queries)
         aggregator = Aggregate()
         aggregated = aggregator.run(sub_results, plan.intent)
+        trace.append({"step": "aggregation", "status": "success", "rows": len(aggregated.get("rows", []))})
         await self._emit_event(sse_callback, "aggregate", {"result": aggregated})
 
         # Extract rows for explanation
@@ -536,6 +567,7 @@ class AgentOrchestrator:
 
         # Generate explanation with quality annotations
         explanation = self._generate_explanation(plan, question, rows, sub_results)
+        trace.append({"step": "explanation", "status": "success"})
         await self._emit_event(sse_callback, "explain", {"explanation": explanation})
 
         # Compute confidence from sub-query confidence scores (weighted average)
@@ -563,6 +595,7 @@ class AgentOrchestrator:
             explanation=explanation,
             confidence=confidence,
             plan=plan,
+            trace=trace,
         )
 
     async def _run_exploration_path(
@@ -573,6 +606,7 @@ class AgentOrchestrator:
         user_id: str,
         tenant_id: str,
         sse_callback: callable | None,
+        trace: list[dict] | None = None,
     ) -> AgentResult:
         """Execute an exploration query — MVP placeholder delegating to simple path."""
         logger.info("[orchestrator] Exploration path: delegating to simple path (MVP)")
@@ -583,6 +617,7 @@ class AgentOrchestrator:
             user_id=user_id,
             tenant_id=tenant_id,
             sse_callback=sse_callback,
+            trace=trace,
         )
 
     @staticmethod

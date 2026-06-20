@@ -302,10 +302,10 @@ def _fix_metric_format(m: dict, metrics_config: dict | None = None) -> dict:
     """
     # LLM may use 'name' or 'metric' instead of 'alias'
     alias = m.get("alias") or m.get("name") or m.get("metric")
+    parsed = None
     if alias:
         alias = alias.strip().lower().replace(" ", "_")
         # 1. Try domain-specific mapping from registry first
-        parsed = None
         if metrics_config and alias in metrics_config:
             expr = metrics_config[alias].get("expr", "")
             if expr:
@@ -317,11 +317,20 @@ def _fix_metric_format(m: dict, metrics_config: dict | None = None) -> dict:
             m.setdefault("func", parsed[0])
             m.setdefault("field", parsed[1])
             m["alias"] = alias  # overwrite with normalized alias
-    # Ensure required fields exist
-    if not m.get("func"):
+    # Normalize func: LLM 常返回大写 SUM/COUNT 等，必须归一化为小写枚举，
+    # 否则 DSL.model_validate 会因 literal_error 崩溃，导致整条查询失败。
+    # 非法 func（非枚举值）回退到 registry 解析值或默认 sum。
+    _VALID_FUNCS = {"sum", "avg", "count", "min", "max"}
+    raw_func = str(m.get("func", "")).strip().lower()
+    if raw_func in _VALID_FUNCS:
+        m["func"] = raw_func
+    elif parsed:
+        m["func"] = parsed[0]
+    else:
         m["func"] = "sum"
+    # Ensure required fields exist
     if not m.get("field"):
-        m["field"] = "order_amount"
+        m["field"] = parsed[1] if parsed else "order_amount"
     if not m.get("alias"):
         m["alias"] = m["field"]
     return m

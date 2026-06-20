@@ -57,7 +57,7 @@ export interface QueryRequest {
 }
 
 export interface QueryResponse {
-  status: string;
+  status: 'success' | 'warning' | 'error' | 'clarification' | 'pending_review';
   data: Record<string, unknown>[] | null;
   dsl: DSL | null;
   sql: string | null;

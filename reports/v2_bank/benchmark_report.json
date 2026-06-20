@@ -1,0 +1,289 @@
+{
+  "by_domain": {
+    "bank": {
+      "failed": 5,
+      "overall_score": 0.5,
+      "passed": 5,
+      "total": 10
+    }
+  },
+  "by_matrix": [
+    {
+      "generator": "rule",
+      "optimizer": "off",
+      "overall_score": 0.5,
+      "passed": 5,
+      "total": 10,
+      "unavailable": 0
+    }
+  ],
+  "by_tag": {
+    "avg": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "basic": {
+      "failed": 1,
+      "overall_score": 0.75,
+      "passed": 3,
+      "total": 4
+    },
+    "channel": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "count": {
+      "failed": 2,
+      "overall_score": 0.5,
+      "passed": 2,
+      "total": 4
+    },
+    "customer": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "dimension": {
+      "failed": 2,
+      "overall_score": 0.5,
+      "passed": 2,
+      "total": 4
+    },
+    "filter": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "group_by": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "multi_metric": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "order_by": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "product": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "risk": {
+      "failed": 0,
+      "overall_score": 1.0,
+      "passed": 1,
+      "total": 1
+    },
+    "sum": {
+      "failed": 4,
+      "overall_score": 0.3333333333333333,
+      "passed": 2,
+      "total": 6
+    },
+    "top_n": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    },
+    "txn": {
+      "failed": 1,
+      "overall_score": 0.0,
+      "passed": 0,
+      "total": 1
+    }
+  },
+  "cases": {
+    "bank|bank_001|rule|off": {
+      "case_id": "bank_001",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "bank|bank_002|rule|off": {
+      "case_id": "bank_002",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "bank|bank_003|rule|off": {
+      "case_id": "bank_003",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "bank|bank_004|rule|off": {
+      "case_id": "bank_004",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 23,
+      "optimizer": "off",
+      "overall": 0.0,
+      "passed": false,
+      "status": "error"
+    },
+    "bank|bank_005|rule|off": {
+      "case_id": "bank_005",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 27,
+      "optimizer": "off",
+      "overall": 0.0,
+      "passed": false,
+      "status": "error"
+    },
+    "bank|bank_006|rule|off": {
+      "case_id": "bank_006",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 19,
+      "optimizer": "off",
+      "overall": 0.0,
+      "passed": false,
+      "status": "error"
+    },
+    "bank|bank_007|rule|off": {
+      "case_id": "bank_007",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "bank|bank_008|rule|off": {
+      "case_id": "bank_008",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 0,
+      "optimizer": "off",
+      "overall": 1.0,
+      "passed": true,
+      "status": "success"
+    },
+    "bank|bank_009|rule|off": {
+      "case_id": "bank_009",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 21,
+      "optimizer": "off",
+      "overall": 0.0,
+      "passed": false,
+      "status": "error"
+    },
+    "bank|bank_010|rule|off": {
+      "case_id": "bank_010",
+      "domain": "bank",
+      "generator": "rule",
+      "latency_ms": 15,
+      "optimizer": "off",
+      "overall": 0.0,
+      "passed": false,
+      "status": "error"
+    }
+  },
+  "dataset_hash": "c8357e2ad776a3a5666baa4fa08d72527bcbd4f2cdb78ba0639a8dc1cb200776",
+  "failed_cases": [
+    {
+      "case_id": "bank_004",
+      "domain": "bank",
+      "error": "Column 'org_name' not found in any table",
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.0,
+      "query": "交易笔数最多的客户",
+      "status": "error"
+    },
+    {
+      "case_id": "bank_005",
+      "domain": "bank",
+      "error": "Column 'org_name' not found in any table",
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.0,
+      "query": "存款交易金额合计",
+      "status": "error"
+    },
+    {
+      "case_id": "bank_006",
+      "domain": "bank",
+      "error": "Column 'org_name' not found in any table",
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.0,
+      "query": "各产品的持有金额",
+      "status": "error"
+    },
+    {
+      "case_id": "bank_009",
+      "domain": "bank",
+      "error": "Column 'org_name' not found in any table",
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.0,
+      "query": "交易笔数和交易金额",
+      "status": "error"
+    },
+    {
+      "case_id": "bank_010",
+      "domain": "bank",
+      "error": "Column 'org_name' not found in any table",
+      "generator": "rule",
+      "optimizer": "off",
+      "overall": 0.0,
+      "query": "各渠道的存款金额",
+      "status": "error"
+    }
+  ],
+  "generated_at": "2026-06-20T07:49:19.112982",
+  "optimizer_stats": null,
+  "schema_version": "1.0",
+  "summary": {
+    "avg_latency_ms": 10.5,
+    "by_dimension": {
+      "filter": 0.5,
+      "governance": 0.5,
+      "intent": 0.5,
+      "metric": 0.5,
+      "planner": 0.5
+    },
+    "execution_errors": 5,
+    "failed": 5,
+    "overall_score": 0.5,
+    "p50_latency_ms": 7.5,
+    "p95_latency_ms": 25.199999999999996,
+    "passed": 5,
+    "recursion_errors": 0,
+    "total_cases": 10,
+    "unavailable": 0
+  }
+}

@@ -81,7 +81,22 @@ def route_after_validate(state: QueryState) -> str:
         if not generation_attempts:
             return "error"
         max_retries = 3
-        if len(generation_attempts) >= max_retries:
+        # Count validation failures too. correct_dsl appends a *generation*
+        # attempt only when it actually regenerates the DSL (LLM mode). In rule
+        # mode (no LLM) correct_dsl is a no-op that returns error WITHOUT
+        # appending, so generation_attempts would stall at 1 and the
+        # validate <-> correct_dsl loop would never reach max_retries — an
+        # infinite recursion until GRAPH_RECURSION_LIMIT. validation_failures
+        # grows on every validate round regardless, so capping on it guarantees
+        # termination (P0: bank/supply_chain infinite-recursion fix).
+        validation_failures = [
+            a for a in dsl_attempts
+            if a.get("source") == "validation" and a.get("valid") is False
+        ]
+        if (
+            len(generation_attempts) >= max_retries
+            or len(validation_failures) >= max_retries
+        ):
             return "error"
         return "retry"
 
@@ -181,15 +196,23 @@ def route_after_execute(state: QueryState) -> str:
 
     Returns "retry" if execution failed and we can retry with a simplified DSL,
     otherwise "end" to finish the pipeline.
+
+    Execution retries are tracked by ``simplify_dsl`` appending a
+    ``source="simplified"`` record on every retry round — a strictly-growing
+    counter that does not depend on generation/validation attempts. This
+    guarantees the execute -> simplify_dsl -> build_sql -> execute loop
+    terminates (P0: bounded execution retries, no infinite recursion).
     """
     status = state.get("status")
     if status == "error":
-        # Check if we have retry attempts left
         dsl_attempts = state.get("dsl_attempts")
-        attempt_count = len(dsl_attempts) if dsl_attempts else 0
+        if isinstance(dsl_attempts, dict):
+            dsl_attempts = [dsl_attempts]
+        simplify_attempts = [
+            a for a in (dsl_attempts or []) if a.get("source") == "simplified"
+        ]
         max_execution_retries = 1
-
-        if attempt_count <= max_execution_retries:
+        if len(simplify_attempts) < max_execution_retries:
             return "retry"
         return "end"
 

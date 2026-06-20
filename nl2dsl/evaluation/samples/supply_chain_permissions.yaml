@@ -1,0 +1,37 @@
+users:
+  sc001:
+    tenant_id: "t001"
+    row_filters:
+      region_code:
+        operator: in
+        value: ["HD", "HN"]
+    columns: []
+  sc002:
+    tenant_id: "t001"
+    row_filters:
+      region_code:
+        operator: in
+        value: ["HB", "XN"]
+    columns: []
+  sc003:
+    tenant_id: "t002"
+    row_filters: {}
+    columns: []
+
+sensitive_columns:
+  purchase_fact:
+    - unit_price
+  supplier_dim:
+    - contact_phone
+    - bank_account
+
+masking_rules:
+  purchase_fact.unit_price:
+    type: "round"
+    params: {"decimals": 0}
+  supplier_dim.contact_phone:
+    type: "partial"
+    params: {"keep_start": 3, "keep_end": 4, "mask": "*"}
+  supplier_dim.bank_account:
+    type: "hash"
+    params: {}

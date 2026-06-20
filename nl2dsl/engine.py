@@ -131,7 +131,7 @@ class Engine:
         from nl2dsl.permission.column_level import ColumnLevelSecurity
         from nl2dsl.query.sandbox import QuerySandbox
         from nl2dsl.query.clarification import ClarificationDetector
-        from nl2dsl.llm.client import LLMClient
+        from nl2dsl.llm.providers import get_llm_client
         from nl2dsl.llm.prompts import DSL_SYSTEM_PROMPT
         from nl2dsl.rag.store import MilvusLiteStore
         from nl2dsl.rag.embedder import BGEEmbedder
@@ -147,15 +147,12 @@ class Engine:
             return
 
         # Shared components (initialized once)
-        llm = None
+        # LLM 客户端由 provider 注册中心按当前激活 provider 构建，
+        # 可通过 NL2DSL_LLM_PROVIDER / set_active_provider 随时切换。
+        llm = get_llm_client()
         embedder = None
         reranker = None
-        if settings.llm_api_key:
-            llm = LLMClient(
-                api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url,
-                model=settings.llm_model,
-            )
+        if llm is not None:
             try:
                 embedder = BGEEmbedder("D:/claude_work/model/bge-base-zh-v1.5")
             except Exception as e:
@@ -223,7 +220,12 @@ class Engine:
             tm = {k: v.get("table", k) for k, v in registry.data_sources.items()}
             ds = {k: v for k, v in registry.data_sources.items()}
             dm = {k: v.get("column", k) for k, v in registry.dimensions.items()}
-            sql_builder = SQLBuilder(db, tm, ds, dm)
+            vmaps = {
+                k: v.get("value_map")
+                for k, v in registry.dimensions.items()
+                if v.get("value_map")
+            }
+            sql_builder = SQLBuilder(db, tm, ds, dm, registry.metrics, vmaps)
 
             # 6. RAG
             rag_retriever = None

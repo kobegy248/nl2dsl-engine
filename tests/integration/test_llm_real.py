@@ -528,6 +528,7 @@ class TestRealLLMEndToEnd:
             {"orders": "order_fact"},
             TEST_REGISTRY["data_sources"],
             {k: v["column"] for k, v in TEST_REGISTRY["dimensions"].items()},
+            TEST_REGISTRY["metrics"],
         )
 
         generate = _make_generate_dsl_node(
@@ -622,6 +623,7 @@ class TestRealLLMEndToEnd:
             {"orders": "order_fact"},
             TEST_REGISTRY["data_sources"],
             {k: v["column"] for k, v in TEST_REGISTRY["dimensions"].items()},
+            TEST_REGISTRY["metrics"],
         )
 
         generate = _make_generate_dsl_node(

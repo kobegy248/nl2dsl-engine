@@ -1,4 +1,9 @@
-"""V2 基准测试运行器。"""
+"""V2 基准测试运行器。
+
+Phase 0 重构：actual DSL 不再从测试用例 ``expected`` 构造，而是由
+:class:`EvaluationExecutor` 调用真实查询链路产出 :class:`EvaluationObservation`，
+评分器只读取 Observation 中的最终 DSL 与治理信息。
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,8 @@ import time
 from datetime import date
 from typing import Any, Callable
 
-from nl2dsl.evaluation.models import V2TestCase, V2ScoreBreakdown, CanonicalQuery
+from nl2dsl.evaluation.execution import EvaluationExecutor, EvaluationObservation
+from nl2dsl.evaluation.models import V2TestCase, V2ScoreBreakdown
 from nl2dsl.evaluation.canonical.resolver import CanonicalResolver
 from nl2dsl.evaluation.scorers.base import Scorer
 from nl2dsl.utils.logger import get_logger
@@ -26,38 +32,80 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "governance": 0.10,
 }
 
+# 不可评分的状态：不参与准确率分子，且强制不通过。
+_NON_RUNNABLE_STATUSES = {"error", "clarification", "unavailable"}
+
+
+def _stable_value(value) -> str:
+    """将 filter value 规范化为可哈希的稳定字符串。"""
+    if isinstance(value, (list, tuple)):
+        return "list:" + ",".join(str(v) for v in value)
+    return f"v:{value}"
+
+
+def _derive_intent(dsl: dict) -> str:
+    """从真实 DSL 结构推导粗粒度意图（DSL 本身不携带 intent 字段）。
+
+    规则生成器对所有带指标的查询都会追加默认 order_by，因此 order_by 不能
+    作为 rank 的判据；仅 ``post_process.group_top_n`` 视为 rank。
+
+    - post_process.group_top_n → rank
+    - 其余（含 proportion、普通聚合、纯排序 TopN）→ aggregate
+    """
+    post = dsl.get("post_process")
+    if isinstance(post, dict) and post.get("type") == "group_top_n":
+        return "rank"
+    return "aggregate"
+
 
 class V2BenchmarkRunner:
-    """运行 V2 语义基准测试。"""
+    """运行 V2 语义基准测试。
+
+    actual DSL 必须来自真实查询链路（:class:`EvaluationExecutor`），
+    严禁从 ``expected`` 构造。
+    """
 
     def __init__(
         self,
         scorers: dict[str, Scorer],
         weights: dict[str, float] | None = None,
         threshold: float = 0.8,
+        injected_filters: list[dict] | None = None,
     ):
         self.scorers = scorers
         self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.threshold = threshold
+        # 治理注入的过滤条件（tenant_id + 行级权限），评分前从 actual DSL 剥离。
+        self.injected_filters = injected_filters or []
 
     def run_single(
         self,
         test_case: V2TestCase,
         actual_dsl: dict[str, Any],
         resolver: CanonicalResolver,
+        injected_filters: list[dict] | None = None,
     ) -> dict:
-        """评估单个测试用例。"""
+        """评估单个测试用例（给定 actual DSL）。
+
+        保留该方法用于直接评分场景；生产评测路径应使用
+        :meth:`run_matrix` + :meth:`score_observation`。
+        """
         start = time.time()
 
         expected = test_case.expected
         scores = V2ScoreBreakdown()
-        # 跟踪哪些维度被实际评分了（用于动态权重调整）
         active_dimensions: set[str] = set()
 
-        # 意图
+        # 评分前剥离治理注入的过滤条件（tenant_id / 行级权限），避免把权限
+        # 注入误判为语义过滤偏差。仅处理 flat list 形式；条件树不剥离。
+        filters_to_strip = injected_filters if injected_filters is not None else self.injected_filters
+        actual_dsl = self._strip_injected_filters(actual_dsl, filters_to_strip)
+
+        # 意图：真实 DSL 不携带 intent 字段，按结构推导（group_top_n / 排序 → rank，
+        # proportion / 聚合 → aggregate）。
         if "intent" in expected and "intent_scorer" in self.scorers:
             scores.intent = self.scorers["intent_scorer"].score(
-                expected["intent"], actual_dsl.get("intent", "")
+                expected["intent"], _derive_intent(actual_dsl)
             )
             active_dimensions.add("intent")
         else:
@@ -110,7 +158,6 @@ class V2BenchmarkRunner:
             active_weights = {k: v for k, v in self.weights.items() if k in active_dimensions}
             total_weight = sum(active_weights.values())
             if total_weight > 0:
-                # 归一化
                 active_weights = {k: v / total_weight for k, v in active_weights.items()}
             scores.overall = scores.compute_overall(active_weights)
         else:
@@ -140,145 +187,123 @@ class V2BenchmarkRunner:
             "post_process": dsl.get("post_process"),
         }
 
-    def run_batch(
+    def _strip_injected_filters(self, dsl: dict, injected_filters: list[dict] | None = None) -> dict:
+        """剥离治理注入的过滤条件（不修改原 dict）。
+
+        注入过滤器以规范化签名匹配（field + operator + value）。
+        条件树（dict with op+children）不剥离，返回原样。
+        """
+        filters_to_strip = injected_filters if injected_filters is not None else self.injected_filters
+        if not filters_to_strip:
+            return dsl
+        filters = dsl.get("filters")
+        if not isinstance(filters, list):
+            return dsl
+
+        def _sig(f: dict) -> tuple:
+            return (f.get("field", ""), f.get("operator", "="), _stable_value(f.get("value")))
+
+        injected_sigs = {_sig(f) for f in filters_to_strip}
+        kept = [f for f in filters if isinstance(f, dict) and _sig(f) not in injected_sigs]
+        new_dsl = dict(dsl)
+        new_dsl["filters"] = kept
+        return new_dsl
+
+    # ------------------------------------------------------------------
+    # 真实评测路径（Phase 0+）
+    # ------------------------------------------------------------------
+
+    def score_observation(
         self,
-        cases: list[V2TestCase],
-        api_client,
+        case: V2TestCase,
+        observation: EvaluationObservation,
         resolver: CanonicalResolver,
-        progress_callback: Callable[[int, int], None] | None = None,
-    ) -> list[dict]:
-        """批量运行测试用例。"""
-        results: list[dict] = []
-        total = len(cases)
+    ) -> dict:
+        """根据真实 Observation 评分。
 
-        for i, case in enumerate(cases):
-            # 调用 API 获取实际 DSL
-            try:
-                response = api_client.post("/api/v1/query", json={
-                    "question": case.query,
-                    "domain": "ecommerce",
-                })
-                actual_dsl = response.json().get("dsl", {})
-            except Exception as exc:
-                logger.error("[%s] API 调用失败：%s", case.id, exc)
-                actual_dsl = {}
+        - 不可评分状态（error/clarification/unavailable）：分数全 0、不通过，
+          但不崩溃。
+        - success/warning：使用最终 DSL 走 :meth:`run_single`。
+        """
+        if observation.status in _NON_RUNNABLE_STATUSES:
+            scores = V2ScoreBreakdown()  # 全 0
+            result = {
+                "test_case": case,
+                "passed": False,
+                "scores": scores,
+                "actual_dsl": observation.final_dsl,
+                "execution_time_ms": observation.execution_time_ms,
+                "status": observation.status,
+            }
+        else:
+            result = self.run_single(
+                case, observation.final_dsl, resolver,
+                injected_filters=observation.injected_filters,
+            )
+            result["status"] = observation.status
 
-            result = self.run_single(case, actual_dsl, resolver)
-            results.append(result)
+        result["observation"] = observation.to_dict()
+        result["generator_mode"] = observation.generator_mode
+        result["optimizer_enabled"] = observation.optimizer_enabled
+        result["domain"] = observation.domain
+        result["optimizer"] = self._extract_optimizer_stats(observation)
+        return result
 
-            if progress_callback:
-                progress_callback(i + 1, total)
+    @staticmethod
+    def _extract_optimizer_stats(observation: EvaluationObservation) -> dict | None:
+        """从 Trace 的 optimize_dsl 步骤提取 Optimizer 统计。
 
-        return results
+        Optimizer 关闭时 Trace 不含该步骤，返回 None。
+        """
+        for step in observation.trace or []:
+            if not isinstance(step, dict):
+                continue
+            if step.get("step") == "optimize_dsl":
+                return {
+                    "fixes_applied": step.get("fixes_applied", 0),
+                    "warnings_issued": step.get("warnings", 0),
+                    "rejections": step.get("rejections", 0),
+                    "elapsed_ms": step.get("elapsed_ms", 0),
+                    "status": step.get("status"),
+                }
+        return None
 
-    def run_batch_with_optimizer(
+    def run_matrix(
         self,
         cases: list[V2TestCase],
-        config: dict,
+        executor: EvaluationExecutor,
         resolver: CanonicalResolver,
         *,
-        use_optimizer: bool = False,
-        enabled_rules: list[str] | None = None,
-        disabled_rules: list[str] | None = None,
-        verbose_optimizer: bool = False,
+        generator_mode: str,
+        optimizer_enabled: bool,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[dict]:
-        """批量运行测试用例，可选启用 Semantic Optimizer。"""
-        from nl2dsl.optimizer import optimize
-        from nl2dsl.optimizer.context import SemanticConfig
-
-        semantic_config = SemanticConfig.from_registry_dict(config) if use_optimizer else None
+        """对单个矩阵组合（generator × optimizer）批量运行真实评测。"""
         results: list[dict] = []
         total = len(cases)
 
         for i, case in enumerate(cases):
-            # Build a mock DSL from the test case's expected values for scoring
-            actual_dsl = self._build_dsl_from_case(case)
-
-            optimizer_report = None
-            if use_optimizer and semantic_config:
-                optimized_dsl, opt_report = optimize(
-                    actual_dsl,
-                    semantic_config=semantic_config,
-                    original_question=case.query,
-                    enabled_rules=enabled_rules,
-                    disabled_rules=disabled_rules,
-                    reference_date=_EVAL_REFERENCE_DATE,
+            try:
+                observation = executor.execute(
+                    case,
+                    generator_mode=generator_mode,
+                    optimizer_enabled=optimizer_enabled,
                 )
-                actual_dsl = optimized_dsl
-                optimizer_report = opt_report
+            except Exception as exc:
+                logger.error("[%s] 执行器异常：%s", case.id, exc)
+                observation = EvaluationObservation(
+                    case_id=case.id,
+                    domain=getattr(case, "domain", "ecommerce"),
+                    generator_mode=generator_mode,
+                    optimizer_enabled=optimizer_enabled,
+                    status="error",
+                    error=str(exc),
+                )
 
-            result = self.run_single(case, actual_dsl, resolver)
-            if optimizer_report:
-                result["optimizer"] = optimizer_report.to_dict() if verbose_optimizer else {
-                    "fixes_applied": len(optimizer_report.fixes_applied),
-                    "warnings_issued": len(optimizer_report.warnings_issued),
-                    "rejections": len(optimizer_report.rejections),
-                    "fix_rate": optimizer_report.fix_rate,
-                    "elapsed_ms": optimizer_report.elapsed_ms,
-                }
+            result = self.score_observation(case, observation, resolver)
             results.append(result)
 
             if progress_callback:
                 progress_callback(i + 1, total)
 
         return results
-
-    def _build_dsl_from_case(self, case: V2TestCase) -> dict:
-        """从测试用例的预期值构建一个可用于评分和优化的 DSL dict。"""
-        expected = case.expected
-        # data_source: ecommerce cases target the "orders" source so the
-        # optimizer (T003/P001) can resolve time fields and JOINs. intent may
-        # be a plain string ("aggregate"), so default safely.
-        intent = expected.get("intent")
-        if isinstance(intent, dict):
-            data_source = intent.get("data_source", "orders")
-        else:
-            data_source = "orders"
-        dsl: dict = {"data_source": data_source}
-
-        # Metric (may be a string alias like "sales_amount" or a dict)
-        metric_info = expected.get("metric")
-        if metric_info:
-            if isinstance(metric_info, dict):
-                dsl["metrics"] = [{
-                    "func": metric_info.get("func", "sum"),
-                    "field": metric_info.get("field", metric_info.get("alias", "")),
-                    "alias": metric_info.get("alias", ""),
-                }]
-            else:
-                dsl["metrics"] = [{"func": "sum", "field": "order_amount", "alias": metric_info}]
-
-        # Dimensions
-        if "dimensions" in expected:
-            dsl["dimensions"] = expected["dimensions"]
-
-        # Filters
-        filters_info = expected.get("filters", [])
-        if filters_info:
-            dsl["filters"] = []
-            for f in filters_info:
-                if isinstance(f, dict):
-                    dsl["filters"].append({
-                        "field": f.get("field", ""),
-                        "operator": f.get("operator", "="),
-                        "value": f.get("value"),
-                    })
-
-        # Planner info
-        planner_info = expected.get("planner", {})
-        if planner_info:
-            if "limit" in planner_info:
-                dsl["limit"] = planner_info["limit"]
-            if "order_by" in planner_info:
-                dsl["order_by"] = planner_info["order_by"]
-            if "joins" in planner_info:
-                dsl["joins"] = planner_info["joins"]
-            if "time_field" in planner_info:
-                dsl["time_field"] = planner_info["time_field"]
-            if "time_range" in planner_info:
-                dsl["time_range"] = planner_info["time_range"]
-            if "post_process" in planner_info:
-                dsl["post_process"] = planner_info["post_process"]
-
-        return dsl

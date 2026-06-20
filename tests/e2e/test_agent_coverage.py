@@ -1011,9 +1011,14 @@ class TestEdgeCases:
 
     def test_feedback_endpoint_accepts_data(self, mock_api_client):
         """Feedback endpoint accepts correction data."""
+        q = mock_api_client.post("/api/v1/query", json={
+            "question": "查询销售额", "user_id": "u001", "tenant_id": "t001",
+        })
+        query_id = q.json()["query_id"]
         response = mock_api_client.post("/api/v1/feedback", json={
-            "query_id": "q-test-001",
+            "query_id": query_id,
             "user_id": "u001",
+            "tenant_id": "t001",
             "corrected_dsl": {"data_source": "orders"},
             "comment": "Test feedback",
         })
@@ -1058,8 +1063,8 @@ class TestEdgeCases:
             "user_id": "u001",
             "tenant_id": "t001",
         })
-        # Then list audit entries
-        response = mock_api_client.get("/api/v1/admin/audit/queries?limit=10")
+        # Then list audit entries (管理接口必须限定 tenant)
+        response = mock_api_client.get("/api/v1/admin/audit/queries?tenant_id=t001&limit=10")
         data = _assert_query_success(response)
         assert "items" in data
         assert "total" in data
@@ -1073,12 +1078,14 @@ class TestEdgeCases:
             "user_id": "u001",
             "tenant_id": "t001",
         })
-        # List and get the first one
-        list_response = mock_api_client.get("/api/v1/admin/audit/queries?limit=1")
+        # List and get the first one (管理接口必须限定 tenant)
+        list_response = mock_api_client.get("/api/v1/admin/audit/queries?tenant_id=t001&limit=1")
         list_data = _assert_query_success(list_response)
         if list_data["items"]:
             query_id = list_data["items"][0]["query_id"]
-            detail_response = mock_api_client.get(f"/api/v1/admin/audit/queries/{query_id}")
+            detail_response = mock_api_client.get(
+                f"/api/v1/admin/audit/queries/{query_id}?tenant_id=t001"
+            )
             detail_data = _assert_query_success(detail_response)
             assert "item" in detail_data
             assert detail_data["item"]["query_id"] == query_id
@@ -1324,9 +1331,14 @@ class TestBackwardCompatibility:
 
     def test_feedback_endpoint_unchanged(self, mock_api_client):
         """Feedback endpoint still accepts data."""
+        q = mock_api_client.post("/api/v1/query", json={
+            "question": "查询订单量", "user_id": "u001", "tenant_id": "t001",
+        })
+        query_id = q.json()["query_id"]
         response = mock_api_client.post("/api/v1/feedback", json={
-            "query_id": "q-12345",
+            "query_id": query_id,
             "user_id": "u001",
+            "tenant_id": "t001",
             "corrected_dsl": {"data_source": "orders"},
             "comment": "Looks good",
         })

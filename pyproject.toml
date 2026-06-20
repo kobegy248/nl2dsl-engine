@@ -32,6 +32,9 @@ dev = [
 
 [project.scripts]
 nl2dsl-eval = "nl2dsl.evaluation.cli:main"
+nl2dsl-v2-eval = "nl2dsl.evaluation.v2_cli:main"
+nl2dsl-quality-report = "nl2dsl.quality.cli:main"
+nl2dsl-feedback-export = "nl2dsl.feedback.exporter:main"
 
 [build-system]
 requires = ["setuptools>=69.0", "wheel"]
