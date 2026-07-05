@@ -129,6 +129,21 @@ class SemanticConfig:
                 return src_name
         return None
 
+    def get_size(self, data_source: str) -> str | None:
+        """返回 data_source 的表大小等级:large/medium/small,缺省 None。"""
+        ds = self.data_sources.get(data_source, {})
+        return ds.get("size")
+
+    def get_selectivity(self, dimension: str) -> str | None:
+        """返回 dimension 的过滤选择性等级:high/medium/low,缺省 None。"""
+        d = self.dimensions.get(dimension, {})
+        return d.get("selectivity")
+
+    def is_indexed(self, dimension: str) -> bool:
+        """返回 dimension 是否建索引,缺省 False。"""
+        d = self.dimensions.get(dimension, {})
+        return bool(d.get("indexed", False))
+
 
 @dataclass
 class RuleContext:

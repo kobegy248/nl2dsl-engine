@@ -28,10 +28,14 @@ dimensions:
   product_name:
     column: product_name
     type: string
+    selectivity: high
+    indexed: false
     description: "产品名称"
   region:
     column: region
     type: string
+    selectivity: low
+    indexed: true
     description: "地区"
     value_map:
       华东: HD
@@ -41,14 +45,20 @@ dimensions:
   order_date:
     column: order_date
     type: date
+    selectivity: high
+    indexed: true
     description: "订单日期"
   brand:
     column: brand
     type: string
+    selectivity: low
+    indexed: false
     description: "品牌"
   category:
     column: category
     type: string
+    selectivity: low
+    indexed: false
     description: "品类"
     value_map:
       手机: phone
@@ -58,6 +68,8 @@ dimensions:
   channel:
     column: channel
     type: string
+    selectivity: low
+    indexed: false
     description: "销售渠道"
     value_map:
       线上: online
@@ -65,6 +77,8 @@ dimensions:
   customer_type:
     column: customer_type
     type: string
+    selectivity: low
+    indexed: false
     description: "客户类型"
     value_map:
       VIP: vip
@@ -73,23 +87,32 @@ dimensions:
   customer_name:
     column: customer_name
     type: string
+    selectivity: high
+    indexed: false
     description: "客户名称"
   city_level:
     column: city_level
     type: string
+    selectivity: low
+    indexed: false
     description: "城市等级"
   supplier_name:
     column: supplier_name
     type: string
+    selectivity: high
+    indexed: false
     description: "供应商名称"
   price:
     column: price
     type: float
+    selectivity: high
+    indexed: false
     description: "产品单价"
 
 data_sources:
   orders:
     table: order_fact
+    size: large
     metrics: [sales_amount, gmv, order_count, avg_order_value, total_discount]
     dimensions: [product_name, region, order_date, brand, category, channel, customer_type]
     joins:
@@ -107,13 +130,16 @@ data_sources:
         alias: s
   products:
     table: product_dim
+    size: medium
     metrics: [max_price, avg_price]
     dimensions: [product_name, brand, category, price]
   customers:
     table: customer_dim
+    size: medium
     metrics: [customer_count]
     dimensions: [customer_name, customer_type, region, city_level]
   suppliers:
     table: supplier_dim
+    size: small
     metrics: []
     dimensions: [supplier_name]
