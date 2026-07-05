@@ -157,6 +157,13 @@ class SQLBuilder:
                 return tbl
         raise ValidationError(f"Table for column '{field}' not found")
 
+    def _get_size_for_join_table(self, table_name: str) -> str | None:
+        """Return the size of the data_source whose physical table matches table_name."""
+        for cfg in self._data_sources.values():
+            if cfg.get("table") == table_name:
+                return cfg.get("size")
+        return None
+
     def _build_condition_tree(self, tables: dict[str, object], node) -> object:
         """Recursively build SQLAlchemy expression from a filter tree."""
         from nl2dsl.dsl.models import FilterTreeNode
@@ -378,6 +385,18 @@ class SQLBuilder:
 
         for table_name in required_tables:
             add_join(table_name)
+
+        # 保守重排:仅当 join 之间无跨依赖(on_field 不含 ".")时,按 size 排序
+        # small 在前(驱动),large 在后(被驱动);同等级保持原依赖顺序(稳定排序)
+        if len(joins) > 1:
+            has_cross_dependency = any(
+                "." in (j.on_field or "") for j in joins
+            )
+            if not has_cross_dependency:
+                size_order = {"small": 0, "medium": 1, "large": 2}
+                joins.sort(
+                    key=lambda j: size_order.get(self._get_size_for_join_table(j.table), 3)
+                )
 
         return joins
 

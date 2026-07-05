@@ -567,3 +567,82 @@ def test_filter_value_type_aligned_number_to_str_warns():
     dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="=", value=123)])
     sql = builder.build(dsl)
     assert "product_name = '123'" in sql
+
+
+def test_join_reordered_small_drives_large():
+    """无跨依赖时:small 表排在前(驱动),large 排在后。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_id", Integer), Column("customer_id", Integer))
+    Table("product_dim", meta, Column("product_id", Integer), Column("product_name", String))
+    Table("customer_dim", meta, Column("customer_id", Integer), Column("customer_name", String))
+    meta.create_all(engine)
+
+    # 两个独立 join(无跨依赖:on_field 不含 ".")
+    data_sources = {
+        "orders": {
+            "table": "order_fact", "size": "large",
+            "joins": {
+                "product_dim": {"on": "product_id", "type": "left", "alias": "p"},
+                "customer_dim": {"on": "customer_id", "type": "left", "alias": "c"},
+            },
+        },
+        "product_dim": {"table": "product_dim", "size": "medium"},
+        "customer_dim": {"table": "customer_dim", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, data_sources,
+        {"product_name": "product_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    # 引用两个 join 表的列(product_name + customer_name),触发两个 join
+    dsl = DSL(
+        data_source="orders",
+        metrics=[Aggregation(func="sum", field="product_id", alias="m")],
+        dimensions=["product_name", "customer_name"],
+    )
+    sql = builder.build(dsl)
+    # customer_dim(small) 应在 product_dim(medium) 之前
+    c_pos = sql.lower().find("customer_dim")
+    p_pos = sql.lower().find("product_dim")
+    assert c_pos != -1 and p_pos != -1
+    assert c_pos < p_pos, f"small 应驱动,但 SQL 顺序: {sql}"
+
+
+def test_join_not_reordered_with_cross_dependency():
+    """有跨依赖(supplier_dim on p.supplier_id)时:保持依赖顺序,不重排。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_id", Integer))
+    Table("product_dim", meta, Column("product_id", Integer), Column("supplier_id", Integer))
+    Table("supplier_dim", meta, Column("supplier_id", Integer), Column("supplier_name", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "orders": {
+            "table": "order_fact", "size": "large",
+            "joins": {
+                "product_dim": {"on": "product_id", "type": "left", "alias": "p"},
+                "supplier_dim": {"on": "p.supplier_id", "type": "left", "alias": "s"},
+            },
+        },
+        "product_dim": {"table": "product_dim", "size": "medium"},
+        "supplier_dim": {"table": "supplier_dim", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, data_sources,
+        {"supplier_name": "supplier_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL
+    dsl = DSL(data_source="orders", dimensions=["supplier_name"])
+    sql = builder.build(dsl)
+    # 依赖链:product_dim 必须在 supplier_dim 之前(on p.supplier_id)
+    p_pos = sql.lower().find("product_dim")
+    s_pos = sql.lower().find("supplier_dim")
+    assert p_pos < s_pos, f"依赖链被破坏: {sql}"
