@@ -1,0 +1,58 @@
+test_cases:
+  # ── 统计驱动 SQL 调优评测用例 (Task 6) ──────────────────
+  # 覆盖三个优化点：like 前缀分流、join 小表驱动大表、filter 类型对齐。
+  #
+  # 注：现有 V2 评测框架在 DSL/Planner 层评分，不支持 sql_contains /
+  # sql_not_contains 等 SQL 字符串断言。以下用例在 DSL 层断言三个优化点的
+  # *输入*（filter / planner.joins / planner.time_range），SQL 层的优化正确性
+  #（like 前缀编译、join 重排、string→int 类型转换）由 tests/unit/test_sql_builder.py
+  # 中的单元测试直接验证。
+
+  - id: LIKE_INDEXED_001
+    query: "2026年7月的销售额"
+    difficulty: easy
+    category: time
+    tags: ["sql_optimization", "like_indexed", "time", "indexed_high_selectivity"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      planner:
+        time_field: order_date
+        time_range: ["2026-07-01", "2026-07-31"]
+        limit: 100
+
+  - id: JOIN_SMALL_001
+    query: "按供应商统计销售额"
+    difficulty: medium
+    category: join
+    tags: ["sql_optimization", "join_small_drives_large", "join", "cross_table", "supplier"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [supplier_name]
+      planner:
+        dimensions: [supplier_name]
+        joins:
+          - table: product_dim
+            on_field: product_id
+            join_type: left
+            alias: p
+          - table: supplier_dim
+            on_field: p.supplier_id
+            join_type: left
+            alias: s
+        limit: 100
+
+  - id: FILTER_TYPE_001
+    query: "价格大于100的销售额"
+    difficulty: easy
+    category: filter
+    tags: ["sql_optimization", "filter_type_alignment", "filter", "numeric"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [product_name]
+      filters:
+        - field: price
+          operator: ">"
+          value: 100

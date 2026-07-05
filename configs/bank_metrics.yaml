@@ -76,117 +76,200 @@ dimensions:
   # ── 客户维度 ──────────────────────────────────────────
   customer_name:
     column: cust_nm
+    type: string
+    selectivity: high
+    indexed: false
     description: "客户姓名"
   customer_status:
     column: cust_sts_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "客户状态（01正常/02冻结/03睡眠/09销户）"
   customer_type:
     column: cust_type_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "客户类型（01个人/02企业）"
   cert_type:
     column: cert_type_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "证件类型（01身份证/02护照/03军官证/04港澳通行证）"
   risk_level:
     column: risk_lvl_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "风险等级（01保守/02稳健/03平衡/04进取/05激进）"
   reg_date:
     column: reg_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "客户注册日期"
   manager_no:
     column: mgr_emp_no
+    type: string
+    selectivity: low
+    indexed: false
     description: "客户经理编号"
 
   # ── 账户维度 ──────────────────────────────────────────
   account_type:
     column: acct_type_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "账户类型（01活期/02定期/03理财/04信用卡）"
   currency:
     column: ccyc_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "币种（CNY人民币/USD美元/EUR欧元/HKD港币）"
   account_status:
     column: acct_sts_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "账户状态（01正常/02冻结/03止付/09销户）"
   open_date:
     column: open_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "开户日期"
   maturity_date:
     column: mat_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "到期日期"
 
   # ── 交易维度 ──────────────────────────────────────────
   txn_date:
     column: txn_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "交易日期"
   txn_type:
     column: txn_type_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "交易类型代码"
   txn_type_name:
     column: txn_type_nm
+    type: string
+    selectivity: high
+    indexed: false
     description: "交易类型名称"
   dr_cr_flag:
     column: dr_cr_flg
+    type: string
+    selectivity: low
+    indexed: false
     description: "借贷标志（1借/出，2贷/入）"
   channel:
     column: chl_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "渠道代码"
   channel_name:
     column: chl_nm
+    type: string
+    selectivity: high
+    indexed: false
     description: "渠道名称"
   reversal_flag:
     column: rvsl_flg
+    type: string
+    selectivity: low
+    indexed: false
     description: "冲正标志（0正常，1已冲正）"
 
   # ── 产品维度 ──────────────────────────────────────────
   product_name:
     column: prod_nm
+    type: string
+    selectivity: high
+    indexed: false
     description: "产品名称"
   product_level1:
     column: prod_lvl1_nm
+    type: string
+    selectivity: low
+    indexed: false
     description: "产品一级类目"
   product_level2:
     column: prod_lvl2_nm
+    type: string
+    selectivity: low
+    indexed: false
     description: "产品二级类目"
   product_status:
     column: prod_sts_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "产品状态（01在售/02停售/03售罄）"
   min_purchase:
     column: min_pur_amt
     type: float
+    selectivity: high
+    indexed: false
     description: "最低购买金额"
 
   # ── 机构维度 ──────────────────────────────────────────
   org_code:
     column: org_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "机构代码"
   org_name:
     column: org_nm
+    type: string
+    selectivity: high
+    indexed: false
     description: "机构名称"
   org_level:
     column: org_lvl
     type: integer
+    selectivity: low
+    indexed: false
     description: "机构层级（1总行/2分行/3支行）"
 
   # ── 合约维度 ──────────────────────────────────────────
   agreement_status:
     column: agt_sts_cd
+    type: string
+    selectivity: low
+    indexed: false
     description: "合约状态（01有效/02到期/03提前终止）"
   sign_date:
     column: sign_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "签约日期"
   due_date:
     column: due_dt
     type: date
+    selectivity: high
+    indexed: true
     description: "到期日期"
 
 data_sources:
   # ── 主数据源：客户账户 ────────────────────────────────
   customer_accounts:
     table: t_acct_main
+    size: large
     metrics: [total_balance, available_balance, frozen_amount, account_count, avg_balance, max_balance]
     dimensions: [account_type, currency, account_status, open_date, maturity_date, org_name]
     joins:
@@ -202,6 +285,7 @@ data_sources:
   # ── 主数据源：交易流水 ────────────────────────────────
   transactions:
     table: t_txn_dtl
+    size: large
     metrics: [txn_count, txn_amount, inflow_amount, outflow_amount, net_inflow, avg_txn_amount, max_txn_amount]
     dimensions: [txn_date, txn_type, txn_type_name, dr_cr_flag, channel, channel_name, reversal_flag]
     joins:
@@ -225,6 +309,7 @@ data_sources:
   # ── 主数据源：客户产品合约 ────────────────────────────
   agreements:
     table: t_cust_prod_agt
+    size: large
     metrics: [product_hold_amount, product_sign_amount, agreement_count, avg_hold_amount, expected_yield, avg_yield_rate]
     dimensions: [agreement_status, sign_date, due_date, product_name, product_level1, product_level2, product_status]
     joins:
@@ -244,6 +329,7 @@ data_sources:
   # ── 主数据源：客户主表 ────────────────────────────────
   customers:
     table: t_cif_base
+    size: medium
     metrics: [customer_count, vip_customer_count]
     dimensions: [customer_name, customer_status, customer_type, cert_type, risk_level, reg_date, manager_no, org_name]
     joins:
