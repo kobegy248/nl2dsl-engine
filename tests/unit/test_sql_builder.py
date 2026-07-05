@@ -646,3 +646,93 @@ def test_join_not_reordered_with_cross_dependency():
     p_pos = sql.lower().find("product_dim")
     s_pos = sql.lower().find("supplier_dim")
     assert p_pos < s_pos, f"依赖链被破坏: {sql}"
+
+
+def test_bank_join_reordered_small_drives_large():
+    """银行域 customer_accounts: t_org_hier(small) 应排到 t_cif_base(medium) 之前。
+
+    镜像 bank_metrics.yaml 的真实结构:t_acct_main 为主表,join t_cif_base(经
+    customers data_source 注册,medium)与 t_org_hier(经 org_hierarchy data_source
+    注册,small),on_field 均无 "."(无跨依赖),故按 size 重排。
+    """
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("t_acct_main", meta, Column("cif_no", String), Column("mgr_emp_no", String))
+    Table("t_cif_base", meta, Column("cif_no", String), Column("cust_nm", String))
+    Table("t_org_hier", meta, Column("mgr_emp_no", String), Column("org_nm", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "customer_accounts": {
+            "table": "t_acct_main", "size": "large",
+            "joins": {
+                "t_cif_base": {"on": "cif_no", "type": "left", "alias": "c"},
+                "t_org_hier": {"on": "mgr_emp_no", "type": "left", "alias": "o"},
+            },
+        },
+        # t_cif_base 经 customers data_source 注册(与 bank_metrics.yaml 一致)
+        "customers": {"table": "t_cif_base", "size": "medium"},
+        # t_org_hier 经 org_hierarchy data_source 注册(本次新增)
+        "org_hierarchy": {"table": "t_org_hier", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"customer_accounts": "t_acct_main"}, data_sources,
+        {"customer_name": "cust_nm", "org_name": "org_nm"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    # 引用两个 join 表的列(cust_nm + org_nm),触发两个 join
+    dsl = DSL(
+        data_source="customer_accounts",
+        metrics=[Aggregation(func="count", field="cif_no", alias="m")],
+        dimensions=["customer_name", "org_name"],
+    )
+    sql = builder.build(dsl)
+    # t_org_hier(small) 应在 t_cif_base(medium) 之前
+    o_pos = sql.lower().find("t_org_hier")
+    c_pos = sql.lower().find("t_cif_base")
+    assert o_pos != -1 and c_pos != -1, f"join 表未出现在 SQL 中: {sql}"
+    assert o_pos < c_pos, f"small 应驱动,但 SQL 顺序: {sql}"
+
+
+def test_bank_join_not_reordered_without_standalone_data_source():
+    """银行域:join 表未注册为独立 data_source 时,size 回退权重 3,稳定排序保持原顺序。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("t_acct_main", meta, Column("cif_no", String), Column("mgr_emp_no", String))
+    Table("t_cif_base", meta, Column("cif_no", String), Column("cust_nm", String))
+    Table("t_org_hier", meta, Column("mgr_emp_no", String), Column("org_nm", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "customer_accounts": {
+            "table": "t_acct_main", "size": "large",
+            "joins": {
+                "t_cif_base": {"on": "cif_no", "type": "left", "alias": "c"},
+                "t_org_hier": {"on": "mgr_emp_no", "type": "left", "alias": "o"},
+            },
+        },
+        # 仅注册 t_cif_base,t_org_hier 未注册 → size=None → 回退权重 3
+        "customers": {"table": "t_cif_base", "size": "medium"},
+    }
+    builder = SQLBuilder(
+        engine, {"customer_accounts": "t_acct_main"}, data_sources,
+        {"customer_name": "cust_nm", "org_name": "org_nm"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    dsl = DSL(
+        data_source="customer_accounts",
+        metrics=[Aggregation(func="count", field="cif_no", alias="m")],
+        dimensions=["customer_name", "org_name"],
+    )
+    sql = builder.build(dsl)
+    # t_cif_base(medium, 权重1) 应在 t_org_hier(None, 回退权重3) 之前
+    c_pos = sql.lower().find("t_cif_base")
+    o_pos = sql.lower().find("t_org_hier")
+    assert c_pos != -1 and o_pos != -1, f"join 表未出现在 SQL 中: {sql}"
+    assert c_pos < o_pos, f"未注册表应回退到权重3排后,但 SQL 顺序: {sql}"

@@ -444,6 +444,8 @@ class F006_LikeOnEnumDimension(BaseRule):
 
     def fix(self, dsl: dict, result: RuleResult) -> dict:
         """Override: 同时改 operator 和 value,保留 field。"""
+        if not result.location:
+            return dsl
         import copy
         dsl = copy.deepcopy(dsl)
         parts = result.location.replace("[", ".").replace("]", "").split(".")

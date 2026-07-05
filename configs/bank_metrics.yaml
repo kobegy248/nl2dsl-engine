@@ -337,3 +337,10 @@ data_sources:
         on: org_cd
         type: left
         alias: o
+
+  # ── 维表：机构层级（独立 data_source，供 join 重排按 size 排序） ──
+  org_hierarchy:
+    table: t_org_hier
+    size: small
+    metrics: []
+    dimensions: [org_code, org_name, org_level]
