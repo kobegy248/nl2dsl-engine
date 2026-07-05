@@ -9,6 +9,11 @@ from nl2dsl.optimizer.rules.filter import F002_OperatorTypeMismatch
 @pytest.fixture(autouse=True)
 def clear_registry():
     RuleRegistry.clear()
+    # Re-register filter rules so RuleEngine-based tests (e.g. F006) find
+    # them in the registry. Direct-instantiation tests are unaffected.
+    import importlib
+    from nl2dsl.optimizer.rules import filter as filter_rules
+    importlib.reload(filter_rules)
     yield
     RuleRegistry.clear()
 
@@ -320,4 +325,50 @@ class TestF001NotEqualEnum:
         rule = F001_InvalidEnumValue()
         dsl = {"data_source": "orders", "filters": [{"field": "category", "operator": "!=", "value": "手机"}]}
         assert rule.check(dsl, ctx).description == ""
+
+
+def test_f006_like_on_enum_dimension_changes_to_in():
+    """like 作用在有 value_map 的枚举维度 → 改 in,value 包装为 list。"""
+    from nl2dsl.optimizer.context import SemanticConfig, RuleContext
+    from nl2dsl.optimizer.engine import RuleEngine
+
+    config = SemanticConfig(
+        dimensions={
+            "region": {"column": "region", "type": "string", "value_map": {"华东": "HD"}},
+            "product_name": {"column": "product_name", "type": "string"},  # 无 value_map
+        }
+    )
+    context = RuleContext(semantic_config=config)
+    dsl = {
+        "filters": [
+            {"field": "region", "operator": "like", "value": "华东"},
+            {"field": "product_name", "operator": "like", "value": "手机"},
+        ]
+    }
+    optimized, report = RuleEngine(context).run(dsl)
+
+    # region 的 like 被改成 in,value 包装为 list
+    assert optimized["filters"][0]["operator"] == "in"
+    assert optimized["filters"][0]["value"] == ["华东"]
+    # product_name 无 value_map,不动
+    assert optimized["filters"][1]["operator"] == "like"
+    assert optimized["filters"][1]["value"] == "手机"
+    # report 记录 F006 fix
+    f006 = [f for f in report.fixes_applied if f["error_code"] == "F006"]
+    assert len(f006) == 1
+
+
+def test_f006_like_with_list_value_stays_list():
+    """like 的 value 已是 list 时,in 保持 list 不双层包装。"""
+    from nl2dsl.optimizer.context import SemanticConfig, RuleContext
+    from nl2dsl.optimizer.engine import RuleEngine
+
+    config = SemanticConfig(
+        dimensions={"region": {"column": "region", "type": "string", "value_map": {"华东": "HD"}}}
+    )
+    context = RuleContext(semantic_config=config)
+    dsl = {"filters": [{"field": "region", "operator": "like", "value": ["华东", "华南"]}]}
+    optimized, _ = RuleEngine(context).run(dsl)
+    assert optimized["filters"][0]["operator"] == "in"
+    assert optimized["filters"][0]["value"] == ["华东", "华南"]
 
