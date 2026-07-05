@@ -524,3 +524,46 @@ def test_like_default_full_match_without_stats():
     dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="like", value="手机")])
     sql = builder.build(dsl)
     assert "product_name LIKE '%手机%'" in sql
+
+
+def test_filter_value_type_aligned_numeric_string_to_int():
+    """Integer 列收到数字字符串 '100' → 无损转 int,命中索引。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("amount", Integer))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"amount": "amount"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="amount", operator="=", value="100")])
+    sql = builder.build(dsl)
+    # literal_binds 内联:int 100 不带引号
+    assert "amount = 100" in sql
+    assert "amount = '100'" not in sql
+
+
+def test_filter_value_type_aligned_number_to_str_warns():
+    """String 列收到数字 123 → 显式转 str '123'(有损但显式)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+    import logging
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="=", value=123)])
+    sql = builder.build(dsl)
+    assert "product_name = '123'" in sql

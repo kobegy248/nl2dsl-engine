@@ -1,7 +1,10 @@
+import logging
 import re
 from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, literal, column, join as sa_join
 from nl2dsl.dsl.models import DSL, Join
 from nl2dsl.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 # Valid SQL aggregation function names (whitelist)
@@ -62,6 +65,30 @@ class SQLBuilder:
         if self._semantic_config is None:
             return False
         return self._semantic_config.is_indexed(field)
+
+    def _align_value_type(self, col, field: str, value):
+        """Align filter value type to column type.
+
+        Lossless cast (numeric column + numeric string) → int/float, hits index.
+        Lossy but explicit (string column + number) → str + warn.
+        Other mismatches → passthrough (DB handles, warn logged by caller if needed).
+        """
+        from sqlalchemy import Integer, Numeric, Float, String
+        col_type = col.type
+        # Lossless: numeric column + numeric string
+        if isinstance(col_type, (Integer, Numeric, Float)) and isinstance(value, str) and not isinstance(value, bool):
+            try:
+                if isinstance(col_type, Integer):
+                    return int(value)
+                return float(value)
+            except (ValueError, TypeError):
+                logger.warning("Filter value %r not numeric for column '%s'", value, field)
+                return value
+        # Lossy: string column + number → str (explicit, warn)
+        if isinstance(col_type, String) and isinstance(value, (int, float)) and not isinstance(value, bool):
+            logger.warning("String column '%s' got numeric value %r, coercing to str", field, value)
+            return str(value)
+        return value
 
     def _parse_expr(self, expr: str) -> tuple[str, str]:
         """Parse 'SUM(order_amount)' -> ('sum', 'order_amount').
@@ -165,31 +192,34 @@ class SQLBuilder:
     def _build_leaf_condition(self, tables: dict[str, object], f) -> object:
         """Build a single filter condition (leaf node)."""
         col = self._resolve_column(tables, f.field)
+        # value_map 翻译(语义值→物理编码)→ 类型对齐(列类型)
+        raw_value = self._translate_filter_value(f.field, f.value)
+        aligned = self._align_value_type(col, f.field, raw_value)
         if f.operator == "=":
-            return col == self._translate_filter_value(f.field, f.value)
+            return col == aligned
         elif f.operator == "!=":
-            return col != self._translate_filter_value(f.field, f.value)
+            return col != aligned
         elif f.operator == ">":
-            return col > f.value
+            return col > aligned
         elif f.operator == "<":
-            return col < f.value
+            return col < aligned
         elif f.operator == ">=":
-            return col >= f.value
+            return col >= aligned
         elif f.operator == "<=":
-            return col <= f.value
+            return col <= aligned
         elif f.operator == "in":
-            return col.in_(self._translate_filter_value(f.field, f.value))
+            return col.in_(aligned if isinstance(aligned, list) else [aligned])
         elif f.operator == "like":
             selectivity = self._get_selectivity(f.field)
             indexed = self._is_indexed(f.field)
             if indexed and selectivity == "high":
                 # 高选择性 + 有索引:前缀匹配,走索引
-                return col.like(f"{f.value}%")
+                return col.like(f"{aligned}%")
             else:
                 # 低选择性/无索引/缺省:全模糊(保持语义/向后兼容)
-                return col.like(f"%{f.value}%")
+                return col.like(f"%{aligned}%")
         elif f.operator == "between":
-            val = f.value
+            val = aligned
             if isinstance(val, (list, tuple)) and len(val) == 2:
                 return col.between(val[0], val[1])
             raise ValidationError(f"'between' requires [min, max] list, got {val!r}")
