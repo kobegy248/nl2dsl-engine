@@ -1,7 +1,10 @@
+import logging
 import re
 from sqlalchemy import MetaData, select, func, and_, or_, not_, desc, asc, text, literal, column, join as sa_join
 from nl2dsl.dsl.models import DSL, Join
 from nl2dsl.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 # Valid SQL aggregation function names (whitelist)
@@ -9,7 +12,7 @@ _VALID_AGG_FUNCS = {"sum", "avg", "count", "min", "max"}
 
 
 class SQLBuilder:
-    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None, metrics: dict | None = None, value_maps: dict[str, dict] | None = None):
+    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None, metrics: dict | None = None, value_maps: dict[str, dict] | None = None, semantic_config=None):
         self._engine = engine
         self._metadata = MetaData()
         self._metadata.reflect(bind=engine)
@@ -29,6 +32,12 @@ class SQLBuilder:
         # physical codes (e.g. "HD") when emitting WHERE conditions, so that
         # filters hit columns that store codes. See resolver._map_single_value.
         self._value_maps = value_maps or {}
+        # Semantic config (duck-typed; typically SemanticConfig). Provides
+        # governance statistics (selectivity / indexed) that steer like-routing
+        # and future cardinality-aware choices. Untyped here to avoid a
+        # sql_engine -> optimizer circular import; only engine.py / api_factory.py
+        # import SemanticConfig to construct the instance.
+        self._semantic_config = semantic_config
 
     def _metric_expr(self, metric) -> str | None:
         """Return the registered expression for a metric, keyed by alias then field.
@@ -44,6 +53,42 @@ class SQLBuilder:
                 if expr:
                     return expr
         return None
+
+    def _get_selectivity(self, field: str) -> str | None:
+        """Return selectivity for a dimension, or None if no semantic_config."""
+        if self._semantic_config is None:
+            return None
+        return self._semantic_config.get_selectivity(field)
+
+    def _is_indexed(self, field: str) -> bool:
+        """Return whether a dimension is indexed, False if no semantic_config."""
+        if self._semantic_config is None:
+            return False
+        return self._semantic_config.is_indexed(field)
+
+    def _align_value_type(self, col, field: str, value):
+        """Align filter value type to column type.
+
+        Lossless cast (numeric column + numeric string) → int/float, hits index.
+        Lossy but explicit (string column + number) → str + warn.
+        Other mismatches → passthrough (DB handles, warn logged by caller if needed).
+        """
+        from sqlalchemy import Integer, Numeric, Float, String
+        col_type = col.type
+        # Lossless: numeric column + numeric string
+        if isinstance(col_type, (Integer, Numeric, Float)) and isinstance(value, str) and not isinstance(value, bool):
+            try:
+                if isinstance(col_type, Integer):
+                    return int(value)
+                return float(value)
+            except (ValueError, TypeError):
+                logger.warning("Filter value %r not numeric for column '%s'", value, field)
+                return value
+        # Lossy: string column + number → str (explicit, warn)
+        if isinstance(col_type, String) and isinstance(value, (int, float)) and not isinstance(value, bool):
+            logger.warning("String column '%s' got numeric value %r, coercing to str", field, value)
+            return str(value)
+        return value
 
     def _parse_expr(self, expr: str) -> tuple[str, str]:
         """Parse 'SUM(order_amount)' -> ('sum', 'order_amount').
@@ -112,6 +157,13 @@ class SQLBuilder:
                 return tbl
         raise ValidationError(f"Table for column '{field}' not found")
 
+    def _get_size_for_join_table(self, table_name: str) -> str | None:
+        """Return the size of the data_source whose physical table matches table_name."""
+        for cfg in self._data_sources.values():
+            if cfg.get("table") == table_name:
+                return cfg.get("size")
+        return None
+
     def _build_condition_tree(self, tables: dict[str, object], node) -> object:
         """Recursively build SQLAlchemy expression from a filter tree."""
         from nl2dsl.dsl.models import FilterTreeNode
@@ -147,24 +199,34 @@ class SQLBuilder:
     def _build_leaf_condition(self, tables: dict[str, object], f) -> object:
         """Build a single filter condition (leaf node)."""
         col = self._resolve_column(tables, f.field)
+        # value_map 翻译(语义值→物理编码)→ 类型对齐(列类型)
+        raw_value = self._translate_filter_value(f.field, f.value)
+        aligned = self._align_value_type(col, f.field, raw_value)
         if f.operator == "=":
-            return col == self._translate_filter_value(f.field, f.value)
+            return col == aligned
         elif f.operator == "!=":
-            return col != self._translate_filter_value(f.field, f.value)
+            return col != aligned
         elif f.operator == ">":
-            return col > f.value
+            return col > aligned
         elif f.operator == "<":
-            return col < f.value
+            return col < aligned
         elif f.operator == ">=":
-            return col >= f.value
+            return col >= aligned
         elif f.operator == "<=":
-            return col <= f.value
+            return col <= aligned
         elif f.operator == "in":
-            return col.in_(self._translate_filter_value(f.field, f.value))
+            return col.in_(aligned if isinstance(aligned, list) else [aligned])
         elif f.operator == "like":
-            return col.like(f"%{f.value}%")
+            selectivity = self._get_selectivity(f.field)
+            indexed = self._is_indexed(f.field)
+            if indexed and selectivity == "high":
+                # 高选择性 + 有索引:前缀匹配,走索引
+                return col.like(f"{aligned}%")
+            else:
+                # 低选择性/无索引/缺省:全模糊(保持语义/向后兼容)
+                return col.like(f"%{aligned}%")
         elif f.operator == "between":
-            val = f.value
+            val = aligned
             if isinstance(val, (list, tuple)) and len(val) == 2:
                 return col.between(val[0], val[1])
             raise ValidationError(f"'between' requires [min, max] list, got {val!r}")
@@ -323,6 +385,18 @@ class SQLBuilder:
 
         for table_name in required_tables:
             add_join(table_name)
+
+        # 保守重排:仅当 join 之间无跨依赖(on_field 不含 ".")时,按 size 排序
+        # small 在前(驱动),large 在后(被驱动);同等级保持原依赖顺序(稳定排序)
+        if len(joins) > 1:
+            has_cross_dependency = any(
+                "." in (j.on_field or "") for j in joins
+            )
+            if not has_cross_dependency:
+                size_order = {"small": 0, "medium": 1, "large": 2}
+                joins.sort(
+                    key=lambda j: size_order.get(self._get_size_for_join_table(j.table), 3)
+                )
 
         return joins
 

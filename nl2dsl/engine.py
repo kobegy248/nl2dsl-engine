@@ -217,6 +217,12 @@ class Engine:
             clarification_detector = ClarificationDetector()
 
             # 5. SQLBuilder
+            from nl2dsl.optimizer.context import SemanticConfig
+            semantic_config = SemanticConfig(
+                metrics=registry.metrics,
+                dimensions=registry.dimensions,
+                data_sources=registry.data_sources,
+            )
             tm = {k: v.get("table", k) for k, v in registry.data_sources.items()}
             ds = {k: v for k, v in registry.data_sources.items()}
             dm = {k: v.get("column", k) for k, v in registry.dimensions.items()}
@@ -225,7 +231,7 @@ class Engine:
                 for k, v in registry.dimensions.items()
                 if v.get("value_map")
             }
-            sql_builder = SQLBuilder(db, tm, ds, dm, registry.metrics, vmaps)
+            sql_builder = SQLBuilder(db, tm, ds, dm, registry.metrics, vmaps, semantic_config=semantic_config)
 
             # 6. RAG
             rag_retriever = None

@@ -94,3 +94,36 @@ class TestBankDimensionTypes:
     def test_txn_date_is_date(self):
         config = _load_bank_config()
         assert config.get_dimension_type("txn_date") == "date"
+
+
+def test_statistics_getters():
+    """size/selectivity/indexed 字段可被 getter 读取,缺省返回安全值。"""
+    from nl2dsl.optimizer.context import SemanticConfig
+
+    config = SemanticConfig(
+        data_sources={
+            "orders": {"table": "order_fact", "size": "large"},
+            "suppliers": {"table": "supplier_dim", "size": "small"},
+            "no_size": {"table": "t"},
+        },
+        dimensions={
+            "order_date": {"column": "order_date", "type": "date", "selectivity": "high", "indexed": True},
+            "region": {"column": "region", "type": "string", "selectivity": "low", "indexed": True},
+            "product_name": {"column": "product_name", "type": "string", "selectivity": "high", "indexed": False},
+            "no_stats": {"column": "x", "type": "string"},
+        },
+    )
+
+    assert config.get_size("orders") == "large"
+    assert config.get_size("suppliers") == "small"
+    assert config.get_size("no_size") is None
+    assert config.get_size("missing") is None
+
+    assert config.get_selectivity("order_date") == "high"
+    assert config.get_selectivity("region") == "low"
+    assert config.get_selectivity("no_stats") is None
+
+    assert config.is_indexed("order_date") is True
+    assert config.is_indexed("product_name") is False
+    assert config.is_indexed("no_stats") is False
+    assert config.is_indexed("missing") is False

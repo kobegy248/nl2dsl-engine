@@ -393,3 +393,70 @@ class F005_ValueTypeMismatch(BaseRule):
                     )
 
         return RuleResult.no_issue("F005", "Filter")
+
+
+@RuleRegistry.register
+class F006_LikeOnEnumDimension(BaseRule):
+    """like on a dimension with value_map should be 'in' (exact match).
+
+    Enum dimensions (those with a value_map) should use exact match, not
+    fuzzy LIKE. Replaces 'like' with 'in' and wraps scalar values in a list.
+    """
+
+    metadata = RuleMetadata(
+        error_code="F006",
+        category="Filter",
+        description="like on enum dimension — replace with 'in' for exact match",
+        priority=3,
+        severity="Fix",
+        confidence="high",
+        auto_fixable=True,
+    )
+
+    def check(self, dsl: dict, context) -> RuleResult:
+        filters = dsl.get("filters") or []
+        if not filters:
+            return RuleResult.no_issue("F006", "Filter")
+
+        for i, f in enumerate(filters):
+            if not isinstance(f, dict):
+                continue
+            if f.get("operator") != "like":
+                continue
+            field = f.get("field", "")
+            value = f.get("value")
+            if value is None:
+                continue
+            # Only trigger on dimensions with a value_map (enum)
+            value_map = context.semantic_config.get_value_map(field)
+            if not value_map:
+                continue
+
+            new_value = value if isinstance(value, list) else [value]
+            return RuleResult.from_metadata(
+                self.metadata,
+                description=f"like on enum dimension '{field}' — replaced with 'in' for exact match",
+                before={"operator": "like", "value": value},
+                after={"operator": "in", "value": new_value},
+                location=f"filters[{i}]",
+            )
+        return RuleResult.no_issue("F006", "Filter")
+
+    def fix(self, dsl: dict, result: RuleResult) -> dict:
+        """Override: 同时改 operator 和 value,保留 field。"""
+        if not result.location:
+            return dsl
+        import copy
+        dsl = copy.deepcopy(dsl)
+        parts = result.location.replace("[", ".").replace("]", "").split(".")
+        # parts == ["filters", "<i>"]
+        if len(parts) < 2 or not parts[1].isdigit():
+            return dsl
+        idx = int(parts[1])
+        filters = dsl.get("filters") or []
+        if idx >= len(filters) or not isinstance(filters[idx], dict):
+            return dsl
+        after = result.after or {}
+        filters[idx]["operator"] = after.get("operator", "in")
+        filters[idx]["value"] = after.get("value", filters[idx].get("value"))
+        return dsl

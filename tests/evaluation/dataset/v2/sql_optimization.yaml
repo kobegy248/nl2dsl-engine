@@ -1,0 +1,55 @@
+test_cases:
+  # ── 统计驱动 SQL 调优评测用例 (Task 6) ──────────────────
+  #
+  # 架构约束（重要）：
+  # V2 评测框架在 DSL/Planner 层评分，不支持 sql_contains / sql_not_contains
+  # 等 SQL 字符串断言。SQL 层的优化（like 前缀编译、join 重排、string→int
+  # 类型转换）发生在 SQL Builder 内部，无法通过 V2 端到端验证。
+  #
+  # 这些用例验证端到端 DSL 层语义正确性（优化点的 *输入* 正确生成）。
+  # SQL 层优化正确性由 tests/unit/test_sql_builder.py 中的单元测试直接验证：
+  #   - like 前缀:  test_like_prefix_match_for_indexed_high_selectivity
+  #   - join 重排:  test_join_reordered_small_drives_large
+  #   - 类型对齐:   test_filter_value_type_aligned_numeric_string_to_int
+  #
+  # join 小表驱动大表的 DSL 层路径已由 joins.yaml 中的 JOIN_002 覆盖
+  #（相同查询 "按供应商统计销售额"），无需在此重复。
+
+  # LIKE_INDEXED_001 — 日期查询冒烟测试
+  # 规则生成器将 "2026年7月" 解析为 order_date（indexed + high selectivity）
+  # 上的 time_range，而非 like 过滤。规则生成器从不产生 like 操作符
+  #（仅产生 = / != / > / < / >= / <= / between），因此 like 前缀优化
+  # 无法在端到端评测中触发。like 前缀编译的 SQL 层正确性由
+  # test_sql_builder.py::test_like_prefix_match_for_indexed_high_selectivity 验证。
+  - id: LIKE_INDEXED_001
+    query: "2026年7月的销售额"
+    difficulty: easy
+    category: time
+    tags: ["sql_optimization", "like_indexed", "time", "indexed_high_selectivity"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      planner:
+        time_field: order_date
+        time_range: ["2026-07-01", "2026-07-31"]
+        limit: 100
+
+  # FILTER_TYPE_001 — 数值过滤冒烟测试
+  # 规则生成器将 "价格大于100" 解析为 price 上的数值过滤 (value=100.0, float)。
+  # 类型对齐优化将 *字符串* 值转为列的数值类型（string→int），但规则生成器
+  # 直接产生数值（float），因此 string→int 对齐路径无法在端到端评测中触发。
+  # 类型对齐的 SQL 层正确性由
+  # test_sql_builder.py::test_filter_value_type_aligned_numeric_string_to_int 验证。
+  - id: FILTER_TYPE_001
+    query: "价格大于100的销售额"
+    difficulty: easy
+    category: filter
+    tags: ["sql_optimization", "filter_type_alignment", "filter", "numeric"]
+    expected:
+      intent: aggregate
+      metric: sales_amount
+      dimensions: [product_name]
+      filters:
+        - field: price
+          operator: ">"
+          value: 100

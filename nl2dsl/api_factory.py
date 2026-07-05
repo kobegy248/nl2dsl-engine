@@ -569,6 +569,8 @@ def create_app(
             _nl2dsl_engine.register("validator", DSLValidator(registry_dict))
             _nl2dsl_engine.register("resolver", SemanticResolver(registry_dict))
             _db_engine = engine or _nl2dsl_engine.registry.get("db_engine")
+            from nl2dsl.optimizer.context import SemanticConfig
+            _sc = SemanticConfig.from_registry_dict(registry_dict)
             _nl2dsl_engine.register("sql_builder", SQLBuilder(
                 _db_engine,
                 {k: v.get("table", k) for k, v in registry_dict.get("data_sources", {}).items()},
@@ -576,12 +578,15 @@ def create_app(
                 {k: v.get("column", k) for k, v in registry_dict.get("dimensions", {}).items()},
                 registry_dict.get("metrics", {}),
                 _extract_value_maps(registry_dict.get("dimensions", {})),
+                semantic_config=_sc,
             ))
         elif engine is not None:
             # Engine was provided but registry_dict was not — rebuild sql_builder
             # with the new engine so metadata reflects the test database.
             _default_registry = _nl2dsl_engine.registry.get("registry_dict")
             if _default_registry:
+                from nl2dsl.optimizer.context import SemanticConfig
+                _sc = SemanticConfig.from_registry_dict(_default_registry)
                 _nl2dsl_engine.register("sql_builder", SQLBuilder(
                     engine,
                     {k: v.get("table", k) for k, v in _default_registry.get("data_sources", {}).items()},
@@ -589,6 +594,7 @@ def create_app(
                     {k: v.get("column", k) for k, v in _default_registry.get("dimensions", {}).items()},
                     _default_registry.get("metrics", {}),
                     _extract_value_maps(_default_registry.get("dimensions", {})),
+                    semantic_config=_sc,
                 ))
 
         # Override permission components

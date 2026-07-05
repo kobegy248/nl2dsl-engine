@@ -450,3 +450,289 @@ class TestValueMapTranslation:
         )
         sql = legacy.build(dsl)
         assert "华东" in sql
+
+
+def test_like_prefix_match_for_indexed_high_selectivity():
+    """indexed + high selectivity 列:like 编译为前缀匹配 'val%'(走索引)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from nl2dsl.optimizer.context import SemanticConfig
+    from sqlalchemy import create_engine, MetaData, Table, Column, String, Date
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("order_date", Date), Column("product_name", String))
+    meta.create_all(engine)
+
+    config = SemanticConfig(
+        dimensions={
+            "order_date": {"column": "order_date", "type": "date", "selectivity": "high", "indexed": True},
+        }
+    )
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"order_date": "order_date"}, {}, {}, semantic_config=config,
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="order_date", operator="like", value="2026-07")])
+    sql = builder.build(dsl)
+    assert "order_date LIKE '2026-07%'" in sql
+    assert "%2026-07%" not in sql
+
+
+def test_like_full_match_for_unindexed_text():
+    """无索引文本列:like 保持全模糊 '%val%'。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from nl2dsl.optimizer.context import SemanticConfig
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    config = SemanticConfig(
+        dimensions={
+            "product_name": {"column": "product_name", "type": "string", "selectivity": "high", "indexed": False},
+        }
+    )
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {}, semantic_config=config,
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="like", value="手机")])
+    sql = builder.build(dsl)
+    assert "product_name LIKE '%手机%'" in sql
+
+
+def test_like_default_full_match_without_stats():
+    """无统计信息时:like 退回当前行为 '%val%'(向后兼容)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {},
+        # 不传 semantic_config
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="like", value="手机")])
+    sql = builder.build(dsl)
+    assert "product_name LIKE '%手机%'" in sql
+
+
+def test_filter_value_type_aligned_numeric_string_to_int():
+    """Integer 列收到数字字符串 '100' → 无损转 int,命中索引。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("amount", Integer))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"amount": "amount"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="amount", operator="=", value="100")])
+    sql = builder.build(dsl)
+    # literal_binds 内联:int 100 不带引号
+    assert "amount = 100" in sql
+    assert "amount = '100'" not in sql
+
+
+def test_filter_value_type_aligned_number_to_str_warns():
+    """String 列收到数字 123 → 显式转 str '123'(有损但显式)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+    import logging
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="=", value=123)])
+    sql = builder.build(dsl)
+    assert "product_name = '123'" in sql
+
+
+def test_join_reordered_small_drives_large():
+    """无跨依赖时:small 表排在前(驱动),large 排在后。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_id", Integer), Column("customer_id", Integer))
+    Table("product_dim", meta, Column("product_id", Integer), Column("product_name", String))
+    Table("customer_dim", meta, Column("customer_id", Integer), Column("customer_name", String))
+    meta.create_all(engine)
+
+    # 两个独立 join(无跨依赖:on_field 不含 ".")
+    data_sources = {
+        "orders": {
+            "table": "order_fact", "size": "large",
+            "joins": {
+                "product_dim": {"on": "product_id", "type": "left", "alias": "p"},
+                "customer_dim": {"on": "customer_id", "type": "left", "alias": "c"},
+            },
+        },
+        "product_dim": {"table": "product_dim", "size": "medium"},
+        "customer_dim": {"table": "customer_dim", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, data_sources,
+        {"product_name": "product_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    # 引用两个 join 表的列(product_name + customer_name),触发两个 join
+    dsl = DSL(
+        data_source="orders",
+        metrics=[Aggregation(func="sum", field="product_id", alias="m")],
+        dimensions=["product_name", "customer_name"],
+    )
+    sql = builder.build(dsl)
+    # customer_dim(small) 应在 product_dim(medium) 之前
+    c_pos = sql.lower().find("customer_dim")
+    p_pos = sql.lower().find("product_dim")
+    assert c_pos != -1 and p_pos != -1
+    assert c_pos < p_pos, f"small 应驱动,但 SQL 顺序: {sql}"
+
+
+def test_join_not_reordered_with_cross_dependency():
+    """有跨依赖(supplier_dim on p.supplier_id)时:保持依赖顺序,不重排。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_id", Integer))
+    Table("product_dim", meta, Column("product_id", Integer), Column("supplier_id", Integer))
+    Table("supplier_dim", meta, Column("supplier_id", Integer), Column("supplier_name", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "orders": {
+            "table": "order_fact", "size": "large",
+            "joins": {
+                "product_dim": {"on": "product_id", "type": "left", "alias": "p"},
+                "supplier_dim": {"on": "p.supplier_id", "type": "left", "alias": "s"},
+            },
+        },
+        "product_dim": {"table": "product_dim", "size": "medium"},
+        "supplier_dim": {"table": "supplier_dim", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, data_sources,
+        {"supplier_name": "supplier_name"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL
+    dsl = DSL(data_source="orders", dimensions=["supplier_name"])
+    sql = builder.build(dsl)
+    # 依赖链:product_dim 必须在 supplier_dim 之前(on p.supplier_id)
+    p_pos = sql.lower().find("product_dim")
+    s_pos = sql.lower().find("supplier_dim")
+    assert p_pos < s_pos, f"依赖链被破坏: {sql}"
+
+
+def test_bank_join_reordered_small_drives_large():
+    """银行域 customer_accounts: t_org_hier(small) 应排到 t_cif_base(medium) 之前。
+
+    镜像 bank_metrics.yaml 的真实结构:t_acct_main 为主表,join t_cif_base(经
+    customers data_source 注册,medium)与 t_org_hier(经 org_hierarchy data_source
+    注册,small),on_field 均无 "."(无跨依赖),故按 size 重排。
+    """
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("t_acct_main", meta, Column("cif_no", String), Column("mgr_emp_no", String))
+    Table("t_cif_base", meta, Column("cif_no", String), Column("cust_nm", String))
+    Table("t_org_hier", meta, Column("mgr_emp_no", String), Column("org_nm", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "customer_accounts": {
+            "table": "t_acct_main", "size": "large",
+            "joins": {
+                "t_cif_base": {"on": "cif_no", "type": "left", "alias": "c"},
+                "t_org_hier": {"on": "mgr_emp_no", "type": "left", "alias": "o"},
+            },
+        },
+        # t_cif_base 经 customers data_source 注册(与 bank_metrics.yaml 一致)
+        "customers": {"table": "t_cif_base", "size": "medium"},
+        # t_org_hier 经 org_hierarchy data_source 注册(本次新增)
+        "org_hierarchy": {"table": "t_org_hier", "size": "small"},
+    }
+    builder = SQLBuilder(
+        engine, {"customer_accounts": "t_acct_main"}, data_sources,
+        {"customer_name": "cust_nm", "org_name": "org_nm"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    # 引用两个 join 表的列(cust_nm + org_nm),触发两个 join
+    dsl = DSL(
+        data_source="customer_accounts",
+        metrics=[Aggregation(func="count", field="cif_no", alias="m")],
+        dimensions=["customer_name", "org_name"],
+    )
+    sql = builder.build(dsl)
+    # t_org_hier(small) 应在 t_cif_base(medium) 之前
+    o_pos = sql.lower().find("t_org_hier")
+    c_pos = sql.lower().find("t_cif_base")
+    assert o_pos != -1 and c_pos != -1, f"join 表未出现在 SQL 中: {sql}"
+    assert o_pos < c_pos, f"small 应驱动,但 SQL 顺序: {sql}"
+
+
+def test_bank_join_not_reordered_without_standalone_data_source():
+    """银行域:join 表未注册为独立 data_source 时,size 回退权重 3,稳定排序保持原顺序。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("t_acct_main", meta, Column("cif_no", String), Column("mgr_emp_no", String))
+    Table("t_cif_base", meta, Column("cif_no", String), Column("cust_nm", String))
+    Table("t_org_hier", meta, Column("mgr_emp_no", String), Column("org_nm", String))
+    meta.create_all(engine)
+
+    data_sources = {
+        "customer_accounts": {
+            "table": "t_acct_main", "size": "large",
+            "joins": {
+                "t_cif_base": {"on": "cif_no", "type": "left", "alias": "c"},
+                "t_org_hier": {"on": "mgr_emp_no", "type": "left", "alias": "o"},
+            },
+        },
+        # 仅注册 t_cif_base,t_org_hier 未注册 → size=None → 回退权重 3
+        "customers": {"table": "t_cif_base", "size": "medium"},
+    }
+    builder = SQLBuilder(
+        engine, {"customer_accounts": "t_acct_main"}, data_sources,
+        {"customer_name": "cust_nm", "org_name": "org_nm"}, {}, {},
+    )
+    from nl2dsl.dsl.models import DSL, Aggregation
+    dsl = DSL(
+        data_source="customer_accounts",
+        metrics=[Aggregation(func="count", field="cif_no", alias="m")],
+        dimensions=["customer_name", "org_name"],
+    )
+    sql = builder.build(dsl)
+    # t_cif_base(medium, 权重1) 应在 t_org_hier(None, 回退权重3) 之前
+    c_pos = sql.lower().find("t_cif_base")
+    o_pos = sql.lower().find("t_org_hier")
+    assert c_pos != -1 and o_pos != -1, f"join 表未出现在 SQL 中: {sql}"
+    assert c_pos < o_pos, f"未注册表应回退到权重3排后,但 SQL 顺序: {sql}"
