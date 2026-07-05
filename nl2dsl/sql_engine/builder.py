@@ -9,7 +9,7 @@ _VALID_AGG_FUNCS = {"sum", "avg", "count", "min", "max"}
 
 
 class SQLBuilder:
-    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None, metrics: dict | None = None, value_maps: dict[str, dict] | None = None):
+    def __init__(self, engine, table_mapping: dict[str, str], data_sources: dict | None = None, dimension_mapping: dict[str, str] | None = None, metrics: dict | None = None, value_maps: dict[str, dict] | None = None, semantic_config=None):
         self._engine = engine
         self._metadata = MetaData()
         self._metadata.reflect(bind=engine)
@@ -29,6 +29,12 @@ class SQLBuilder:
         # physical codes (e.g. "HD") when emitting WHERE conditions, so that
         # filters hit columns that store codes. See resolver._map_single_value.
         self._value_maps = value_maps or {}
+        # Semantic config (duck-typed; typically SemanticConfig). Provides
+        # governance statistics (selectivity / indexed) that steer like-routing
+        # and future cardinality-aware choices. Untyped here to avoid a
+        # sql_engine -> optimizer circular import; only engine.py / api_factory.py
+        # import SemanticConfig to construct the instance.
+        self._semantic_config = semantic_config
 
     def _metric_expr(self, metric) -> str | None:
         """Return the registered expression for a metric, keyed by alias then field.
@@ -44,6 +50,18 @@ class SQLBuilder:
                 if expr:
                     return expr
         return None
+
+    def _get_selectivity(self, field: str) -> str | None:
+        """Return selectivity for a dimension, or None if no semantic_config."""
+        if self._semantic_config is None:
+            return None
+        return self._semantic_config.get_selectivity(field)
+
+    def _is_indexed(self, field: str) -> bool:
+        """Return whether a dimension is indexed, False if no semantic_config."""
+        if self._semantic_config is None:
+            return False
+        return self._semantic_config.is_indexed(field)
 
     def _parse_expr(self, expr: str) -> tuple[str, str]:
         """Parse 'SUM(order_amount)' -> ('sum', 'order_amount').
@@ -162,7 +180,14 @@ class SQLBuilder:
         elif f.operator == "in":
             return col.in_(self._translate_filter_value(f.field, f.value))
         elif f.operator == "like":
-            return col.like(f"%{f.value}%")
+            selectivity = self._get_selectivity(f.field)
+            indexed = self._is_indexed(f.field)
+            if indexed and selectivity == "high":
+                # 高选择性 + 有索引:前缀匹配,走索引
+                return col.like(f"{f.value}%")
+            else:
+                # 低选择性/无索引/缺省:全模糊(保持语义/向后兼容)
+                return col.like(f"%{f.value}%")
         elif f.operator == "between":
             val = f.value
             if isinstance(val, (list, tuple)) and len(val) == 2:

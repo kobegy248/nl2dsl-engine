@@ -450,3 +450,77 @@ class TestValueMapTranslation:
         )
         sql = legacy.build(dsl)
         assert "华东" in sql
+
+
+def test_like_prefix_match_for_indexed_high_selectivity():
+    """indexed + high selectivity 列:like 编译为前缀匹配 'val%'(走索引)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from nl2dsl.optimizer.context import SemanticConfig
+    from sqlalchemy import create_engine, MetaData, Table, Column, String, Date
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("order_date", Date), Column("product_name", String))
+    meta.create_all(engine)
+
+    config = SemanticConfig(
+        dimensions={
+            "order_date": {"column": "order_date", "type": "date", "selectivity": "high", "indexed": True},
+        }
+    )
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"order_date": "order_date"}, {}, {}, semantic_config=config,
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="order_date", operator="like", value="2026-07")])
+    sql = builder.build(dsl)
+    assert "order_date LIKE '2026-07%'" in sql
+    assert "%2026-07%" not in sql
+
+
+def test_like_full_match_for_unindexed_text():
+    """无索引文本列:like 保持全模糊 '%val%'。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from nl2dsl.optimizer.context import SemanticConfig
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    config = SemanticConfig(
+        dimensions={
+            "product_name": {"column": "product_name", "type": "string", "selectivity": "high", "indexed": False},
+        }
+    )
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {}, semantic_config=config,
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="like", value="手机")])
+    sql = builder.build(dsl)
+    assert "product_name LIKE '%手机%'" in sql
+
+
+def test_like_default_full_match_without_stats():
+    """无统计信息时:like 退回当前行为 '%val%'(向后兼容)。"""
+    from nl2dsl.sql_engine.builder import SQLBuilder
+    from sqlalchemy import create_engine, MetaData, Table, Column, String
+
+    engine = create_engine("sqlite:///:memory:")
+    meta = MetaData()
+    Table("order_fact", meta, Column("product_name", String))
+    meta.create_all(engine)
+
+    builder = SQLBuilder(
+        engine, {"orders": "order_fact"}, {"orders": {"table": "order_fact"}},
+        {"product_name": "product_name"}, {}, {},
+        # 不传 semantic_config
+    )
+    from nl2dsl.dsl.models import DSL, Filter
+    dsl = DSL(data_source="orders", filters=[Filter(field="product_name", operator="like", value="手机")])
+    sql = builder.build(dsl)
+    assert "product_name LIKE '%手机%'" in sql
