@@ -72,6 +72,7 @@ dimensions:
     description: "客户类型"
   order_date:
     column: order_date
+    type: date
     description: "订单日期"
   warehouse_name:
     column: warehouse_name
